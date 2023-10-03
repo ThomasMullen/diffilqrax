@@ -1,0 +1,11 @@
+matplotlib
+jax
+jaxopt
+flax
+chex
+numpy
+scipy
+tqdm
+jax_dataclasses
+torch
+chex
