@@ -83,8 +83,8 @@ def riccati_step(lqr: LQR, state:State):
     V, v, Ct, c = state.V, state.v, state.C, state.c
     AT, BT = lqr.A.T, lqr.B.T
     Hxx = symmetrise(lqr.Q + AT@V@lqr.A)
-    Huu = symmetrise(lqr.R + BT@V@lqr.B)
     # NOTE: add noise to Huu to guarentee inverse
+    Huu = symmetrise(lqr.R + BT@V@lqr.B)
     Hxu = symmetrise(lqr.S + AT@V@lqr.B)
     hx = lqr.q + AT@(v + V@lqr.a)
     hu = lqr.r + BT@(v + V@lqr.a)
@@ -94,8 +94,8 @@ def riccati_step(lqr: LQR, state:State):
     k = -np.linalg(Huu, hu)
     
     # Find value iteration at current time
-    V_curr = Hxx + Hxu@K
-    v_curr = hx + Hxu@k
+    V_curr = symmetrise(Hxx + Hxu@K + K.T@Hxu + K.T@Huu@K)
+    v_curr = hx + Hxu@k + K.T@hu + K.T @ Huu @ k
     
     pass
 

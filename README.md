@@ -17,3 +17,11 @@ The optimal cost-to-go $J^{*}_T{}(x_t)$ is defined as:
 $$J^{*}_T{}(x_t) = \frac{1}{2} x_T^{T}P_Tx_T + p_T^{T}x_T+\beta_{T} $$
 
 where $P$ and $p$ are the quadratic and linear value iteration respectively.
+
+
+
+
+# Resources
+DDP implementation https://bjack205.github.io/papers/AL_iLQR_Tutorial.pdf
+Jax DP and implicit differentiation https://stephentu.github.io/presentations/jax4dc/#/1
+
