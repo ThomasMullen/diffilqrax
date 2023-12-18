@@ -53,6 +53,13 @@ class Gains(NamedTuple):
     K: np.ndarray
     k: np.ndarray
 
+class State(NamedTuple):
+    """Cost-to-go and current cost """
+
+    V: np.ndarray
+    v: np.ndarray
+    C: np.ndarray
+    v: np.ndarray
 
 # forward pass
 def forward(
@@ -69,6 +76,28 @@ def forward(
 
     xf, (Xs, Us) = lax.scan(dynamics, init=x_init, xs=(A, B, a, gains))
     return Xs, Us
+
+
+# riccati step
+def riccati_step(lqr: LQR, state:State):
+    V, v, Ct, c = state.V, state.v, state.C, state.c
+    AT, BT = lqr.A.T, lqr.B.T
+    Hxx = symmetrise(lqr.Q + AT@V@lqr.A)
+    Huu = symmetrise(lqr.R + BT@V@lqr.B)
+    # NOTE: add noise to Huu to guarentee inverse
+    Hxu = symmetrise(lqr.S + AT@V@lqr.B)
+    hx = lqr.q + AT@(v + V@lqr.a)
+    hu = lqr.r + BT@(v + V@lqr.a)
+    
+    # solve gains
+    K = -np.linalg(Huu, Hxu.T)
+    k = -np.linalg(Huu, hu)
+    
+    # Find value iteration at current time
+    V_curr = Hxx + Hxu@K
+    v_curr = hx + Hxu@k
+    
+    pass
 
 
 # backward pass
