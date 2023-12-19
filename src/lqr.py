@@ -85,9 +85,9 @@ def riccati_step(lqr: LQR, state: ValueIter) -> Tuple[ValueIter, Gains]:
     Hxx = symmetrise(lqr.Q + AT @ V @ lqr.A)
     Huu = symmetrise(lqr.R + BT @ V @ lqr.B)
     # Ensure Huu PD
-    δ = 1e-8 
-    s = np.linalg.eigh(Huu)[0][0]
-    Huu = Huu + np.max(0., δ-s) * np.eye(Huu.shape[0])
+    # δ = 1e-8 
+    # s = np.linalg.eigh(Huu)[0][0]
+    # Huu = Huu + np.max(0., δ-s) * np.eye(Huu.shape[0])
     Hxu = symmetrise(lqr.S + AT @ V @ lqr.B)
     hx = lqr.q + AT @ (v + V @ lqr.a)
     hu = lqr.r + BT @ (v + V @ lqr.a)
