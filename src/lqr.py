@@ -53,13 +53,13 @@ class Gains(NamedTuple):
     K: np.ndarray
     k: np.ndarray
 
-class State(NamedTuple):
-    """Cost-to-go and current cost """
+
+class ValueIter(NamedTuple):
+    """Cost-to-go"""
 
     V: np.ndarray
     v: np.ndarray
-    C: np.ndarray
-    v: np.ndarray
+
 
 # forward pass
 def forward(
@@ -79,31 +79,33 @@ def forward(
 
 
 # riccati step
-def riccati_step(lqr: LQR, state:State):
-    V, v, Ct, c = state.V, state.v, state.C, state.c
+def riccati_step(lqr: LQR, state: ValueIter) -> Tuple[ValueIter, Gains]:
+    V, v = state.V, state.v
     AT, BT = lqr.A.T, lqr.B.T
-    Hxx = symmetrise(lqr.Q + AT@V@lqr.A)
+    Hxx = symmetrise(lqr.Q + AT @ V @ lqr.A)
     # NOTE: add noise to Huu to guarentee inverse
-    Huu = symmetrise(lqr.R + BT@V@lqr.B)
-    Hxu = symmetrise(lqr.S + AT@V@lqr.B)
-    hx = lqr.q + AT@(v + V@lqr.a)
-    hu = lqr.r + BT@(v + V@lqr.a)
-    
+    Huu = symmetrise(lqr.R + BT @ V @ lqr.B)
+    Hxu = symmetrise(lqr.S + AT @ V @ lqr.B)
+    hx = lqr.q + AT @ (v + V @ lqr.a)
+    hu = lqr.r + BT @ (v + V @ lqr.a)
+
     # solve gains
     K = -np.linalg(Huu, Hxu.T)
     k = -np.linalg(Huu, hu)
-    
+
     # Find value iteration at current time
-    V_curr = symmetrise(Hxx + Hxu@K + K.T@Hxu + K.T@Huu@K)
-    v_curr = hx + Hxu@k + K.T@hu + K.T @ Huu @ k
-    
-    pass
+    # V_curr = symmetrise(Hxx + Hxu@K + K.T@Hxu + K.T@Huu@K)    # for DDP
+    # v_curr = hx + Hxu@k + K.T@hu + K.T @ Huu @ k              # for DDP
+    V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu + K.T @ Huu @ K)
+    v_curr = hx + Hxu @ k
+
+    return ValueIter(V_curr, v_curr), Gains(K, k)
 
 
 # backward pass
 def backward(
     lqr: LQR,
-)->Gains:
+) -> Gains:
     pass
 
 
