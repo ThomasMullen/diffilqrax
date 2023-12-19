@@ -5,7 +5,7 @@ import jax.lax as lax
 import jax.numpy as np
 
 # symmetrise
-symmetrise = lambda x: (x + x.T) / 2
+symmetrise = lambda x: (x + x.transpose(0, 2, 1)) / 2
 
 
 # LQR struct
@@ -13,7 +13,7 @@ class LQR(NamedTuple):
     """LQR params
 
     Args:
-        NamedTuple (np.ndarray): Dynamics and Cost parameters
+        NamedTuple (np.ndarray): Dynamics and Cost parameters. Shape [T,X,Y]
     """
 
     A: np.ndarray
@@ -78,41 +78,43 @@ def forward(
     return Xs, Us
 
 
-# riccati step
-def riccati_step(lqr: LQR, state: ValueIter) -> Tuple[ValueIter, Gains]:
-    V, v = state.V, state.v
-    AT, BT = lqr.A.T, lqr.B.T
-    Hxx = symmetrise(lqr.Q + AT @ V @ lqr.A)
-    Huu = symmetrise(lqr.R + BT @ V @ lqr.B)
-    # Ensure Huu PD
-    # δ = 1e-8 
-    # s = np.linalg.eigh(Huu)[0][0]
-    # Huu = Huu + np.max(0., δ-s) * np.eye(Huu.shape[0])
-    Hxu = symmetrise(lqr.S + AT @ V @ lqr.B)
-    hx = lqr.q + AT @ (v + V @ lqr.a)
-    hu = lqr.r + BT @ (v + V @ lqr.a)
-
-    # solve gains
-    K = -np.linalg(Huu, Hxu.T)
-    k = -np.linalg(Huu, hu)
-
-    # Find value iteration at current time
-    # V_curr = symmetrise(Hxx + Hxu@K + K.T@Hxu + K.T@Huu@K)    # for DDP
-    # v_curr = hx + Hxu@k + K.T@hu + K.T @ Huu @ k              # for DDP
-    V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu + K.T @ Huu @ K)
-    v_curr = hx + Hxu @ k
-
-    return ValueIter(V_curr, v_curr), Gains(K, k)
-
-
 # backward pass
 def backward(
     lqr: LQR,
+    T: int,
 ) -> Gains:
-    pass
+    def riccati_step(carry: ValueIter, t: int) -> Tuple[ValueIter, Gains]:
+        symmetrise = lambda x: (x + x.T) / 2
+        V, v = carry.V, carry.v
+        AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+        Hxx = symmetrise(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
+        Huu = symmetrise(lqr.R[t] + BT[t] @ V @ lqr.B[t])
+        Hxu = symmetrise(lqr.S[t] + AT[t] @ V @ lqr.B[t])
+        hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
+        hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
+
+        # solve gains
+        K = -np.linalg(Huu, Hxu.T)
+        k = -np.linalg(Huu, hu)
+
+        # Find value iteration at current time
+        V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu + K.T @ Huu @ K)
+        v_curr = hx + Hxu @ k
+
+        return ValueIter(V_curr, v_curr), Gains(K, k)
+
+    V_0, Ks = lax.scan(
+        riccati_step, init=ValueIter(lqr.Qf, lqr.qf), xs=np.arange(T), reverse=True
+    )
+    return np.flip(Ks)
 
 
 # lqr solve
+def solve_lqr():
+    # backward
+
+    # forward
+    pass
 
 
 if __name__ == "__main__":
