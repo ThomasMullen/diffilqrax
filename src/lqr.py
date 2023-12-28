@@ -66,15 +66,13 @@ def forward(
     lqr: LQR, gains: Gains, x_init: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Forward iteration of LDS using gains"""
-    A, B, a = lqr.A, lqr.B, lqr.a
-
     def dynamics(x, params):
-        A, B, a, gain = params
-        u = gain.K @ x + gain.k
+        A, B, a, K, k = params
+        u = K @ x + k
         nx = A @ x + B @ u + a
         return nx, (nx, u)
 
-    xf, (Xs, Us) = lax.scan(dynamics, init=x_init, xs=(A, B, a, gains))
+    xf, (Xs, Us) = lax.scan(dynamics, init=x_init, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k))
     return Xs, Us
 
 
@@ -112,7 +110,8 @@ def backward(
     V_0, Ks = lax.scan(
         riccati_step, init=ValueIter(lqr.Qf, lqr.qf), xs=np.arange(T), reverse=True
     )
-    return np.flip(Ks)
+    # return np.flip(Ks)
+    return Ks
 
 
 # lqr solve
@@ -131,7 +130,6 @@ def init_params():
     A = np.array([[0.,1.], [-k_spring/m, -k_damp/m]])
     B = np.array([[0.],[1.]])
     a = np.array([[0.],[0.]])
-    a = np.tile(a,(tps,1,1))
     
     Qf = np.eye(2)*10
     qf = np.array([[0.],[0.]])
@@ -157,6 +155,8 @@ def init_params():
 
 if __name__ == "__main__":
     # generate some dynamics
+    x_init = np.array([[2.],[1.]])
     lqr = init_params()
-    Ks = backward(lqr, 20)
+    gains = backward(lqr, 20)
+    Xs, Us = forward(lqr, gains, x_init)
     pass
