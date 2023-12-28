@@ -35,7 +35,7 @@ class LQR(NamedTuple):
             a=self.a,
             Q=symmetrise(self.Q),
             q=self.q,
-            Qf=symmetrise(self.Qf),
+            Qf=(self.Qf+self.Qf.T)/2,
             qf=self.qf,
             R=symmetrise(self.R),
             r=self.r,
@@ -87,18 +87,24 @@ def backward(
         symmetrise = lambda x: (x + x.T) / 2
         V, v = carry.V, carry.v
         AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+        # print(AT[t].shape, V.shape, lqr.A[t].shape, lqr.Q[t].shape)
         Hxx = symmetrise(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
+        # print(Hxx.shape)
+        # print(BT[t].shape, V.shape, lqr.B[t].shape, lqr.R[t].shape)
         Huu = symmetrise(lqr.R[t] + BT[t] @ V @ lqr.B[t])
-        Hxu = symmetrise(lqr.S[t] + AT[t] @ V @ lqr.B[t])
+        # print(Huu.shape)
+        # print(AT[t].shape, V.shape, lqr.B[t].shape, lqr.S[t].shape)
+        Hxu = lqr.S[t] + AT[t] @ V @ lqr.B[t]
+        # print(Hxu.shape)
         hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
         # solve gains
-        K = -np.linalg(Huu, Hxu.T)
-        k = -np.linalg(Huu, hu)
+        K = -np.linalg.solve(Huu, Hxu.T)
+        k = -np.linalg.solve(Huu, hu)
 
         # Find value iteration at current time
-        V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu + K.T @ Huu @ K)
+        V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
         v_curr = hx + Hxu @ k
 
         return ValueIter(V_curr, v_curr), Gains(K, k)
@@ -117,5 +123,40 @@ def solve_lqr():
     pass
 
 
+def init_params():
+    k_spring=10
+    k_damp=5
+    m=10
+    tps=20
+    A = np.array([[0.,1.], [-k_spring/m, -k_damp/m]])
+    B = np.array([[0.],[1.]])
+    a = np.array([[0.],[0.]])
+    a = np.tile(a,(tps,1,1))
+    
+    Qf = np.eye(2)*10
+    qf = np.array([[0.],[0.]])
+    Q = np.eye(2)*10
+    q = np.array([[0.],[0.]])
+    R = np.eye(1)*0.1
+    r = np.array([0.])
+    S = np.zeros((2,1))
+    
+    lqr=LQR(
+        A=np.tile(A,(tps,1,1)),
+        B = np.tile(B,(tps,1,1)),
+        a = np.tile(a,(tps,1,1)),
+        Q=np.tile(Q,(tps,1,1)),
+        q=np.tile(q,(tps,1,1)),
+        Qf=Qf,
+        qf=qf,
+        R=np.tile(R,(tps,1,1)),
+        r=np.tile(r,(tps,1)),
+        S=np.tile(S,(tps,1,1)),
+        )
+    return lqr()
+
 if __name__ == "__main__":
+    # generate some dynamics
+    lqr = init_params()
+    Ks = backward(lqr, 20)
     pass
