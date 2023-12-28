@@ -85,15 +85,9 @@ def backward(
         symmetrise = lambda x: (x + x.T) / 2
         V, v = carry.V, carry.v
         AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
-        # print(AT[t].shape, V.shape, lqr.A[t].shape, lqr.Q[t].shape)
         Hxx = symmetrise(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
-        # print(Hxx.shape)
-        # print(BT[t].shape, V.shape, lqr.B[t].shape, lqr.R[t].shape)
         Huu = symmetrise(lqr.R[t] + BT[t] @ V @ lqr.B[t])
-        # print(Huu.shape)
-        # print(AT[t].shape, V.shape, lqr.B[t].shape, lqr.S[t].shape)
         Hxu = lqr.S[t] + AT[t] @ V @ lqr.B[t]
-        # print(Hxu.shape)
         hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
