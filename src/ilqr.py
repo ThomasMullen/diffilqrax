@@ -25,6 +25,7 @@ class Systen:
 
     cost: Callable[[int, np.ndarray, np.ndarray, Optional[Any]], np.ndarray]
     costf: Callable[[np.ndarray, Optional[Any]], np.ndarray]
+    dynamics: Callable[[int, np.ndarray, np.ndarray, Optional[Any]], np.ndarray]
 
 
 # recursive linesearch
