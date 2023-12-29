@@ -22,9 +22,9 @@ class Systen:
     dynamics : Callable
         dynamical update f(t, x, u, params)
     """
+
     cost: Callable[[int, np.ndarray, np.ndarray, Optional[Any]], np.ndarray]
     costf: Callable[[np.ndarray, Optional[Any]], np.ndarray]
 
 
 # recursive linesearch
-
