@@ -4,6 +4,8 @@ import jax
 import jax.lax as lax
 import jax.numpy as np
 
+jax.config.update("jax_enable_x64", True)
+
 # symmetrise
 symmetrise = lambda x: (x + x.transpose(0, 2, 1)) / 2
 
