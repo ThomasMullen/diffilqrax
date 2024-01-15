@@ -148,9 +148,27 @@ def ddp_rollout(
 
 
 # recursive linesearch
+# structure of while loop represented as a scan
+def while_loop(continue_search:Callable[[float,float,float],bool],
+               body_fun:Callable,
+               init_val:Tuple[Any],
+               max_iter:int=20):
+    
+    def loop(carry):
+        cond, state = carry
+        new_state = lax.cond(cond, body_fun, lambda x: x, state)
+        return (cond, new_state), new_state
+    
+    (converged, final_state), _ = lax.scan(loop, init=(continue_search(init_val), init_val), length=max_iter) 
+    pass
 
+def continue_search():
+    
+    pass
 
-# overload forward function with deviation step function
+def body_fun():
+    
+    pass
 
 
 if __name__ == "__main__":
@@ -176,9 +194,9 @@ if __name__ == "__main__":
     # initialise model: dyn and costs
     model = define_model()
     # test forward step
-    print(model.dynamics(np.ones((3, 1)), np.ones((2, 1)), params).shape)
+    print(model.dynamics(np.ones((3, 1)), np.ones((2, 1)), params.theta).shape)
     # test differentiation
-    print(linearise(model.dynamics)(np.ones((3,)), np.ones((2,)), params)[0].shape)
+    print(linearise(model.dynamics)(np.ones((3,)), np.ones((2,)), params.theta)[0].shape)
     # test vectorisation in time
     print(
         vectorise_fun_in_time(linearise(model.dynamics))(
@@ -194,7 +212,7 @@ if __name__ == "__main__":
                     2,
                 )
             ),
-            params,
+            params.theta,
         )[0].shape
     )
     # Guess a U
