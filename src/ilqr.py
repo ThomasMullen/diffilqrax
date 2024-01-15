@@ -104,31 +104,47 @@ def approx_lqr(model: System, Xs: np.ndarray, Us: np.ndarray, params: Params):
 
 
 def define_model():
-    # key = jax.random.PRNGKey(42)
-    # key, subkey = jax.random.split(key)
     def cost(x: np.array, u: np.array, theta: Theta):
-        # return np.sum(np.sin(x * np.pi)) + np.sum(u**2)
         return np.sum(x**2) + np.sum(u**2)
 
     def costf(x: np.array, theta: Theta):
         return np.sum(np.abs(x))
 
     def dynamics(x: np.array, u: np.array, theta: Theta):
-        # key, subkey = jax.random.split(key)
-
-        # Uh = np.array(
-        #     [[-0.63462433, -1.22943886, -0.07712939],
-        #     [-0.22857423, -1.36123108, -0.04661756],
-        #     [-0.14380682,  1.75378683, -1.77218787]]
-        # )
-        # Wh = np.array(
-        #     [[ 0.37087464, -1.1752595 ],
-        #     [-0.51433962,  1.94757307],
-        #     [-1.29836488, -0.61030051]]
-        #     )
         return np.tanh(theta.Uh @ x + theta.Wh @ u)
 
     return System(cost, costf, dynamics, horizon=40)
+
+
+def ddp_rollout(
+    model: System,
+    params: Params,
+    Ks: Gains,
+    Xs: np.ndarray,
+    Us: np.ndarray,
+    alpha: float = 1.0,
+):
+    x0, theta = params.x0, params.theta
+    x_hat0 = x0
+
+    def fwd_step(state, inputs):
+        x_hat, nx_cost = state
+        x, u, K, k = inputs
+
+        δx = x_hat - x
+        δu = K @ δx + alpha * k
+        u_hat = u + δu
+        nx_hat = model.dynamics(x_hat, u_hat, theta)
+        nx_cost = nx_cost + model.cost(x_hat, u_hat, theta)
+        return (nx_hat, nx_cost), (nx_hat, u_hat)
+
+    (xf, nx_cost), (new_Xs, new_Us) = lax.scan(
+        fwd_step, init=(x_hat0, 0.0), xs=(Xs, Us, Ks.K, Ks.k)
+    )
+    total_cost = nx_cost + model.costf(xf, theta)
+    new_Xs = np.vstack([x0[None], new_Xs])
+
+    return (new_Xs, new_Us), total_cost
 
 
 # recursive linesearch
@@ -197,4 +213,6 @@ if __name__ == "__main__":
     # test backward sweep
     (dC, Ks), f = backward(lqr_approximated, 40, True)
     # test forward update sweep
-    X_preds, U_preds = forward(lqr_approximated, Ks, x_init=np.zeros((3, 1)))
+    (new_Xs, new_Us), total_cost = ddp_rollout(
+        model=model, params=params, Ks=Ks, Xs=Xs[:-1], Us=Us, alpha=1
+    )
