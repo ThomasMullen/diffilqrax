@@ -45,12 +45,13 @@ class LQR(NamedTuple):
         )
 
 
-class Gains(NamedTuple):
-    """LQR Gains
+class Params(NamedTuple):
+    """Contains initial states and LQR parameters"""
+    x0: np.ndarray
+    lqr: LQR
 
-    Args:
-        NamedTuple (np.ndarray): Linear input gains
-    """
+class Gains(NamedTuple):
+    """Linear input gains"""
 
     K: np.ndarray
     k: np.ndarray
@@ -61,20 +62,45 @@ class ValueIter(NamedTuple):
 
     V: np.ndarray
     v: np.ndarray
+    
+    
+def rollout(dynamics: Callable, Us: np.ndarray, params: Params):
+    """Simulate forward pass with LQR params"""
+    x0, lqr = params.x0, params[1]
+    def step(x, u):
+        nx = dynamics(x, u, lqr)
+        return nx, nx
+    return np.vstack([x0[None], lax.scan(step, x0, Us)[1]])
 
+
+# # step for forward rollout
+# def linear_step(x, params):
+#     A, B, a, K, k = params
+#     u = K @ x + k
+#     nx = A @ x + B @ u + a
+#     return nx, (nx, u)
+
+# # step for forward tracking we rollout
+# def track_step(x, params):
+#     A, B, a, K, k, x_star, u_star = params
+#     δx = x - x_star
+#     δu = K @ δx + k
+#     u_hat = u_star + δu
+#     nx = A @ x + B @ u_hat + a
+#     return nx, (nx, u_hat)
 
 # forward pass
-def forward(
-    lqr: LQR, gains: Gains, x_init: np.ndarray
+def forward(gains: Gains, params: Params
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Forward iteration of LDS using gains"""
+    x0, lqr = params.x0, params.lqr
     def dynamics(x, params):
         A, B, a, K, k = params
         u = K @ x + k
         nx = A @ x + B @ u + a
         return nx, (nx, u)
 
-    xf, (Xs, Us) = lax.scan(dynamics, init=x_init, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k))
+    xf, (Xs, Us) = lax.scan(dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k))
     return Xs, Us
 
 
@@ -82,10 +108,14 @@ def forward(
 def backward(
     lqr: LQR,
     T: int,
+    expected_change: bool=False,
+    verbose: bool=False,
 ) -> Gains:
-    def riccati_step(carry: ValueIter, t: int) -> Tuple[ValueIter, Gains]:
+    I_mu = np.eye(lqr.R.shape[-1])*1e-9
+    def riccati_step(carry: Tuple[ValueIter, ValueIter], t: int) -> Tuple[ValueIter, Gains]:
         symmetrise = lambda x: (x + x.T) / 2
-        V, v = carry.V, carry.v
+        curr_val, cost_step = carry
+        V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
         Hxx = symmetrise(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
         Huu = symmetrise(lqr.R[t] + BT[t] @ V @ lqr.B[t])
@@ -94,28 +124,45 @@ def backward(
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
         # solve gains
-        K = -np.linalg.solve(Huu, Hxu.T)
-        k = -np.linalg.solve(Huu, hu)
+        # With Levenberg-Marquardt regulisation
+        K = -np.linalg.solve(Huu+I_mu, Hxu.T)
+        k = -np.linalg.solve(Huu+I_mu, hu)
 
+        if verbose:
+            print("I_mu", I_mu.shape, "v",v.shape, "V",V.shape)
+            print("Hxx",Hxx.shape, "Huu",Huu.shape, "Hxu",Hxu.shape, "hx",hx.shape, "hu",hu.shape)
+            print("k",k.shape, "K",K.shape)
+        
         # Find value iteration at current time
         V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
-        v_curr = hx + Hxu @ k
+        v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
+        
+        # expected change in cost
+        dJ = dJ + 0.5*(k.T @ Huu @ k).squeeze()
+        dj = dj + (k.T @ hu).squeeze()
 
-        return ValueIter(V_curr, v_curr), Gains(K, k)
+        return (ValueIter(V_curr, v_curr), ValueIter(dJ, dj)), Gains(K, k)
 
-    V_0, Ks = lax.scan(
-        riccati_step, init=ValueIter(lqr.Qf, lqr.qf), xs=np.arange(T), reverse=True
+    (V_0, dJ), Ks = lax.scan(
+        riccati_step, init=(ValueIter(lqr.Qf, lqr.qf), (ValueIter(0., 0.))), xs=np.arange(T), reverse=True
     )
-    # return np.flip(Ks)
-    return Ks
+    if not expected_change:
+        return dJ, Ks
+        
+    return (dJ, Ks), calc_expected_change
+
+def calc_expected_change(alpha:float, dJ: ValueIter):
+    return dJ.V*alpha**2 + dJ.v*alpha
 
 
 # lqr solve
-def solve_lqr():
+def solve_lqr(params: Params, horizon: int):
+    "run backward forward sweep to find optimal control"
     # backward
-
+    _, gains = backward(params.lqr, horizon)
     # forward
-    pass
+    Xs, Us = forward(gains, params)
+    return gains, Xs, Us
 
 
 def init_params():
@@ -151,8 +198,8 @@ def init_params():
 
 if __name__ == "__main__":
     # generate some dynamics
-    x_init = np.array([[2.],[1.]])
+    x0 = np.array([[2.],[1.]])
     lqr = init_params()
-    gains = backward(lqr, 20)
-    Xs, Us = forward(lqr, gains, x_init)
-    pass
+    params = Params(x0, lqr)
+    _, gains = backward(params.lqr, 20)
+    Xs, Us = forward(gains, params)
