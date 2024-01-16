@@ -3,7 +3,7 @@ import jax
 import jax.lax as lax
 import jax.numpy as np
 from functools import partial
-
+import jaxopt
 # from . import LQR
 import sys
 
@@ -147,29 +147,35 @@ def ddp_rollout(
     return (new_Xs, new_Us), total_cost
 
 
-# recursive linesearch
-# structure of while loop represented as a scan
-def while_loop(continue_search:Callable[[float,float,float],bool],
-               body_fun:Callable,
-               init_val:Tuple[Any],
-               max_iter:int=20):
-    
-    def loop(carry):
-        cond, state = carry
-        new_state = lax.cond(cond, body_fun, lambda x: x, state)
-        return (cond, new_state), new_state
-    
-    (converged, final_state), _ = lax.scan(loop, init=(continue_search(init_val), init_val), length=max_iter) 
-    pass
 
-def continue_search():
+def ilQR():
+    # approximate dyn and loss to LQR with initial {u} and {x}
     
-    pass
-
-def body_fun():
+    # define initial carry tuple: (Xs, Us, Total cost (old), cond)
     
-    pass
+    
+    # define body_fun(carry_tuple)
+        # approximate dyn and loss to LQR with initial {u} and {x}
+        
+        # calc gains and expected dJ0
+        
+        # rollout with non-linear dynamics, α=1.
+        
+        # calc change in dJ0 w.r.t old dJ0
+        
+        # determine cond: ΔJ0 > threshold
+        
+        # return (new_Xs, new_Us, dJ0, cond)
 
+    # loop_fun: NOTE if cond false return existing carry
+        # new_carry_tuple = lax.cond(cond, body_fun, lambda x: x, carry_tuple)
+
+    # scan through with max iterations
+    # (Xs, Us, Total cost (old), _), _ = lax.scan(loop_fun, init_carry, None, length=max_iter)
+
+
+
+    return
 
 if __name__ == "__main__":
     key = jax.random.PRNGKey(42)
@@ -196,7 +202,9 @@ if __name__ == "__main__":
     # test forward step
     print(model.dynamics(np.ones((3, 1)), np.ones((2, 1)), params.theta).shape)
     # test differentiation
-    print(linearise(model.dynamics)(np.ones((3,)), np.ones((2,)), params.theta)[0].shape)
+    print(
+        linearise(model.dynamics)(np.ones((3,)), np.ones((2,)), params.theta)[0].shape
+    )
     # test vectorisation in time
     print(
         vectorise_fun_in_time(linearise(model.dynamics))(

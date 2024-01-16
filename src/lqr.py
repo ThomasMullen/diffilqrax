@@ -149,7 +149,7 @@ def backward(
     if not expected_change:
         return dJ, Ks
         
-    return (dJ, Ks), calc_expected_change
+    return (dJ, Ks), calc_expected_change(dJ=dJ)
 
 def calc_expected_change(alpha:float, dJ: ValueIter):
     return dJ.V*alpha**2 + dJ.v*alpha
