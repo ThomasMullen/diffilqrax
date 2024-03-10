@@ -19,9 +19,9 @@ class System(NamedTuple):
     """iLQR System
 
     cost : Callable
-        running cost l(x, u)
+        running cost l(x, u, params)
     costf : Callable
-        final state cost lf(xf)
+        final state cost lf(xf, params)
     dynamics : Callable
         dynamical update f(x, u, params)
     """

@@ -111,7 +111,7 @@ def backward(
     expected_change: bool=False,
     verbose: bool=False,
 ) -> Gains:
-    I_mu = np.eye(lqr.R.shape[-1])*1e-9
+    I_mu = np.eye(lqr.R.shape[-1])*1e-8
     def riccati_step(carry: Tuple[ValueIter, ValueIter], t: int) -> Tuple[ValueIter, Gains]:
         symmetrise = lambda x: (x + x.T) / 2
         curr_val, cost_step = carry
@@ -171,14 +171,14 @@ def init_params():
     m=10
     tps=20
     A = np.array([[0.,1.], [-k_spring/m, -k_damp/m]])
-    B = np.array([[0.],[1.]])
+    B = np.array([[0.5],[1.]])
     a = np.array([[0.],[0.]])
     
-    Qf = np.eye(2)*10
+    Qf = np.eye(2)*1.
     qf = np.array([[0.],[0.]])
-    Q = np.eye(2)*10
+    Q = np.eye(2)*1.
     q = np.array([[0.],[0.]])
-    R = np.eye(1)*0.1
+    R = np.eye(1)*1.
     r = np.array([0.])
     S = np.zeros((2,1))
     
