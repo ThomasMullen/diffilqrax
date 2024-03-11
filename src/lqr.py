@@ -88,7 +88,16 @@ class ValueIter(NamedTuple):
 def simulate_trajectory(
     dynamics: Callable, Us: np.ndarray, params: Params
 ) -> np.ndarray:
-    """Simulate forward pass with LQR params"""
+    """Simulate forward pass with LQR params
+
+    Args:
+        dynamics (Callable): function of dynamics with args t, x, u, params
+        Us (np.ndarray): Input timeseries shape [Txm]
+        params (Params): Parameters containing x_init, horizon and theta
+
+    Returns:
+        np.ndarray: state trajectory [(T+1)xn]
+    """
     x0, horizon, lqr = params.x0, params.horizon, params[2]
 
     def step(x, inputs):
@@ -108,7 +117,16 @@ def lin_dyn_step(t: int, x: np.array, u: np.array, lqr: LQR) -> np.array:
 
 
 def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarray:
-    """Adjoint backward pass with LQR params"""
+    """Adjoint backward pass with LQR params
+
+    Args:
+        Xs (np.ndarray): State timeseries shape [(T+1)xn]
+        Us (np.ndarray): Input timeseries shape [Txm]
+        params (Params): LQR state and cost matrices
+
+    Returns:
+        np.ndarray: adjoint λs [(T+1)xn]
+    """
     x0, lqr = params.x0, params[2]
     AT = lqr.A.transpose(0, 2, 1)
     lambf = lqr.Qf @ Xs[-1]
@@ -125,7 +143,15 @@ def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarr
 
 
 def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarray]:
-    """LQR forward pass using gain state feedback"""
+    """LQR forward pass using gain state feedback
+
+    Args:
+        gains (Gains): K matrices
+        params (Params): LQR state and cost matrices
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: updated state [(T+1)xn] and inputs [Txm]
+    """
     x0, lqr = params.x0, params.lqr
 
     def dynamics(x: np.array, params: LQRBackParams):
@@ -144,7 +170,17 @@ def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarr
 def lqr_tracking_forward_pass(
     gains: Gains, params: Params, Xs_star: np.ndarray, Us_star: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """LQR forward pass tracking using gain state feedback on state-input deviations"""
+    """LQR forward pass tracking using gain state feedback on state-input deviations
+
+    Args:
+        gains (Gains): K matrices
+        params (Params): LQR state and cost matrices
+        Xs_star (np.ndarray): target trajectory [(T+1)xn]
+        Us_star (np.ndarray): initial input [Txm]
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: updated state [(T+1)xn] and inputs [Txm]
+    """
     x0, lqr = params.x0, params.lqr
     dx0 = x0 - Xs_star[0]
 
@@ -175,6 +211,17 @@ def lqr_backward_pass(
     expected_change: bool = False,
     verbose: bool = False,
 ) -> Gains:
+    """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
+
+    Args:
+        lqr (LQR): LQR parameters
+        T (int): parameter time horizon
+        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020]. Defaults to False.
+        verbose (bool, optional): Print out matrix shapes for debugging. Defaults to False.
+
+    Returns:
+        Gains: Optimal feedback gains.
+    """
     I_mu = np.eye(lqr.R.shape[-1]) * 1e-8
     AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
 
