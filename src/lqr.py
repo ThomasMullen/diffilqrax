@@ -1,5 +1,7 @@
 """LQR solver via dynamic programming"""
 from typing import Callable, NamedTuple, Tuple, Union
+from jax.typing import ArrayLike
+from jax import Array
 import jax
 import jax.lax as lax
 import jax.numpy as np
@@ -13,18 +15,18 @@ symmetrise_matrix = lambda x: (x + x.T) / 2
 
 # LQR struct
 LQRBackParams = Tuple[
-    np.ndarray, np.ndarray, np.array, np.ndarray, np.array, np.ndarray, np.array
+    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike
 ]
 LQRTrackParams = Tuple[
-    np.ndarray,
-    np.ndarray,
-    np.array,
-    np.ndarray,
-    np.array,
-    np.ndarray,
-    np.array,
-    np.array,
-    np.array,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
 ]
 
 
@@ -35,16 +37,16 @@ class LQR(NamedTuple):
         NamedTuple (np.ndarray): Dynamics and Cost parameters. Shape [T,X,Y]
     """
 
-    A: np.ndarray
-    B: np.ndarray
-    a: np.ndarray
-    Q: np.ndarray
-    q: np.ndarray
-    Qf: np.ndarray
-    qf: np.ndarray
-    R: np.ndarray
-    r: np.ndarray
-    S: np.ndarray
+    A: Array
+    B: Array
+    a: Array
+    Q: Array
+    q: Array
+    Qf: Array
+    qf: Array
+    R: Array
+    r: Array
+    S: Array
 
     def __call__(self):
         """Symmetrise quadratic costs"""
@@ -65,38 +67,38 @@ class LQR(NamedTuple):
 class Params(NamedTuple):
     """Contains initial states and LQR parameters"""
 
-    x0: np.ndarray
+    x0: ArrayLike
     horizon: int
-    lqr: Union[LQR, Tuple[np.ndarray]]
+    lqr: Union[LQR, Tuple[ArrayLike]]
 
 
 class Gains(NamedTuple):
     """Linear input gains"""
 
-    K: np.ndarray
-    k: np.ndarray
+    K: ArrayLike
+    k: ArrayLike
 
 
 class ValueIter(NamedTuple):
     """Cost-to-go"""
 
-    V: np.ndarray
-    v: np.ndarray
+    V: ArrayLike
+    v: ArrayLike
 
 
 # simulate trajectory
 def simulate_trajectory(
-    dynamics: Callable, Us: np.ndarray, params: Params
-) -> np.ndarray:
+    dynamics: Callable, Us: ArrayLike, params: Params
+) -> Array:
     """Simulate forward pass with LQR params
 
     Args:
         dynamics (Callable): function of dynamics with args t, x, u, params
-        Us (np.ndarray): Input timeseries shape [Txm]
+        Us (ArrayLike): Input timeseries shape [Txm]
         params (Params): Parameters containing x_init, horizon and theta
 
     Returns:
-        np.ndarray: state trajectory [(T+1)xn]
+        Array: state trajectory [(T+1)xn]
     """
     x0, horizon, lqr = params.x0, params.horizon, params[2]
 
@@ -110,13 +112,13 @@ def simulate_trajectory(
     return np.vstack([x0[None], Xs])
 
 
-def lin_dyn_step(t: int, x: np.array, u: np.array, lqr: LQR) -> np.array:
+def lin_dyn_step(t: int, x: ArrayLike, u: ArrayLike, lqr: LQR) -> Array:
     """State space linear step"""
     nx = lqr.A[t] @ x + lqr.B[t] @ u + lqr.a[t]
     return nx
 
 
-def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarray:
+def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: Params) -> Array:
     """Adjoint backward pass with LQR params
 
     Args:
@@ -142,7 +144,7 @@ def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarr
     return np.vstack([np.flip(lambs), lambf[None]])
 
 
-def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarray]:
+def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[Array, Array]:
     """LQR forward pass using gain state feedback
 
     Args:
@@ -150,7 +152,7 @@ def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarr
         params (Params): LQR state and cost matrices
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: updated state [(T+1)xn] and inputs [Txm]
+        Tuple[Array, Array]: updated state [(T+1)xn] and inputs [Txm]
     """
     x0, lqr = params.x0, params.lqr
 
@@ -168,23 +170,23 @@ def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarr
 
 
 def lqr_tracking_forward_pass(
-    gains: Gains, params: Params, Xs_star: np.ndarray, Us_star: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
+    gains: Gains, params: Params, Xs_star: ArrayLike, Us_star: ArrayLike
+) -> Tuple[Array, Array]:
     """LQR forward pass tracking using gain state feedback on state-input deviations
 
     Args:
         gains (Gains): K matrices
         params (Params): LQR state and cost matrices
-        Xs_star (np.ndarray): target trajectory [(T+1)xn]
-        Us_star (np.ndarray): initial input [Txm]
+        Xs_star (ArrayLike): target trajectory [(T+1)xn]
+        Us_star (ArrayLike): initial input [Txm]
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: updated state [(T+1)xn] and inputs [Txm]
+        Tuple[Array, Array]: updated state [(T+1)xn] and inputs [Txm]
     """
     x0, lqr = params.x0, params.lqr
     dx0 = x0 - Xs_star[0]
 
-    def dynamics(x: np.array, params: LQRTrackParams):
+    def dynamics(x: ArrayLike, params: LQRTrackParams):
         A, B, a, K, k, x_star, u_star = params
         δx = x - x_star
         δu = K @ δx + k
