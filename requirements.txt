@@ -9,3 +9,4 @@ tqdm
 jax_dataclasses
 torch
 chex
+pytest
