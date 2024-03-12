@@ -1,5 +1,6 @@
 from .lqr import (
     Gains,
+    LQR,
     simulate_trajectory,
     lqr_adjoint_pass,
     lin_dyn_step,
