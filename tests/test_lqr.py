@@ -5,8 +5,8 @@ from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
 
-from tests.fixtures import sys_matrices, sys_dims
-from src.lqr import Gains, LQR, Params, simulate_trajectory, lqr_adjoint_pass, lin_dyn_step, lqr_forward_pass, lqr_tracking_forward_pass, lqr_backward_pass, solve_lqr
+# from tests.fixtures import sys_matrices, sys_dims
+from src.lqr import Gains, CostToGo, LQR, Params, simulate_trajectory, lqr_adjoint_pass, lin_dyn_step, lqr_forward_pass, lqr_tracking_forward_pass, lqr_backward_pass, solve_lqr
 
 
 
@@ -31,13 +31,13 @@ class TestLQR(unittest.TestCase):
     
         A = jr.normal(subkeys[0], self.dims['TNN'])
         B = jr.normal(subkeys[1], self.dims['TNM'])
-        a = jr.normal(subkeys[2], self.dims['TN'])
+        a = jr.normal(subkeys[2], self.dims['TNX'])
         Qf = jnp.eye(self.dims['N'][0])
-        qf = 0.5 * jnp.ones(self.dims['N'][0])
+        qf = 0.5 * jnp.ones(self.dims['NX'])
         Q = jnp.tile(jnp.eye(self.dims['N'][0]), self.dims['TXX'])
-        q = 0.5 * jnp.tile(jnp.ones(self.dims['N']), self.dims['TX'])
+        q = 0.5 * jnp.tile(jnp.ones(self.dims['NX']), self.dims['TXX'])
         R = jnp.tile(jnp.eye(self.dims['M'][0]), self.dims['TXX'])
-        r = 0.5 * jnp.tile(jnp.ones(self.dims['M']), self.dims['TX'])
+        r = 0.5 * jnp.tile(jnp.ones(self.dims['MX']), self.dims['TXX'])
         S = 0.5 * jnp.tile(jnp.ones(self.dims['NM']), self.dims['TXX'])
         
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
@@ -93,17 +93,61 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(Xs,  float)
         chex.assert_shape(Xs,  (self.dims["T"][0]+1,) + self.dims["NX"])
         
-        pass
-    
     
     def test_lqr_adjoint_pass(self):
-        pass
+        print("Running test_lqr_adjoint_pass")
+        params = Params(self.x0, self.dims["T"][0], self.lqr)
+        Xs_sim = simulate_trajectory(lin_dyn_step, self.Us, params)
+        Lambs = lqr_adjoint_pass(Xs_sim, self.Us, params)
+        chex.assert_type(Lambs,  float)
+        chex.assert_shape(Lambs,  (self.dims["T"][0]+1,) + self.dims["NX"])
+
+        
+    def test_lqr_backward_pass(self):
+        params = Params(self.x0, self.dims["T"][0], self.lqr)
+        (dJ, Ks), exp_dJ = lqr_backward_pass(
+            lqr=params.lqr, 
+            T=params.horizon, 
+            expected_change=True, 
+            verbose=False
+        )
+        chex.assert_type(Ks.K,  float)
+        chex.assert_shape(Ks.K,  self.dims["TMN"])
+        chex.assert_type(Ks.k,  float)
+        chex.assert_shape(Ks.k,  self.dims["TMX"])
+        chex.assert_type(dJ,  float)
+        chex.assert_type(exp_dJ,  float)
+        
         
     def test_lqr_forward_pass(self):
-        pass
+        params = Params(self.x0, self.dims["T"][0], self.lqr)
+        (dJ, Ks), exp_dJ = lqr_backward_pass(
+            lqr=params.lqr, 
+            T=params.horizon, 
+            expected_change=True, 
+            verbose=False
+        )
+        Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
+        chex.assert_type(Xs_lqr,  float)
+        chex.assert_shape(Xs_lqr,  (self.dims["T"][0]+1,) + self.dims["NX"])
+        chex.assert_type(Us_lqr,  float)
+        chex.assert_shape(Us_lqr,  self.dims["TMX"])
         
         
     def test_solve_lqr(self):
+        params = Params(self.x0, self.dims["T"][0], self.lqr)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, params.horizon)
+        chex.assert_type(gains_lqr.K,  float)
+        chex.assert_shape(gains_lqr.K,  self.dims["TMN"])
+        chex.assert_type(gains_lqr.k,  float)
+        chex.assert_shape(gains_lqr.k,  self.dims["TMX"])
+        chex.assert_type(Xs_lqr,  float)
+        chex.assert_shape(Xs_lqr,  (self.dims["T"][0]+1,) + self.dims["NX"])
+        chex.assert_type(Us_lqr,  float)
+        chex.assert_shape(Us_lqr,  self.dims["TMX"])
+        chex.assert_type(Lambs_lqr,  float)
+        chex.assert_shape(Lambs_lqr,  (self.dims["T"][0]+1,) + self.dims["NX"])
+        
         pass
         
 
@@ -111,6 +155,7 @@ class TestLQR(unittest.TestCase):
         """Destruct test class
         """
         print("Running tearDown method...")
+
 class TestLQRSolution(unittest.TestCase):
     """Test LQR solution using jaxopt conjugate gradient solution"""
     pass
