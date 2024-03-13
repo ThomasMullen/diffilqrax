@@ -269,7 +269,7 @@ def init_params():
         Qf=Qf,
         qf=qf,
         R=np.tile(R, (tps, 1, 1)),
-        r=np.tile(r, (tps, 1)),
+        r=np.tile(r, (tps, 1, 1)),
         S=np.tile(S, (tps, 1, 1)),
     )
     return lqr()
