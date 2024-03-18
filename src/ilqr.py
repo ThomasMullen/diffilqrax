@@ -1,7 +1,7 @@
 """iterative LQR solver"""
 from typing import Callable, Any, Optional, NamedTuple
 from jax import Array
-from jax.typing import ArrayLike
+from jax.typing import ArrayLike, Tuple
 import jax
 import jax.lax as lax
 import jax.numpy as np
@@ -127,14 +127,115 @@ def approx_lqr(
     return lqr
 
 
+def ilqr_forward_pass(
+    model: System,
+    params: Params,
+    Ks: lqr.Gains,
+    Xs: np.ndarray,
+    Us: np.ndarray,
+    alpha: float = 1.0,
+):
+    """
+    Performs a forward pass of the iterative Linear Quadratic Regulator (iLQR) algorithm. Uses the deviations of target state and system generated state to update control inputs using gains obtained from LQR solver.
+
+    Args:
+        model (System): The nonlinear system model.
+        params (Params): The parameters of the system.
+        Ks (lqr.Gains): The gains obtained from the LQR controller.
+        Xs (np.ndarray): The target state trajectory.
+        Us (np.ndarray): The control trajectory.
+        alpha (float, optional): The linesearch parameter (TODO: implement linesearch). Defaults to 1.0.
+
+    Returns:
+        Tuple[[np.ndarray, np.ndarray], float]: A tuple containing the updated state trajectory and control trajectory, 
+        and the total cost of the trajectory.
+    """
+    
+    x0, theta = params.x0, params.theta
+    x_hat0 = x0
+
+    def fwd_step(state, inputs):
+        x_hat, nx_cost = state
+        x, u, K, k = inputs
+
+        delta_x = x_hat - x
+        delta_u = K @ delta_x + alpha * k
+        u_hat = u + delta_u
+        nx_hat = model.dynamics(None, x_hat, u_hat, theta)
+        nx_cost = nx_cost + model.cost(None, x_hat, u_hat, theta)
+        return (nx_hat, nx_cost), (nx_hat, u_hat)
+
+    (xf, nx_cost), (new_Xs, new_Us) = lax.scan(
+        fwd_step, init=(x_hat0, 0.0), xs=(Xs, Us, Ks.K, Ks.k)
+    )
+    total_cost = nx_cost + model.costf(xf, theta)
+    new_Xs = np.vstack([x0[None], new_Xs])
+
+    return (new_Xs, new_Us), total_cost
+
+
+def ilQR_solver(model: System, params: Params, X_inits: Array, U_inits: Array, max_iter:int=10, tol:float=1e-6):
+    """Solves the iterative Linear Quadratic Regulator (iLQR) problem.
+
+    This function iteratively solves the LQR problem by approximating the dynamics and cost-to-go functions
+    using linearizations around the current state and control trajectories. It performs a backward pass to
+    calculate the control gains and expected cost reduction, and then performs a forward pass to update the
+    state and control trajectories. This process is repeated until the change in the cost-to-go function
+    falls below a specified tolerance or the maximum number of iterations is reached.
+
+    Args:
+        model (System): The system model.
+        params (Params): The parameters of the system.
+        X_inits (Array): The initial state trajectory.
+        U_inits (Array): The initial control trajectory.
+        max_iter (int, optional): The maximum number of iterations. Defaults to 10.
+        tol (float, optional): The tolerance for convergence. Defaults to 1e-6.
+
+    Returns:
+        Tuple[Array, Array, Array]: A tuple containing the final state trajectory, control trajectory, and
+        the adjoint variables.
+    """
+    # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
+    initial_carry = (X_inits, U_inits, 0.0, 0, True)
+    
+    # define body_fun(carry_tuple)
+    def lqr_iter(carry_tuple: Tuple[Array, Array, float, bool], _):
+        """lqr iteration update function"""
+        # unravel carry
+        old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
+        # approximate dyn and loss to LQR with initial {u} and {x}
+        lqr_params = approx_lqr(model, old_Xs, old_Us, params)
+        # calc gains and expected dJ0
+        (total_cost, gains), exp_cost_red = lqr.lqr_backward_pass(lqr_params, model.horizon, expected_change=True, verbose=False)
+        # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
+        (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(model, params, gains, old_Xs, old_Us, alpha=1.0)
+        # calc change in dJ0 w.r.t old dJ0
+        z = (total_cost - new_total_cost) / exp_cost_red
+        # determine cond: ΔJ0 > threshold
+        carry_on = z > tol
+        
+        return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
+
+    def loop_fun(carry_tuple: Tuple[Array, Array, float, bool], _):
+        """if cond false return existing carry else run another iteration of lqr_iter"""
+        updated_carry = lax.cond(carry_tuple[-1], lqr_iter, lambda x: x, carry_tuple)
+        return updated_carry, _
+
+    # scan through with max iterations
+    (Xs_stars, Us_stars, total_cost, _, _), _ = lax.scan(loop_fun, initial_carry, None, length=max_iter)
+    lqr_params_stars = approx_lqr(model, Xs, Us, params)
+    Lambs_stars = lqr.lqr_adjoint_pass(lqr_params_stars, Xs_stars, Us_stars)
+    return Xs_stars, Us_stars, Lambs_stars
+
+
 def define_model():
-    def cost(t: int, x: np.array, u: np.array, theta: Theta):
+    def cost(t: int, x: Array, u: Array, theta: Theta):
         return np.sum(x**2) + np.sum(u**2)
 
-    def costf(x: np.array, theta: Theta):
+    def costf(x: Array, theta: Theta):
         return np.sum(np.abs(x))
 
-    def dynamics(t: int, x: np.array, u: np.array, theta: Theta):
+    def dynamics(t: int, x: Array, u: Array, theta: Theta):
         return np.tanh(theta.Uh @ x + theta.Wh @ u)
 
     return System(cost, costf, dynamics, horizon=20, n=3, m=2)
