@@ -197,20 +197,16 @@ def lqr_backward_pass(
         k = -np.linalg.solve(Huu + I_mu, hu)
 
         if verbose:
-            print("I_mu", I_mu.shape, "v", v.shape, "V", V.shape)
-            print(
-                "Hxx",
-                Hxx.shape,
-                "Huu",
-                Huu.shape,
-                "Hxu",
-                Hxu.shape,
-                "hx",
-                hx.shape,
-                "hu",
-                hu.shape,
-            )
-            print("k", k.shape, "K", K.shape)
+            assert I_mu.shape == Huu.shape
+            assert v.shape == (Huu.shape[0],)
+            assert V.shape == Hxx.shape
+            assert Hxx.shape == (lqr.A.shape[1], lqr.A.shape[1])
+            assert Huu.shape == (lqr.B.shape[2], lqr.B.shape[2])
+            assert Hxu.shape == (lqr.A.shape[1], lqr.B.shape[2])
+            assert hx.shape == (lqr.A.shape[1],)
+            assert hu.shape == (lqr.B.shape[2],)
+            assert k.shape == (lqr.B.shape[2],)
+            assert K.shape == (lqr.B.shape[2], lqr.A.shape[1])
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
