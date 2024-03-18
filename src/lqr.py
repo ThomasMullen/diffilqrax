@@ -230,10 +230,10 @@ def lqr_backward_pass(
     return (dJ, Ks), calc_expected_change(dJ=dJ)
 
 
-def solve_lqr(params: Params, horizon: int):
+def solve_lqr(params: Params):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains = lqr_backward_pass(params.lqr, horizon)
+    _, gains = lqr_backward_pass(params.lqr, params.horizon)
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
