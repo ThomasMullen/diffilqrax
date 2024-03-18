@@ -79,7 +79,7 @@ class Gains(NamedTuple):
     k: ArrayLike
 
 
-class ValueIter(NamedTuple):
+class CostToGo(NamedTuple):
     """Cost-to-go"""
 
     V: ArrayLike
@@ -141,7 +141,7 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: Params) -> Array:
     _, lambs = lax.scan(
         adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
     )
-    return np.vstack([np.flip(lambs), lambf[None]])
+    return np.flip(np.vstack([lambf[None], lambs]), axis=0)
 
 
 def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[Array, Array]:
@@ -188,9 +188,9 @@ def lqr_tracking_forward_pass(
 
     def dynamics(x: ArrayLike, params: LQRTrackParams):
         A, B, a, K, k, x_star, u_star = params
-        δx = x - x_star
-        δu = K @ δx + k
-        u_hat = u_star + δu
+        delta_x = x - x_star
+        delta_u = K @ delta_x + k
+        u_hat = u_star + delta_u
         nx = A @ x + B @ u_hat + a
         return nx, (nx, u_hat)
 
@@ -203,7 +203,7 @@ def lqr_tracking_forward_pass(
     return np.vstack([x0[None], Xs]), Us
 
 
-def calc_expected_change(dJ: ValueIter, alpha: float = 0.5):
+def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
     return dJ.V * alpha**2 + dJ.v * alpha
 
 
@@ -228,8 +228,8 @@ def lqr_backward_pass(
     AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
 
     def riccati_step(
-        carry: Tuple[ValueIter, ValueIter], t: int
-    ) -> Tuple[ValueIter, Gains]:
+        carry: Tuple[CostToGo, CostToGo], t: int
+    ) -> Tuple[CostToGo, Gains]:
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         Hxx = symmetrise_matrix(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
@@ -267,11 +267,11 @@ def lqr_backward_pass(
         dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
         dj = dj + (k.T @ hu).squeeze()
 
-        return (ValueIter(V_curr, v_curr), ValueIter(dJ, dj)), Gains(K, k)
+        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), Gains(K, k)
 
     (V_0, dJ), Ks = lax.scan(
         riccati_step,
-        init=(ValueIter(lqr.Qf, lqr.qf), (ValueIter(0.0, 0.0))),
+        init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
         xs=np.arange(T),
         reverse=True,
     )
@@ -318,7 +318,7 @@ def init_params():
         Qf=Qf,
         qf=qf,
         R=np.tile(R, (tps, 1, 1)),
-        r=np.tile(r, (tps, 1)),
+        r=np.tile(r, (tps, 1, 1)),
         S=np.tile(S, (tps, 1, 1)),
     )
     return lqr()
