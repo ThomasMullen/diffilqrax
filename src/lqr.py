@@ -175,7 +175,6 @@ def lqr_backward_pass(
     expected_change: bool = False,
     verbose: bool = False,
 ) -> Gains:
-    I_mu = np.eye(lqr.R.shape[-1]) * 1e-8
     AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
 
     def riccati_step(
@@ -189,8 +188,11 @@ def lqr_backward_pass(
         hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
-        # solve gains
         # With Levenberg-Marquardt regulisation
+        min_eval = np.linalg.eigh(Huu)[0][0]
+        I_mu = Huu + np.maximum(0., 1e-6 - min_eval) * np.eye(lqr.R.shape[-1])
+        
+        # solve gains
         K = -np.linalg.solve(Huu + I_mu, Hxu.T)
         k = -np.linalg.solve(Huu + I_mu, hu)
 
