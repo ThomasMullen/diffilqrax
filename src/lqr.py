@@ -190,8 +190,8 @@ def lqr_backward_pass(
 
         # With Levenberg-Marquardt regulisation
         min_eval = np.linalg.eigh(Huu)[0][0]
-        I_mu = Huu + np.maximum(0., 1e-6 - min_eval) * np.eye(lqr.R.shape[-1])
-        
+        I_mu = Huu + np.maximum(0.0, 1e-6 - min_eval) * np.eye(lqr.R.shape[-1])
+
         # solve gains
         K = -np.linalg.solve(Huu + I_mu, Hxu.T)
         k = -np.linalg.solve(Huu + I_mu, hu)
@@ -228,6 +228,37 @@ def lqr_backward_pass(
         return dJ, Ks
 
     return (dJ, Ks), calc_expected_change(dJ=dJ)
+
+
+def kkt(params: Params, Xs: np.ndarray, Us: np.ndarray, Lambs: np.ndarray):
+    """Define KKT conditions for LQR problem"""
+    AT = params.lqr.A.transpose(0, 2, 1)
+    BT = params.lqr.B.transpose(0, 2, 1)
+    ST = params.lqr.S.transpose(0, 2, 1)
+    dLdXs = (
+        np.matmul(params.lqr.Q, Xs[:-1])
+        + np.matmul(params.lqr.S, Us[:])
+        + params.lqr.q
+        + np.matmul(AT, Lambs[1:])
+        - Lambs[:-1]
+    )
+    dLdXf = np.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
+    dLdXs = np.concatenate([dLdXs, dLdXf[None]])
+    dLdUs = (
+        np.matmul(ST, Xs[:-1])
+        + np.matmul(params.lqr.R, Us[:])
+        + params.lqr.r
+        + np.matmul(BT, Lambs[1:])
+    )
+    dLdLambs = (
+        np.matmul(params.lqr.A, Xs[:-1])
+        + np.matmul(params.lqr.B, Us[:])
+        + params.lqr.a
+        - Xs[1:]
+    )
+    dLdLamb0 = params.x0 - Xs[0]
+    dLdLambs = np.concatenate([dLdLamb0[None], dLdLambs])
+    return dLdXs, dLdUs, dLdLambs
 
 
 def solve_lqr(params: Params):
