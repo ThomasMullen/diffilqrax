@@ -121,7 +121,7 @@ def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarr
     _, lambs = lax.scan(
         adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
     )
-    return np.flip(np.vstack([lambf[None], lambs]), axis=0)
+    return np.vstack([lambs,lambf[None]])
 
 
 def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarray]:
@@ -227,7 +227,7 @@ def lqr_backward_pass(
     if not expected_change:
         return dJ, Ks
 
-    return (dJ, Ks), calc_expected_change(dJ=dJ)
+    return (dJ, np.flip(Ks)), calc_expected_change(dJ=dJ)
 
 
 def kkt(params: Params, Xs: np.ndarray, Us: np.ndarray, Lambs: np.ndarray):
