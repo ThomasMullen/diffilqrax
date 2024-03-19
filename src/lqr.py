@@ -227,7 +227,7 @@ def lqr_backward_pass(
     if not expected_change:
         return dJ, Ks
 
-    return (dJ, np.flip(Ks)), calc_expected_change(dJ=dJ)
+    return (dJ, Ks), calc_expected_change(dJ=dJ)
 
 
 def kkt(params: Params, Xs: np.ndarray, Us: np.ndarray, Lambs: np.ndarray):
