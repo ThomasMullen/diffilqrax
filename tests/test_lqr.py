@@ -188,15 +188,39 @@ class TestLQRSolution(unittest.TestCase):
         self.Us = Us
         self.params = Params(self.x0, self.dims["T"][0], self.lqr)
 
-    def test_kkt(self):
+    def test_lqr_solution(self):
+        """test LQR solution using jaxopt conjugate gradient solution"""
+        # Exercise the LQR solver function
         K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
         K_impl, Xs_impl, Us_impl, Lambs_impl = implicit_diff.custom_root(
             kkt, linear_solve.solve_cg
         )(solve_lqr)(self.params)
+        # Verify that the two solutions are close
+        assert jnp.allclose(Xs_dir, Xs_impl, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(Us_dir, Us_impl, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(Lambs_dir, Lambs_impl, rtol=1e-05, atol=1e-08)
 
+
+    def test_kkt_optimal(self):
+        # Setup the LQR problem
+        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
+        # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
-
-    pass
+        # Verify that the KKT conditions are satisfied
+        assert jnp.allclose(dLdXs[:-1], 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+        
+    def test_gradients(self):
+        # Setup the LQR problem
+        
+        # Exercise
+        
+        # Verify
+        # chex.assert_numerical_grads
+        pass
 
 
 if __name__ == "__main__":
