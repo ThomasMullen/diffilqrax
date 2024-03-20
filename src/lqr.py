@@ -141,8 +141,7 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: Params) -> Array:
     _, lambs = lax.scan(
         adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
     )
-    return np.flip(np.vstack([lambf[None], lambs]), axis=0)
-
+    return np.vstack([lambs,lambf[None]])
 
 def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[Array, Array]:
     """LQR forward pass using gain state feedback
@@ -238,26 +237,25 @@ def lqr_backward_pass(
         hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
-        # solve gains
         # With Levenberg-Marquardt regulisation
+        min_eval = np.linalg.eigh(Huu)[0][0]
+        I_mu = Huu + np.maximum(0.0, 1e-6 - min_eval) * np.eye(lqr.R.shape[-1])
+
+        # solve gains
         K = -np.linalg.solve(Huu + I_mu, Hxu.T)
         k = -np.linalg.solve(Huu + I_mu, hu)
 
         if verbose:
-            print("I_mu", I_mu.shape, "v", v.shape, "V", V.shape)
-            print(
-                "Hxx",
-                Hxx.shape,
-                "Huu",
-                Huu.shape,
-                "Hxu",
-                Hxu.shape,
-                "hx",
-                hx.shape,
-                "hu",
-                hu.shape,
-            )
-            print("k", k.shape, "K", K.shape)
+            assert I_mu.shape == Huu.shape
+            assert v.shape == (Huu.shape[0],)
+            assert V.shape == Hxx.shape
+            assert Hxx.shape == (lqr.A.shape[1], lqr.A.shape[1])
+            assert Huu.shape == (lqr.B.shape[2], lqr.B.shape[2])
+            assert Hxu.shape == (lqr.A.shape[1], lqr.B.shape[2])
+            assert hx.shape == (lqr.A.shape[1],)
+            assert hu.shape == (lqr.B.shape[2],)
+            assert k.shape == (lqr.B.shape[2],)
+            assert K.shape == (lqr.B.shape[2], lqr.A.shape[1])
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
@@ -281,10 +279,41 @@ def lqr_backward_pass(
     return (dJ, Ks), calc_expected_change(dJ=dJ)
 
 
-def solve_lqr(params: Params, horizon: int):
+def kkt(params: Params, Xs: Array, Us: Array, Lambs: Array):
+    """Define KKT conditions for LQR problem"""
+    AT = params.lqr.A.transpose(0, 2, 1)
+    BT = params.lqr.B.transpose(0, 2, 1)
+    ST = params.lqr.S.transpose(0, 2, 1)
+    dLdXs = (
+        np.matmul(params.lqr.Q, Xs[:-1])
+        + np.matmul(params.lqr.S, Us[:])
+        + params.lqr.q
+        + np.matmul(AT, Lambs[1:])
+        - Lambs[:-1]
+    )
+    dLdXf = np.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
+    dLdXs = np.concatenate([dLdXs, dLdXf[None]])
+    dLdUs = (
+        np.matmul(ST, Xs[:-1])
+        + np.matmul(params.lqr.R, Us[:])
+        + params.lqr.r
+        + np.matmul(BT, Lambs[1:])
+    )
+    dLdLambs = (
+        np.matmul(params.lqr.A, Xs[:-1])
+        + np.matmul(params.lqr.B, Us[:])
+        + params.lqr.a
+        - Xs[1:]
+    )
+    dLdLamb0 = params.x0 - Xs[0]
+    dLdLambs = np.concatenate([dLdLamb0[None], dLdLambs])
+    return dLdXs, dLdUs, dLdLambs
+
+
+def solve_lqr(params: Params):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains = lqr_backward_pass(params.lqr, horizon)
+    _, gains = lqr_backward_pass(params.lqr, params.horizon)
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
@@ -345,4 +374,4 @@ if __name__ == "__main__":
     Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
 
     # LQR solver
-    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, params.horizon)
+    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
