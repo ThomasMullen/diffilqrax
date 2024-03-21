@@ -1,28 +1,28 @@
 from functools import partial
 import jax.lax as lax
 import jax.numpy as np
-from jax import custom_vjp
+from jax.typing import ArrayLike
+from typing import Tuple
+from jax import Array, custom_vjp
 from .lqr import (
     LQR,
     Params,
     solve_lqr,
 )
 
-"""Batch multiplication function"""
-def bmm(x1: np.ndarray,x2: np.ndarray):
-    return lax.batch_matmul(x1,x2)
+bmm = lax.batch_matmul
 
-"""Helper function to get gradients wrt to q, r, a."""
-def get_qra_bar(params: Params, tau_bar: np.ndarray):
+def get_qra_bar(params: Params, tau_bar: Array)-> Tuple[Array, Array, Array]:
+    """Helper function to get gradients wrt to q, r, a."""
     #q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
-    LQR = params.lqr
-    N, M = LQR.A[0].shape()[1], LQR.B[0].shape()[1] 
-    x_bar, u_bar = tau_bar[...,:N], tau_bar[...,N:]
-    swapped_LQR = LQR
-    Lambs_bar = np.zeros_like(LQR.a)
-    swapped_LQR.q, swapped_LQR.r, swapped_LQR.a = x_bar, u_bar, Lambs_bar
+    lqr = params.lqr
+    n, m = lqr.A[0].shape()[1], lqr.B[0].shape()[1] 
+    x_bar, u_bar = tau_bar[...,:n], tau_bar[...,n:]
+    swapped_lqr = lqr
+    Lambs_bar = np.zeros_like(lqr.a)
+    swapped_lqr.q, swapped_lqr.r, swapped_lqr.a = x_bar, u_bar, Lambs_bar
     swapped_params = params
-    swapped_params.LQR = swapped_LQR
+    swapped_params.lqr = swapped_lqr
     _, q_bar, r_bar, a_bar = solve_lqr(swapped_params, params.horizon)
     ##TODO : check the indices for a_bar
     return q_bar, r_bar, a_bar
@@ -44,17 +44,17 @@ def fwd_dlqr(params: Params):
     tau_star = np.concatenate([Xs_star, Us_star], axis = 1)
     return tau_star, (params, Lambs, tau_star)
 
-def rev_dlqr(res, tau_bar: np.ndarray):
+def rev_dlqr(res, tau_bar: Array)->Params:
   params, Lambs, tau_star = res 
   """
   Inputs : params (contains lqr parameters, x0, and the horizon), tau_star_bar (gradients wrt to tau at tau_star)
   params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
   A : T x N x N
   B : T x N x M
-  a :  T x N x 1
-  q :  T x N x 1
-  Q :  T x N x N
-  R :  T x M x M
+  a : T x N x 1
+  q : T x N x 1
+  Q : T x N x N
+  R : T x M x M
   r : T x M x 1
   S : T x N x M
   
@@ -69,14 +69,14 @@ def rev_dlqr(res, tau_bar: np.ndarray):
   - we don't want to differentiate wrt to the horizon so maybe we shouldn't use the vector containing it
   """
   #
-  N, M = LQR.A[0].shape()[1], LQR.B[0].shape()[1]   
+  n, m = LQR.A[0].shape()[1], LQR.B[0].shape()[1]   
   q_bar, r_bar, a_bar = get_qra_bar(params, tau_bar)
   c_bar = np.concatenate([q_bar, r_bar], axis = 1)
   F_bar = bmm(Lambs[1:],np.transpose(c_bar[:-1], axis = (0,2,1))) + bmm(a_bar[1:],np.transpose(tau_star[:-1], axis = (0,2,1)))
   C_bar = 0.5*(bmm(c_bar,tau_star.T) + bmm(tau_star, c_bar.T))
-  Q_bar, R_bar = C_bar[:,:N,:N], C_bar[:,N:,N:]
-  S_bar = 0.5*(C_bar[:,:N,N:] + np.transpose(C_bar[:,N:,:N], axis = (0,2,1)))
-  A_bar, B_bar = F_bar[...,:N], F_bar[...,:M]
+  Q_bar, R_bar = C_bar[:,:n,:n], C_bar[:,n:,n:]
+  S_bar = 0.5*(C_bar[:,:n,n:] + np.transpose(C_bar[:,n:,:n], axis = (0,2,1)))
+  A_bar, B_bar = F_bar[...,:n], F_bar[...,:m]
   LQR_bar = LQR(A = A_bar, B = B_bar, a = a_bar, Q = Q_bar[:-1], q = q_bar[:-1], Qf = Q_bar[-1][None,...], qf = q_bar[-1][None,...], R = R_bar, r = r_bar, S = S_bar)
   x0_bar = np.zeros_like(params.x0)
   horizon_bar = np.zeros_like(params.horizon)
