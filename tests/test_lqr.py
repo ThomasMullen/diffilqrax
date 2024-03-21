@@ -1,7 +1,7 @@
 import unittest
 import pytest
 import chex
-from jax import Array
+from jax import Array, grad
 import jax.random as jr
 import jax.numpy as jnp
 from jaxopt import linear_solve, implicit_diff
@@ -218,14 +218,32 @@ class TestLQRSolution(unittest.TestCase):
         
     def test_gradients(self):
         # Setup the LQR problem
-        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
-        K_impl, Xs_impl, Us_impl, Lambs_impl = implicit_diff.custom_root(
-            kkt, linear_solve.solve_cg
-        )(solve_lqr)(self.params)
         # define a loss function
+        def loss(params, Xs, Us, Lambds):
+            return jnp.sum(Xs**2) + jnp.sum(Us**2) + jnp.sum(Lambds**2) + jnp.sum(params.x0**2) + jnp.sum(params.lqr.A**2)
+        def dir_loss(params):
+            s = solve_lqr(params=params)[1:]
+            return loss(params, *s)
+        def impl_loss(params):
+            s = implicit_diff.custom_root(
+                kkt, linear_solve.solve_cg
+            )(solve_lqr)(params)[1:]
+            return loss(params, *s)
         # Exercise - take gradients of implicit and explicit solutions
-        
+        dir_param_grads = grad(dir_loss, allow_int=True)(self.params)
+        impl_param_grads = grad(impl_loss, allow_int=True)(self.params)
         # Verify
+        assert jnp.allclose(dir_param_grads.x0, impl_param_grads.x0, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.A, impl_param_grads.lqr.A, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.B, impl_param_grads.lqr.B, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.a, impl_param_grads.lqr.a, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.Q, impl_param_grads.lqr.Q, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.S, impl_param_grads.lqr.S, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.R, impl_param_grads.lqr.R, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.q, impl_param_grads.lqr.q, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.r, impl_param_grads.lqr.r, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.Qf, impl_param_grads.lqr.Qf, rtol=1e-01, atol=1e-01)
+        assert jnp.allclose(dir_param_grads.lqr.qf, impl_param_grads.lqr.qf, rtol=1e-01, atol=1e-01)
         # chex.assert_numerical_grads
         pass
 
