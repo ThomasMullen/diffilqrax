@@ -12,12 +12,13 @@ from .lqr import (
 
 bmm = lax.batch_matmul
 
-def get_qra_bar(params: Params, tau_bar: Array)-> Tuple[Array, Array, Array]:
+
+def get_qra_bar(params: Params, tau_bar: Array) -> Tuple[Array, Array, Array]:
     """Helper function to get gradients wrt to q, r, a."""
-    #q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
+    # q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
     lqr = params.lqr
-    n, m = lqr.A[0].shape()[1], lqr.B[0].shape()[1] 
-    x_bar, u_bar = tau_bar[...,:n], tau_bar[...,n:]
+    n, m = lqr.A[0].shape()[1], lqr.B[0].shape()[1]
+    x_bar, u_bar = tau_bar[..., :n], tau_bar[..., n:]
     swapped_lqr = lqr
     Lambs_bar = np.zeros_like(lqr.a)
     swapped_lqr.q, swapped_lqr.r, swapped_lqr.a = x_bar, u_bar, Lambs_bar
@@ -26,27 +27,29 @@ def get_qra_bar(params: Params, tau_bar: Array)-> Tuple[Array, Array, Array]:
     _, q_bar, r_bar, a_bar = solve_lqr(swapped_params, params.horizon)
     ##TODO : check the indices for a_bar
     return q_bar, r_bar, a_bar
-    
+
 
 @partial(custom_vjp, nondiff_argnums=(0,))
 def dlqr(horizon: int, params: LQR):
     """params vector contains all the LQR parameters : here, this assumes an LQR problem
-    In the more general case, depending on where we are defining this, we may to take into account the fact that we are at around the solution, so the effective problem has extra linear terms, as follows : 
-    
+    In the more general case, depending on where we are defining this, we may to take into account the fact that we are at around the solution, so the effective problem has extra linear terms, as follows :
+
     local_LQR = params.lqr
     local_LQR.q = local_LQR.q - bmm(Xs_star, local_LQR.Q) - bmm(Us_star, local_LQR.S)
     local_LQR.r = local_LQR.r - bmm(Xs_star, np.transpose(local_LQR.S, axis = (0,2,1))) - bmm(Us_star, local_LQR.R)
     params.lqr = local_LQR"""
     return solve_lqr(params, horizon)
 
+
 def fwd_dlqr(params: Params):
     _, Xs_star, Us_star, Lambs = dlqr(params.horizon, params)
-    tau_star = np.concatenate([Xs_star, Us_star], axis = 1)
+    tau_star = np.concatenate([Xs_star, Us_star], axis=1)
     return tau_star, (params, Lambs, tau_star)
 
-def rev_dlqr(res, tau_bar: Array)->Params:
-  params, Lambs, tau_star = res 
-  """
+
+def rev_dlqr(res, tau_bar: Array) -> Params:
+    params, Lambs, tau_star = res
+    """
   Inputs : params (contains lqr parameters, x0, and the horizon), tau_star_bar (gradients wrt to tau at tau_star)
   params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
   A : T x N x N
@@ -68,23 +71,35 @@ def rev_dlqr(res, tau_bar: Array)->Params:
   - make sure we are solving the local problenn, with the local parameters 
   - we don't want to differentiate wrt to the horizon so maybe we shouldn't use the vector containing it
   """
-  #
-  n, m = LQR.A[0].shape()[1], LQR.B[0].shape()[1]   
-  q_bar, r_bar, a_bar = get_qra_bar(params, tau_bar)
-  c_bar = np.concatenate([q_bar, r_bar], axis = 1)
-  F_bar = bmm(Lambs[1:],np.transpose(c_bar[:-1], axis = (0,2,1))) + bmm(a_bar[1:],np.transpose(tau_star[:-1], axis = (0,2,1)))
-  C_bar = 0.5*(bmm(c_bar,tau_star.T) + bmm(tau_star, c_bar.T))
-  Q_bar, R_bar = C_bar[:,:n,:n], C_bar[:,n:,n:]
-  S_bar = 0.5*(C_bar[:,:n,n:] + np.transpose(C_bar[:,n:,:n], axis = (0,2,1)))
-  A_bar, B_bar = F_bar[...,:n], F_bar[...,:m]
-  LQR_bar = LQR(A = A_bar, B = B_bar, a = a_bar, Q = Q_bar[:-1], q = q_bar[:-1], Qf = Q_bar[-1][None,...], qf = q_bar[-1][None,...], R = R_bar, r = r_bar, S = S_bar)
-  x0_bar = np.zeros_like(params.x0)
-  horizon_bar = np.zeros_like(params.horizon)
-  return Params(x0 = x0_bar, lqr = LQR_bar, horizon = horizon_bar)
+    #
+    n, m = LQR.A[0].shape()[1], LQR.B[0].shape()[1]
+    q_bar, r_bar, a_bar = get_qra_bar(params, tau_bar)
+    c_bar = np.concatenate([q_bar, r_bar], axis=1)
+    F_bar = bmm(Lambs[1:], np.transpose(c_bar[:-1], axis=(0, 2, 1))) + bmm(
+        a_bar[1:], np.transpose(tau_star[:-1], axis=(0, 2, 1))
+    )
+    C_bar = 0.5 * (bmm(c_bar, tau_star.T) + bmm(tau_star, c_bar.T))
+    Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
+    S_bar = 0.5 * (C_bar[:, :n, n:] + np.transpose(C_bar[:, n:, :n], axis=(0, 2, 1)))
+    A_bar, B_bar = F_bar[..., :n], F_bar[..., :m]
+    LQR_bar = LQR(
+        A=A_bar,
+        B=B_bar,
+        a=a_bar,
+        Q=Q_bar[:-1],
+        q=q_bar[:-1],
+        Qf=Q_bar[-1][None, ...],
+        qf=q_bar[-1][None, ...],
+        R=R_bar,
+        r=r_bar,
+        S=S_bar,
+    )
+    x0_bar = np.zeros_like(params.x0)
+    horizon_bar = np.zeros_like(params.horizon)
+    return Params(x0=x0_bar, lqr=LQR_bar, horizon=horizon_bar)
 
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
-
 
 
 """Useful pieces of code : 
