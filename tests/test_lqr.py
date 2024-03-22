@@ -167,7 +167,7 @@ class TestLQRSolution(unittest.TestCase):
         key = jr.PRNGKey(seed=234)
         subkeys = jr.split(key, 11)
 
-        A = jr.normal(subkeys[0], self.dims["TNN"])
+        A = (jr.normal(subkeys[0], self.dims["TNN"]) / jnp.sqrt(self.dims["N"])*0.6) - jnp.eye(self.dims["N"][0])
         B = jr.normal(subkeys[1], self.dims["TNM"])
         a = jr.normal(subkeys[2], self.dims["TNX"])
         Qf = jnp.eye(self.dims["N"][0])
