@@ -224,6 +224,11 @@ def lqr_backward_pass(
         xs=np.arange(T),
         reverse=True,
     )
+    
+    if verbose:
+        assert not np.any(np.isnan(Ks.K))
+        assert not np.any(np.isnan(Ks.k))
+    
     if not expected_change:
         return dJ, Ks
 
