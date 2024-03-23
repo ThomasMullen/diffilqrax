@@ -2,6 +2,7 @@ import unittest
 import pytest
 import chex
 from jax import Array, grad
+from typing import Tuple
 import jax.random as jr
 import jax.numpy as jnp
 from jaxopt import linear_solve, implicit_diff
@@ -23,10 +24,52 @@ from src.lqr import (
 )
 
 
-# chex.assert_type(...,  Array)
-# chex.assert_trees_all_close(lqr.Q[0], lqr.Q[0].T)
-# dims = chex.Dimensions(T=20, N=3, M=2, X=1)
-# chex.assert_shape(x, dims['TNX'])
+def keygen(key, nkeys):
+    """Generate randomness that JAX can use by splitting the JAX keys.
+
+    Args:
+    key : the random.PRNGKey for JAX
+    nkeys : how many keys in key generator
+
+    Returns:
+    2-tuple (new key for further generators, key generator)
+    """
+    keys = jr.split(key, nkeys+1)
+    return keys[0], (k for k in keys[1:])
+
+
+def initialise_stable_dynamics(key:Tuple[int,int], n_dim:int, T:int, radii:float=0.6)->Array:
+    """Generate a state matrix with stable dynamics (eigenvalues < 1)
+
+    Args:
+        key (Tuple[int,int]): random key
+        n_dim (int): state dimensions
+        radii (float, optional): spectral radius. Defaults to 0.6.
+
+    Returns:
+        Array: matrix A with stable dynamics.
+    """
+    mat = jr.normal(key,(n_dim,n_dim))*radii
+    mat /= jnp.sqrt(n_dim)
+    mat -= jnp.eye(n_dim)
+    return jnp.tile(mat,(T,1,1))
+
+
+def initialise_stable_time_varying_dynamics(key:Tuple[int,int], n_dim:int, T:int, radii:float=0.6)->Array:
+    """Generate a state matrix with stable dynamics (eigenvalues < 1)
+
+    Args:
+        key (Tuple[int,int]): random key
+        n_dim (int): state dimensions
+        radii (float, optional): spectral radius. Defaults to 0.6.
+
+    Returns:
+        Array: matrix A with stable dynamics.
+    """
+    mat = jr.normal(key,(T,n_dim,n_dim))*radii
+    mat /= jnp.sqrt(n_dim)
+    mat -= jnp.eye(n_dim)
+    return mat
 
 
 class TestLQR(unittest.TestCase):
@@ -40,18 +83,20 @@ class TestLQR(unittest.TestCase):
 
         print("\nMake LQR struct")
         key = jr.PRNGKey(seed=234)
-        subkeys = jr.split(key, 11)
+        key, skeys = keygen(key, 3)
 
-        A = jr.normal(subkeys[0], self.dims["TNN"])
-        B = jr.normal(subkeys[1], self.dims["TNM"])
-        a = jr.normal(subkeys[2], self.dims["TNX"])
+        # A = jr.normal(next(skeys), self.dims["TNN"])
+        A = initialise_stable_dynamics(next(skeys), self.dims["N"][0], self.dims["T"][0],radii=0.6)
+        B = jnp.tile(jr.normal(next(skeys), self.dims["NM"]), self.dims["TXX"])
+        # a = jr.normal(next(skeys), self.dims["TNX"])
+        a = jnp.tile(jr.normal(next(skeys), self.dims["NX"]), self.dims["TXX"])
         Qf = jnp.eye(self.dims["N"][0])
-        qf = 0.5 * jnp.ones(self.dims["NX"])
+        qf = 2*1e-1 * jnp.ones(self.dims["NX"])
         Q = jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
-        q = 0.5 * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
-        R = jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
-        r = 0.5 * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
-        S = 0.5 * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+        q = 2*1e-1 * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
+        R = 1e-4 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
+        r = 1e-2 * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
+        S = 1e-4 * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
 
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
         print("LQR Q shape", self.lqr.Q.shape)
@@ -165,18 +210,21 @@ class TestLQRSolution(unittest.TestCase):
 
         print("\nMake LQR struct")
         key = jr.PRNGKey(seed=234)
-        subkeys = jr.split(key, 11)
+        key, skeys = keygen(key, 3)
 
-        A = (jr.normal(subkeys[0], self.dims["TNN"]) / jnp.sqrt(self.dims["N"])*0.6) - jnp.eye(self.dims["N"][0])
-        B = jr.normal(subkeys[1], self.dims["TNM"])
-        a = jr.normal(subkeys[2], self.dims["TNX"])
+        # A = jr.normal(next(skeys), self.dims["TNN"])
+        A = initialise_stable_dynamics(next(skeys), self.dims["N"][0], self.dims["T"][0],radii=0.6)
+        B = jnp.tile(jr.normal(next(skeys), self.dims["NM"]), self.dims["TXX"])
+        # a = jr.normal(next(skeys), self.dims["TNX"])
+        a = jnp.tile(jr.normal(next(skeys), self.dims["NX"]), self.dims["TXX"])
         Qf = jnp.eye(self.dims["N"][0])
-        qf = 0.5 * jnp.ones(self.dims["NX"])
+        qf = 2*1e-1 * jnp.ones(self.dims["NX"])
         Q = jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
-        q = 0.5 * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
-        R = jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
-        r = 0.5 * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
-        S = 0.5 * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+        q = 2*1e-1 * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
+        R = 1e-4 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
+        r = 1e-2 * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
+        S = 1e-4 * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+
 
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
         print("LQR Q shape", self.lqr.Q.shape)
