@@ -5,30 +5,6 @@ import numpy as np
 import jax, scipy
 import jaxopt
 
-T = 10
-Q = 2 * jnp.array([[2.0, 0.5], [0.5, 1]])
-q = 2 * jnp.array([[2.0, 0.5]])
-R = 2 * np.array([1.0])
-r = 2 * np.array([[1.0]])
-c = np.array([1.0, 1.0])
-A = np.array([[1.0, 1.0], [1.0, 2.0]])
-B = np.array([[1.0], [1.0]])
-print(B.shape)
-b = np.array([1.0])
-x0 = np.array([[0.,0.]]).T
-n, m = 2,1
-
-# def quad_solve(params):
-#     T = 10 #params.dims.T
-#     Q = params.LQR.Q
-#     c = 
-# Q = 2 * jnp.array([[2.0, 0.5], [0.5, 1]])
-# c = jnp.array([1.0, 1.0])
-# A = jnp.array([[1.0, 1.0]])
-# b = jnp.array([1.0])
-
-#params_obj = #Q and c in min (x^TQx/2 + c^Tx)
-#params_eq = #A,b : should be for the constraint Ax = b
 """The original problem is \sum_t x_t^T Q x_t + u_t^T R u_t + 2 x_t^T S u_t + c^T x_t subject to 
 x_{t+1} = A x_t + B u_t + a, for all t, and x_0 = x0.
 This translates into a dynamics constraint of the form x = F_0 x_0 + F u where F0 
@@ -37,17 +13,6 @@ is an upper diagonal matrix with blocks F0_{ij} = A^{j - i} if i>=j and 0 otherw
 
 We can build the matrices F0 and F as follows:  
 F0 = np.block([[np.linalg.matrix_power(A, j - i) for j in range(T)] for i in range(T)])"""
-
-# sol = qp.run(params_obj=params_obj, params_eq=params_eq).params
-
-# print(sol.primal)
-# print(sol.dual_eq)
-
-
-#  implicit_diff.custom_root(
-#             kkt, linear_solve.solve_cg
-#         )(solve_lqr)(self.params)
-
 
 def quad_solve(params, n, m, T, x0):
     T = T 
