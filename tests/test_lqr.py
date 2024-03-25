@@ -6,11 +6,13 @@ from typing import Tuple
 import jax.random as jr
 import jax.numpy as jnp
 from jaxopt import linear_solve, implicit_diff
-import numpy as onp
-# from src.exact import quad_solve
 
-#jax.config.update('jax_default_device', jax.devices('cpu')[0])
-# from tests.fixtures import sys_matrices, sys_dims
+import numpy as onp
+from src.exact import quad_solve, exact_solve
+
+jax.config.update('jax_default_device', jax.devices('cpu')[0])
+jax.config.update("jax_enable_x64", True)  # double precision
+
 from src import (
     Gains,
     CostToGo,
@@ -91,7 +93,6 @@ class TestLQR(unittest.TestCase):
         chex.assert_trees_all_close(self.lqr.Q[0], self.lqr.Q[0].T)
         chex.assert_trees_all_close(self.lqr.R[0], self.lqr.R[0].T)
         # check if Q is positive definite
-        # print(jnp.linalg.eigvals(self.lqr.Q[0]).real)
         assert jnp.all(jnp.linalg.eigvals(self.lqr.Q[0]) > 0), "Q is not positive definite"
         assert jnp.all(jnp.linalg.eigvals(self.lqr.R[0]) > 0), "R is not positive definite"
 
@@ -201,17 +202,18 @@ class TestLQRSolution(unittest.TestCase):
         """Instantiate dummy LQR"""
         print("\nRunning setUp method...")
         self.dims = chex.Dimensions(T=20, N=3, M=2, X=1)
+        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
         print(self.dims["TNMX"])
 
         print("\nMake LQR struct")
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 3)
 
-        # A = jr.normal(next(skeys), self.dims["TNN"])
         A = initialise_stable_dynamics(next(skeys), self.dims["N"][0], self.dims["T"][0],radii=0.6)
         B = jnp.tile(jr.normal(next(skeys), self.dims["NM"]), self.dims["TXX"])
-        # a = jr.normal(next(skeys), self.dims["TNX"])
         a = jnp.tile(jr.normal(next(skeys), self.dims["NX"]), self.dims["TXX"])
+        # B = jr.normal(next(skeys), self.dims["TNM"])
+        # a = jr.normal(next(skeys), self.dims["TNX"])
         Qf = jnp.eye(self.dims["N"][0])
         qf = 2*1e-1 * jnp.ones(self.dims["NX"])
         Q = jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
@@ -219,22 +221,19 @@ class TestLQRSolution(unittest.TestCase):
         R = 1e-4 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
         r = 1e-2 * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
         S = 1e-4 * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
-
-
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
-        print("LQR Q shape", self.lqr.Q.shape)
 
-        print("\nMake initial state x0 and input U")
+        print("\nMake x0 and input U")
         self.x0 = jnp.array([[2.0], [1.0], [1.0]])
         Us = jnp.zeros(self.dims["TMX"]) * 1.0
         Us = Us.at[2].set(1.0)
         self.Us = Us
-        self.params = Params(self.x0, self.dims["T"][0], self.lqr)
+        self.params = Params(self.x0, self.lqr)
 
     def test_lqr_solution(self):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # Exercise the LQR solver function
-        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
+        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params, sys_dims=self.sys_dims)
         K_impl, Xs_impl, Us_impl, Lambs_impl = implicit_diff.custom_root(
             kkt, linear_solve.solve_cg
         )(solve_lqr)(self.params)
@@ -246,18 +245,18 @@ class TestLQRSolution(unittest.TestCase):
 
     def test_kkt_optimal(self):
         # Setup the LQR problem
-        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
+        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params, sys_dims=self.sys_dims)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
         # Verify that the KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-01, atol=1e-01)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-01, atol=1e-01)
         #TODO: Inspect why U not near 0 and how to set threhold
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-01, atol=1e-01) 
-        # assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
-        # assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
-        # assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
-        # assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-01, atol=1e-01) 
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
         
     def test_gradients(self):
         # Setup the LQR problem
@@ -295,47 +294,45 @@ class TestLQRSolutionExact(unittest.TestCase):
     """Test LQR solution comparing to the exact solution using a CG solve (in a case in which the dynamics are constant)"""
 
     def setUp(self):
-        """Instantiate dummy LQR"""
+        """Instantiate LQR example using the pendulum example to compare against Ocaml"""
         print("\nRunning setUp method...")
-        self.dims = chex.Dimensions(T=10, N=3, M=2, X=1)
-        print(self.dims["TNMX"])
+        self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
+        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        dt = self.sys_dims.dt
 
-        print("\nMake LQR struct")
-        key = jr.PRNGKey(seed=234)
-        subkeys = jr.split(key, 11)
-
-        A = jnp.tile(((jr.normal(subkeys[0], self.dims["NN"]) / jnp.sqrt(self.dims["N"])*0.8) - jnp.eye(self.dims["N"][0])), self.dims["TXX"])
-        B = jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+        A = jnp.float64(jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"]))
+        B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
         a = jnp.zeros(self.dims["TNX"])
-        Qf = jnp.eye(self.dims["N"][0])
-        qf = 0.5 * jnp.ones(self.dims["NX"])
-        Q = 0.5 * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
-        q = 0.5 * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
-        R = jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
-        r = 0.5 * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
+        Qf = 0. *jnp.eye(self.dims["N"][0])
+        qf = 0. * jnp.ones(self.dims["NX"])
+        Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
+        q = 0. * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
+        R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
+        r = 0. * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
-
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
-        print("LQR Q shape", self.lqr.Q.shape)
 
         print("\nMake initial state x0 and input U")
-        self.x0 = jnp.array([[2.0], [1.0], [1.0]])
+        self.x0 = jnp.array([[0.3], [0.]])
         Us = jnp.zeros(self.dims["TMX"]) * 1.0
         Us = Us.at[2].set(1.0)
         self.Us = Us
-        self.params = Params(self.x0, self.dims["T"][0], self.lqr)
-
+        self.params = Params(self.x0, self.lqr)
+        
     def test_lqr_solution(self):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # Exercise the LQR solver function
         K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
-        Xs_exact, Us_exact = quad_solve(self.params, self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], self.x0)   
-        #np.savetxt("Us_ext", Us_exact[...,0]) 
-        #np.savetxt("Xs_ext", Xs_exact[...,0]) 
-        #np.savetxt("Us_dir", Us_dir[...,0]) 
-        #np.savetxt("Xs_dir", Xs_dir[...,0])
+        Xs_quad, Us_quad = quad_solve(self.params, self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], self.x0) 
+        Xs_exact, Us_exact = exact_solve(self.params, self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], self.x0)   
+        onp.savetxt("Us_ext", Us_exact[...,0]) 
+        onp.savetxt("Xs_ext", Xs_exact[...,0]) 
+        onp.savetxt("Us_quad", Us_quad[...,0]) 
+        onp.savetxt("Xs_quad", Xs_quad[...,0]) 
+        onp.savetxt("Us_dir", Us_dir[...,0]) 
+        onp.savetxt("Xs_dir", Xs_dir[...,0])
         # Verify that the two solutions are close
-        assert jnp.allclose(Us_dir, Us_exact, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(Us_dir[:-1], Us_exact, rtol=1e-05, atol=1e-08)
         
         
 if __name__ == "__main__":
