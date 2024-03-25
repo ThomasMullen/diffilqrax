@@ -3,6 +3,9 @@ from typing import Callable, NamedTuple, Tuple, Union
 import jax
 import jax.lax as lax
 import jax.numpy as np
+import jax.random as jr
+
+from src import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
@@ -97,7 +100,7 @@ def simulate_trajectory(
     dynamics: Callable, Us: np.ndarray, params: Params, dims: ModelDims
 ) -> np.ndarray:
     """Simulate forward pass with LQR params"""
-    x0, lqr = params.x0, params[2]
+    x0, lqr = params.x0, params[-1]
 
     def step(x, inputs):
         t, u = inputs
@@ -208,14 +211,14 @@ def lqr_backward_pass(
 
         if verbose:
             assert I_mu.shape == (dims.m, dims.m)
-            assert v.shape == (dims.m,)
+            assert v.shape == (dims.n, 1)
             assert V.shape == (dims.n, dims.n)
             assert Hxx.shape == (dims.n, dims.n)
             assert Huu.shape == (dims.m, dims.m)
             assert Hxu.shape == (dims.n, dims.m)
-            assert hx.shape == (dims.n,)
-            assert hu.shape == (dims.m,)
-            assert k.shape == (dims.m,)
+            assert hx.shape == (dims.n, 1)
+            assert hu.shape == (dims.m, 1)
+            assert k.shape == (dims.m, 1)
             assert K.shape == (dims.m, dims.n)
 
         # Find value iteration at current time
@@ -287,57 +290,49 @@ def solve_lqr(params: Params, sys_dims: ModelDims):
     return gains, Xs, Us, Lambs
 
 
-def init_params():
-    k_spring = 10
-    k_damp = 5
-    m = 10
-    tps = 20
-    A = np.array([[0.0, 1.0], [-k_spring / m, -k_damp / m]])
-    B = np.array([[0.5], [1.0]])
-    a = np.array([[0.0], [0.0]])
-
-    Qf = np.eye(2) * 1.0
-    qf = np.array([[0.0], [0.0]])
-    Q = np.eye(2) * 1.0
-    q = np.array([[0.0], [0.0]])
-    R = np.eye(1) * 1.0
-    r = np.array([0.0])
-    S = np.zeros((2, 1))
-
-    lqr = LQR(
-        A=np.tile(A, (tps, 1, 1)),
-        B=np.tile(B, (tps, 1, 1)),
-        a=np.tile(a, (tps, 1, 1)),
-        Q=np.tile(Q, (tps, 1, 1)),
-        q=np.tile(q, (tps, 1, 1)),
-        Qf=Qf,
-        qf=qf,
-        R=np.tile(R, (tps, 1, 1)),
-        r=np.tile(r, (tps, 1, 1)),
-        S=np.tile(S, (tps, 1, 1)),
-    )
+def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6, 
+                   pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}):
+    """Generate time-invariant LQR parameters"""
+    # generate random seeds
+    key = jr.PRNGKey(seed=234)
+    key, skeys = keygen(key, 3)
+    # initialise dynamics
+    span_time=(sys_dims.horizon, 1, 1)
+    A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
+    B = np.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
+    a = np.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
+    # define cost matrices
+    Q = pen_weight["Q"] * np.tile(np.eye(sys_dims.n), span_time)
+    q = 2*1e-1 * np.tile(np.ones((sys_dims.n,1)), span_time)
+    R = pen_weight["R"] * np.tile(np.eye(sys_dims.m), span_time)
+    r = 1e-6 * np.tile(np.ones((sys_dims.m,1)), span_time)
+    S = pen_weight["S"] * np.tile(np.ones((sys_dims.n,sys_dims.m)), span_time)
+    Qf = pen_weight["Q"] * np.eye(sys_dims.n)
+    qf = 2*1e-1 * np.ones((sys_dims.n,1))
+    # construct LQR
+    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
     return lqr()
 
 
 if __name__ == "__main__":
     # generate data
     sys_dims = ModelDims(n=3, m=2, horizon=60, dt=0.1)
-    x0 = np.array([[2.0], [1.0]])
-    lqr = init_params()
+    x0 = np.array([[2.0], [1.0], [1.0]])
+    lqr = initialise_lqr(sys_dims=sys_dims, spectral_radius=0.6)
     params = Params(x0, lqr)
-    Us = np.zeros((sys_dims.horizon,sys_dims.m, sys_dims.m), dtype=float)
+    Us = np.zeros((sys_dims.horizon,sys_dims.m, 1), dtype=float)
     Us = Us.at[2].set(1.0)
 
     # simulate trajectory
-    Xs_sim = simulate_trajectory(dynamics=lin_dyn_step, Us=Us, params=params)
+    Xs_sim = simulate_trajectory(dynamics=lin_dyn_step, Us=Us, params=params, dims=sys_dims)
     # generate adjoints
     Lambs = lqr_adjoint_pass(Xs_sim, Us, params)
     # LQR backward pass
     (dJ, Ks), exp_dJ = lqr_backward_pass(
-        lqr=params.lqr, T=params.horizon, expected_change=True, verbose=False
+        lqr=params.lqr, dims=sys_dims, expected_change=True, verbose=False
     )
     # LQR forward update
     Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
 
     # LQR solver
-    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, params.horizon)
+    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, sys_dims)
