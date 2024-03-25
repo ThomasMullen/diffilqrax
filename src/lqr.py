@@ -276,10 +276,10 @@ def kkt(params: Params, Xs: np.ndarray, Us: np.ndarray, Lambs: np.ndarray):
     return dLdXs, dLdUs, dLdLambs
 
 
-def solve_lqr(params: Params):
+def solve_lqr(params: Params, sys_dims: ModelDims):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains = lqr_backward_pass(params.lqr, params.horizon)
+    _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
@@ -321,11 +321,11 @@ def init_params():
 
 if __name__ == "__main__":
     # generate data
-    tps = 20
+    sys_dims = ModelDims(n=3, m=2, horizon=60, dt=0.1)
     x0 = np.array([[2.0], [1.0]])
     lqr = init_params()
-    params = Params(x0, tps, lqr)
-    Us = np.zeros((params.horizon, 1, 1)) * 1.0
+    params = Params(x0, lqr)
+    Us = np.zeros((sys_dims.horizon,sys_dims.m, sys_dims.m), dtype=float)
     Us = Us.at[2].set(1.0)
 
     # simulate trajectory
