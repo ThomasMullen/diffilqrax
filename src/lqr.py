@@ -5,7 +5,7 @@ import jax.lax as lax
 import jax.numpy as np
 import jax.random as jr
 
-from src import keygen, initialise_stable_dynamics
+# from src import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
@@ -293,24 +293,25 @@ def solve_lqr(params: Params, sys_dims: ModelDims):
 def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6, 
                    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}):
     """Generate time-invariant LQR parameters"""
-    # generate random seeds
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
-    # initialise dynamics
-    span_time=(sys_dims.horizon, 1, 1)
-    A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
-    B = np.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
-    a = np.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
-    # define cost matrices
-    Q = pen_weight["Q"] * np.tile(np.eye(sys_dims.n), span_time)
-    q = 2*1e-1 * np.tile(np.ones((sys_dims.n,1)), span_time)
-    R = pen_weight["R"] * np.tile(np.eye(sys_dims.m), span_time)
-    r = 1e-6 * np.tile(np.ones((sys_dims.m,1)), span_time)
-    S = pen_weight["S"] * np.tile(np.ones((sys_dims.n,sys_dims.m)), span_time)
-    Qf = pen_weight["Q"] * np.eye(sys_dims.n)
-    qf = 2*1e-1 * np.ones((sys_dims.n,1))
-    # construct LQR
-    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    # # generate random seeds
+    # key = jr.PRNGKey(seed=234)
+    # key, skeys = keygen(key, 3)
+    # # initialise dynamics
+    # span_time=(sys_dims.horizon, 1, 1)
+    # A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
+    # B = np.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
+    # a = np.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
+    # # define cost matrices
+    # Q = pen_weight["Q"] * np.tile(np.eye(sys_dims.n), span_time)
+    # q = 2*1e-1 * np.tile(np.ones((sys_dims.n,1)), span_time)
+    # R = pen_weight["R"] * np.tile(np.eye(sys_dims.m), span_time)
+    # r = 1e-6 * np.tile(np.ones((sys_dims.m,1)), span_time)
+    # S = pen_weight["S"] * np.tile(np.ones((sys_dims.n,sys_dims.m)), span_time)
+    # Qf = pen_weight["Q"] * np.eye(sys_dims.n)
+    # qf = 2*1e-1 * np.ones((sys_dims.n,1))
+    # # construct LQR
+    # lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    lqr = LQR(None, None, None, None, None, None, None, None, None, None)
     return lqr()
 
 

@@ -7,11 +7,11 @@ import jax.random as jr
 import jax.numpy as jnp
 from jaxopt import linear_solve, implicit_diff
 import numpy as np
-from src.exact import quad_solve
+# from src.exact import quad_solve
 
 #jax.config.update('jax_default_device', jax.devices('cpu')[0])
 # from tests.fixtures import sys_matrices, sys_dims
-from src.lqr import (
+from src import (
     Gains,
     CostToGo,
     LQR,
@@ -25,6 +25,8 @@ from src.lqr import (
     solve_lqr,
     kkt,
 )
+
+from src import keygen, initialise_stable_dynamics
 
 
 class TestLQR(unittest.TestCase):

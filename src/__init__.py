@@ -1,5 +1,7 @@
 from .lqr import (
     Gains,
+    CostToGo,
+    Params,
     LQR,
     simulate_trajectory,
     lqr_adjoint_pass,
@@ -8,6 +10,7 @@ from .lqr import (
     lqr_tracking_forward_pass,
     lqr_backward_pass,
     solve_lqr,
+    kkt
 )
 
 from .utils import (
