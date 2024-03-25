@@ -2,8 +2,9 @@
 from typing import Callable, NamedTuple, Tuple, Union
 import jax
 import jax.lax as lax
-import jax.numpy as np
+import jax.numpy as jnp
 import jax.random as jr
+from functools import partial
 
 # from src import keygen, initialise_stable_dynamics
 
@@ -16,18 +17,18 @@ symmetrise_matrix = lambda x: (x + x.T) / 2
 
 # LQR struct
 LQRBackParams = Tuple[
-    np.ndarray, np.ndarray, np.array, np.ndarray, np.array, np.ndarray, np.array
+    jnp.ndarray, jnp.ndarray, jnp.array, jnp.ndarray, jnp.array, jnp.ndarray, jnp.array
 ]
 LQRTrackParams = Tuple[
-    np.ndarray,
-    np.ndarray,
-    np.array,
-    np.ndarray,
-    np.array,
-    np.ndarray,
-    np.array,
-    np.array,
-    np.array,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.array,
+    jnp.ndarray,
+    jnp.array,
+    jnp.ndarray,
+    jnp.array,
+    jnp.array,
+    jnp.array,
 ]
 
 
@@ -44,19 +45,19 @@ class LQR(NamedTuple):
     """LQR params
 
     Args:
-        NamedTuple (np.ndarray): Dynamics and Cost parameters. Shape [T,X,Y]
+        NamedTuple (jnp.ndarray): Dynamics and Cost parameters. Shape [T,X,Y]
     """
 
-    A: np.ndarray
-    B: np.ndarray
-    a: np.ndarray
-    Q: np.ndarray
-    q: np.ndarray
-    Qf: np.ndarray
-    qf: np.ndarray
-    R: np.ndarray
-    r: np.ndarray
-    S: np.ndarray
+    A: jnp.ndarray
+    B: jnp.ndarray
+    a: jnp.ndarray
+    Q: jnp.ndarray
+    q: jnp.ndarray
+    Qf: jnp.ndarray
+    qf: jnp.ndarray
+    R: jnp.ndarray
+    r: jnp.ndarray
+    S: jnp.ndarray
 
     def __call__(self):
         """Symmetrise quadratic costs"""
@@ -77,30 +78,31 @@ class LQR(NamedTuple):
 class Params(NamedTuple):
     """Contains initial states and LQR parameters"""
 
-    x0: np.ndarray
-    lqr: Union[LQR, Tuple[np.ndarray]]
+    x0: jnp.ndarray
+    lqr: Union[LQR, Tuple[jnp.ndarray]]
 
 
 class Gains(NamedTuple):
     """Linear input gains"""
 
-    K: np.ndarray
-    k: np.ndarray
+    K: jnp.ndarray
+    k: jnp.ndarray
 
 
 class CostToGo(NamedTuple):
     """Cost-to-go"""
 
-    V: np.ndarray
-    v: np.ndarray
+    V: jnp.ndarray
+    v: jnp.ndarray
 
 
 # simulate trajectory
 def simulate_trajectory(
-    dynamics: Callable, Us: np.ndarray, params: Params, dims: ModelDims
-) -> np.ndarray:
+    dynamics: Callable, Us: jnp.ndarray, params: Params, dims: ModelDims
+) -> jnp.ndarray:
     """Simulate forward pass with LQR params"""
-    x0, lqr = params.x0, params[-1]
+    horizon = dims.horizon
+    x0, lqr = params.x0, params[1]
 
     def step(x, inputs):
         t, u = inputs
@@ -108,18 +110,18 @@ def simulate_trajectory(
         nx = dynamics(t, x, u, lqr)
         return nx, nx
 
-    _, Xs = lax.scan(step, x0, (np.arange(dims.horizon), Us))
+    _, Xs = lax.scan(step, x0, (jnp.arange(horizon), Us))
 
-    return np.vstack([x0[None], Xs])
+    return jnp.vstack([x0[None], Xs])
 
 
-def lin_dyn_step(t: int, x: np.array, u: np.array, lqr: LQR) -> np.array:
+def lin_dyn_step(t: int, x: jnp.array, u: jnp.array, lqr: LQR) -> jnp.array:
     """State space linear step"""
     nx = lqr.A[t] @ x + lqr.B[t] @ u + lqr.a[t]
     return nx
 
 
-def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarray:
+def lqr_adjoint_pass(Xs: jnp.ndarray, Us: jnp.ndarray, params: Params) -> jnp.ndarray:
     """Adjoint backward pass with LQR params"""
     x0, lqr = params.x0, params[1]
     AT = lqr.A.transpose(0, 2, 1)
@@ -133,14 +135,14 @@ def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarr
     _, lambs = lax.scan(
         adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
     )
-    return np.vstack([lambs,lambf[None]])
+    return jnp.vstack([lambs,lambf[None]])
 
 
-def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarray]:
+def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """LQR forward pass using gain state feedback"""
     x0, lqr = params.x0, params.lqr
 
-    def dynamics(x: np.array, params: LQRBackParams):
+    def dynamics(x: jnp.array, params: LQRBackParams):
         # TODO: add dims.dt to dynamics
         A, B, a, K, k = params
         u = K @ x + k
@@ -151,17 +153,17 @@ def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarr
         dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k)
     )
 
-    return np.vstack([x0[None], Xs]), Us
+    return jnp.vstack([x0[None], Xs]), Us
 
 
 def lqr_tracking_forward_pass(
-    gains: Gains, params: Params, Xs_star: np.ndarray, Us_star: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
+    gains: Gains, params: Params, Xs_star: jnp.ndarray, Us_star: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """LQR forward pass tracking using gain state feedback on state-input deviations"""
     x0, lqr = params.x0, params.lqr
     dx0 = x0 - Xs_star[0]
 
-    def dynamics(x: np.array, params: LQRTrackParams):
+    def dynamics(x: jnp.array, params: LQRTrackParams):
         A, B, a, K, k, x_star, u_star = params
         delta_x = x - x_star
         delta_u = K @ delta_x + k
@@ -175,7 +177,7 @@ def lqr_tracking_forward_pass(
         xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k, Xs_star[1:], Us_star),
     )
 
-    return np.vstack([x0[None], Xs]), Us
+    return jnp.vstack([x0[None], Xs]), Us
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
@@ -202,12 +204,12 @@ def lqr_backward_pass(
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
         # With Levenberg-Marquardt regulisation
-        min_eval = np.linalg.eigh(Huu)[0][0]
-        I_mu = np.maximum(0.0, 1e-6 - min_eval) * np.eye(dims.m)
+        min_eval = jnp.linalg.eigh(Huu)[0][0]
+        I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
 
         # solve gains
-        K = -np.linalg.solve(Huu + I_mu, Hxu.T)
-        k = -np.linalg.solve(Huu + I_mu, hu)
+        K = -jnp.linalg.solve(Huu + I_mu, Hxu.T)
+        k = -jnp.linalg.solve(Huu + I_mu, hu)
 
         if verbose:
             assert I_mu.shape == (dims.m, dims.m)
@@ -234,13 +236,13 @@ def lqr_backward_pass(
     (V_0, dJ), Ks = lax.scan(
         riccati_step,
         init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
-        xs=np.arange(dims.horizon),
+        xs=jnp.arange(dims.horizon),
         reverse=True,
     )
     
     if verbose:
-        assert not np.any(np.isnan(Ks.K))
-        assert not np.any(np.isnan(Ks.k))
+        assert not jnp.any(jnp.isnan(Ks.K))
+        assert not jnp.any(jnp.isnan(Ks.k))
     
     if not expected_change:
         return dJ, Ks
@@ -248,34 +250,34 @@ def lqr_backward_pass(
     return (dJ, Ks), calc_expected_change(dJ=dJ)
 
 
-def kkt(params: Params, Xs: np.ndarray, Us: np.ndarray, Lambs: np.ndarray):
+def kkt(params: Params, Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray):
     """Define KKT conditions for LQR problem"""
     AT = params.lqr.A.transpose(0, 2, 1)
     BT = params.lqr.B.transpose(0, 2, 1)
     ST = params.lqr.S.transpose(0, 2, 1)
     dLdXs = (
-        np.matmul(params.lqr.Q, Xs[:-1])
-        + np.matmul(params.lqr.S, Us[:])
+        jnp.matmul(params.lqr.Q, Xs[:-1])
+        + jnp.matmul(params.lqr.S, Us[:])
         + params.lqr.q
-        + np.matmul(AT, Lambs[1:])
+        + jnp.matmul(AT, Lambs[1:])
         - Lambs[:-1]
     )
-    dLdXf = np.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
-    dLdXs = np.concatenate([dLdXs, dLdXf[None]])
+    dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
+    dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
     dLdUs = (
-        np.matmul(ST, Xs[:-1])
-        + np.matmul(params.lqr.R, Us[:])
+        jnp.matmul(ST, Xs[:-1])
+        + jnp.matmul(params.lqr.R, Us[:])
         + params.lqr.r
-        + np.matmul(BT, Lambs[1:])
+        + jnp.matmul(BT, Lambs[1:])
     )
     dLdLambs = (
-        np.matmul(params.lqr.A, Xs[:-1])
-        + np.matmul(params.lqr.B, Us[:])
+        jnp.matmul(params.lqr.A, Xs[:-1])
+        + jnp.matmul(params.lqr.B, Us[:])
         + params.lqr.a
         - Xs[1:]
     )
     dLdLamb0 = params.x0 - Xs[0]
-    dLdLambs = np.concatenate([dLdLamb0[None], dLdLambs])
+    dLdLambs = jnp.concatenate([dLdLamb0[None], dLdLambs])
     return dLdXs, dLdUs, dLdLambs
 
 
@@ -299,16 +301,16 @@ def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6,
     # # initialise dynamics
     # span_time=(sys_dims.horizon, 1, 1)
     # A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
-    # B = np.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
-    # a = np.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
+    # B = jnp.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
+    # a = jnp.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
     # # define cost matrices
-    # Q = pen_weight["Q"] * np.tile(np.eye(sys_dims.n), span_time)
-    # q = 2*1e-1 * np.tile(np.ones((sys_dims.n,1)), span_time)
-    # R = pen_weight["R"] * np.tile(np.eye(sys_dims.m), span_time)
-    # r = 1e-6 * np.tile(np.ones((sys_dims.m,1)), span_time)
-    # S = pen_weight["S"] * np.tile(np.ones((sys_dims.n,sys_dims.m)), span_time)
-    # Qf = pen_weight["Q"] * np.eye(sys_dims.n)
-    # qf = 2*1e-1 * np.ones((sys_dims.n,1))
+    # Q = pen_weight["Q"] * jnp.tile(jnp.eye(sys_dims.n), span_time)
+    # q = 2*1e-1 * jnp.tile(jnp.ones((sys_dims.n,1)), span_time)
+    # R = pen_weight["R"] * jnp.tile(jnp.eye(sys_dims.m), span_time)
+    # r = 1e-6 * jnp.tile(jnp.ones((sys_dims.m,1)), span_time)
+    # S = pen_weight["S"] * jnp.tile(jnp.ones((sys_dims.n,sys_dims.m)), span_time)
+    # Qf = pen_weight["Q"] * jnp.eye(sys_dims.n)
+    # qf = 2*1e-1 * jnp.ones((sys_dims.n,1))
     # # construct LQR
     # lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
     lqr = LQR(None, None, None, None, None, None, None, None, None, None)
@@ -318,10 +320,10 @@ def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6,
 if __name__ == "__main__":
     # generate data
     sys_dims = ModelDims(n=3, m=2, horizon=60, dt=0.1)
-    x0 = np.array([[2.0], [1.0], [1.0]])
+    x0 = jnp.array([[2.0], [1.0], [1.0]])
     lqr = initialise_lqr(sys_dims=sys_dims, spectral_radius=0.6)
     params = Params(x0, lqr)
-    Us = np.zeros((sys_dims.horizon,sys_dims.m, 1), dtype=float)
+    Us = jnp.zeros((sys_dims.horizon,sys_dims.m, 1), dtype=float)
     Us = Us.at[2].set(1.0)
 
     # simulate trajectory
