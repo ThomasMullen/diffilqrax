@@ -28,6 +28,15 @@ LQRTrackParams = Tuple[
 ]
 
 
+class ModelDims(NamedTuple):
+    """Model dimensions"""
+
+    n: int
+    m: int
+    horizon: int
+    dt: float
+
+
 class LQR(NamedTuple):
     """LQR params
 
