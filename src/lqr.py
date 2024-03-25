@@ -75,7 +75,6 @@ class Params(NamedTuple):
     """Contains initial states and LQR parameters"""
 
     x0: np.ndarray
-    horizon: int
     lqr: Union[LQR, Tuple[np.ndarray]]
 
 
@@ -95,17 +94,18 @@ class CostToGo(NamedTuple):
 
 # simulate trajectory
 def simulate_trajectory(
-    dynamics: Callable, Us: np.ndarray, params: Params
+    dynamics: Callable, Us: np.ndarray, params: Params, dims: ModelDims
 ) -> np.ndarray:
     """Simulate forward pass with LQR params"""
-    x0, horizon, lqr = params.x0, params.horizon, params[2]
+    x0, lqr = params.x0, params[2]
 
     def step(x, inputs):
         t, u = inputs
+        # TODO: add dims.dt to dynamics
         nx = dynamics(t, x, u, lqr)
         return nx, nx
 
-    _, Xs = lax.scan(step, x0, (np.arange(horizon), Us))
+    _, Xs = lax.scan(step, x0, (np.arange(dims.horizon), Us))
 
     return np.vstack([x0[None], Xs])
 
@@ -118,7 +118,7 @@ def lin_dyn_step(t: int, x: np.array, u: np.array, lqr: LQR) -> np.array:
 
 def lqr_adjoint_pass(Xs: np.ndarray, Us: np.ndarray, params: Params) -> np.ndarray:
     """Adjoint backward pass with LQR params"""
-    x0, lqr = params.x0, params[2]
+    x0, lqr = params.x0, params[1]
     AT = lqr.A.transpose(0, 2, 1)
     lambf = lqr.Qf @ Xs[-1]
 
@@ -138,6 +138,7 @@ def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[np.ndarray, np.ndarr
     x0, lqr = params.x0, params.lqr
 
     def dynamics(x: np.array, params: LQRBackParams):
+        # TODO: add dims.dt to dynamics
         A, B, a, K, k = params
         u = K @ x + k
         nx = A @ x + B @ u + a
@@ -180,7 +181,7 @@ def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
 
 def lqr_backward_pass(
     lqr: LQR,
-    T: int,
+    dims: ModelDims,
     expected_change: bool = False,
     verbose: bool = False,
 ) -> Gains:
@@ -199,23 +200,23 @@ def lqr_backward_pass(
 
         # With Levenberg-Marquardt regulisation
         min_eval = np.linalg.eigh(Huu)[0][0]
-        I_mu = np.maximum(0.0, 1e-6 - min_eval) * np.eye(lqr.R.shape[-1])
+        I_mu = np.maximum(0.0, 1e-6 - min_eval) * np.eye(dims.m)
 
         # solve gains
         K = -np.linalg.solve(Huu + I_mu, Hxu.T)
         k = -np.linalg.solve(Huu + I_mu, hu)
 
         if verbose:
-            assert I_mu.shape == Huu.shape
-            assert v.shape == (Huu.shape[0],)
-            assert V.shape == Hxx.shape
-            assert Hxx.shape == (lqr.A.shape[1], lqr.A.shape[1])
-            assert Huu.shape == (lqr.B.shape[2], lqr.B.shape[2])
-            assert Hxu.shape == (lqr.A.shape[1], lqr.B.shape[2])
-            assert hx.shape == (lqr.A.shape[1],)
-            assert hu.shape == (lqr.B.shape[2],)
-            assert k.shape == (lqr.B.shape[2],)
-            assert K.shape == (lqr.B.shape[2], lqr.A.shape[1])
+            assert I_mu.shape == (dims.m, dims.m)
+            assert v.shape == (dims.m,)
+            assert V.shape == (dims.n, dims.n)
+            assert Hxx.shape == (dims.n, dims.n)
+            assert Huu.shape == (dims.m, dims.m)
+            assert Hxu.shape == (dims.n, dims.m)
+            assert hx.shape == (dims.n,)
+            assert hu.shape == (dims.m,)
+            assert k.shape == (dims.m,)
+            assert K.shape == (dims.m, dims.n)
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
@@ -230,7 +231,7 @@ def lqr_backward_pass(
     (V_0, dJ), Ks = lax.scan(
         riccati_step,
         init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
-        xs=np.arange(T),
+        xs=np.arange(dims.horizon),
         reverse=True,
     )
     
