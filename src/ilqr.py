@@ -7,10 +7,11 @@ import jax.lax as lax
 import jax.numpy as np
 from functools import partial
 import jaxopt
-from . import lqr as lqr
+import src as lqr
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
 
+# TODO separate dimesions from System and parse through ModelDims through functions
 
 class System(NamedTuple):
     """iLQR System
@@ -35,6 +36,7 @@ class System(NamedTuple):
     horizon: int
     n: int
     m: int
+    dt:float
 
 
 class Theta(NamedTuple):
@@ -47,7 +49,7 @@ class Params(NamedTuple):
     """Non-linear parameter struct"""
 
     x0: ArrayLike
-    horizon: int
+    # horizon: int
     theta: Any
 
 
@@ -91,11 +93,12 @@ def vectorise_fun_in_time(fun: Callable) -> Callable:
 
 def approx_lqr(
     model: System, Xs: np.ndarray, Us: np.ndarray, params: Params
-) -> lqr.LQR:
+) -> Tuple[lqr.LQR, lqr.ModelDims]:
     """Calls linearisation and quadratisation function
 
     Returns:
         LQR: return the LQR structure
+        ModelDims: return the dimensionality of model
     """
     theta = params.theta
 
@@ -126,7 +129,7 @@ def approx_lqr(
         S=Cxu,
     )()
 
-    return lqr_params
+    return lqr_params, lqr.ModelDims(n=model.n, m=model.m, horizon=model.horizon)
 
 
 def ilqr_simulate(
@@ -247,10 +250,10 @@ def ilQR_solver(
         # unravel carry
         old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
         # approximate dyn and loss to LQR with initial {u} and {x}
-        lqr_params = approx_lqr(model, old_Xs, old_Us, params)
+        lqr_params, sys_dims = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dJ0
         exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, model.horizon, expected_change=False, verbose=False
+            lqr_params, sys_dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
@@ -295,7 +298,7 @@ def define_model():
     def dynamics(t: int, x: Array, u: Array, theta: Theta):
         return np.tanh(theta.Uh @ x + theta.Wh @ u)
 
-    return System(cost, costf, dynamics, horizon=20, n=3, m=2)
+    return System(cost, costf, dynamics, horizon=20, n=3, m=2, dt=0.1)
 
 
 if __name__ == "__main__":
@@ -316,7 +319,7 @@ if __name__ == "__main__":
     )
     # initialise params
     theta = Theta(Uh=Uh, Wh=Wh, sigma=np.zeros((3, 1)))
-    params = Params(x0=np.zeros((3, 1)), theta=theta, horizon=20)
+    params = Params(x0=np.zeros((3, 1)), theta=theta)
     model = define_model()
     # generate input
     Us = np.zeros((model.horizon, model.m, 1))
