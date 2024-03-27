@@ -7,7 +7,7 @@ import jax.lax as lax
 import jax.numpy as jnp
 from functools import partial
 import jaxopt
-import src as lqr
+import src.lqr as lqr
 import jax.random as jr
 import matplotlib.pyplot as plt
 
@@ -150,8 +150,8 @@ def ilqr_simulate(
     def fwd_step(state, inputs):
         t, u = inputs
         x, nx_cost = state
-        nx = model.dynamics(None, x, u, theta)
-        nx_cost = nx_cost + model.cost(None, x, u, theta)
+        nx = model.dynamics(t, x, u, theta)
+        nx_cost = nx_cost + model.cost(t, x, u, theta)
         return (nx, nx_cost), (nx, u)
 
     (xf, nx_cost), (new_Xs, new_Us) = lax.scan(fwd_step, init=(x0, 0.0), xs=(tps, Us))
