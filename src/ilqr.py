@@ -84,7 +84,8 @@ def vectorise_fun_in_time(fun: Callable) -> Callable:
     Returns:
         Callable: vectorised function along args 1 and 2 0th-axis
     """
-    return jax.vmap(fun, in_axes=(None, 0, 0, None))
+    return jax.vmap(fun, in_axes=(0, 0, 0, None))
+    # return jax.vmap(fun, in_axes=(None, 0, 0, None))
 
 
 def approx_lqr(
@@ -98,15 +99,16 @@ def approx_lqr(
     """
     theta = params.theta
 
+    tps = jnp.arange(model.dims.horizon)
     Xs = Xs.squeeze()
     Us = Us.squeeze()
 
     (Fx, Fu) = vectorise_fun_in_time(linearise(model.dynamics))(
-        None, Xs[:-1], Us, theta
+        tps, Xs[:-1], Us, theta
     )
-    (Cx, Cu) = vectorise_fun_in_time(linearise(model.cost))(None, Xs[:-1], Us, theta)
+    (Cx, Cu) = vectorise_fun_in_time(linearise(model.cost))(tps, Xs[:-1], Us, theta)
     (Cxx, Cxu), (Cux, Cuu) = vectorise_fun_in_time(quadratise(model.cost))(
-        None, Xs[:-1], Us, theta
+        tps, Xs[:-1], Us, theta
     )
     fCx = jax.jacrev(model.costf)(Xs[-1], theta)
     fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
@@ -143,14 +145,16 @@ def ilqr_simulate(
         and the total cost of the trajectory.
     """
     x0, theta = params.x0, params.theta
+    tps = jnp.arange(model.dims.horizon)
 
-    def fwd_step(state, u):
+    def fwd_step(state, inputs):
+        t, u = inputs
         x, nx_cost = state
         nx = model.dynamics(None, x, u, theta)
         nx_cost = nx_cost + model.cost(None, x, u, theta)
         return (nx, nx_cost), (nx, u)
 
-    (xf, nx_cost), (new_Xs, new_Us) = lax.scan(fwd_step, init=(x0, 0.0), xs=Us)
+    (xf, nx_cost), (new_Xs, new_Us) = lax.scan(fwd_step, init=(x0, 0.0), xs=(tps, Us))
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
 
@@ -183,21 +187,22 @@ def ilqr_forward_pass(
     """
 
     x0, theta = params.x0, params.theta
+    tps = jnp.arange(model.dims.horizon)
     x_hat0 = x0
 
     def fwd_step(state, inputs):
         x_hat, nx_cost = state
-        x, u, K, k = inputs
+        t, x, u, K, k = inputs
 
         delta_x = x_hat - x
         delta_u = K @ delta_x + alpha * k
         u_hat = u + delta_u
-        nx_hat = model.dynamics(None, x_hat, u_hat, theta)
-        nx_cost = nx_cost + model.cost(None, x_hat, u_hat, theta)
+        nx_hat = model.dynamics(t, x_hat, u_hat, theta)
+        nx_cost = nx_cost + model.cost(t, x_hat, u_hat, theta)
         return (nx_hat, nx_cost), (nx_hat, u_hat)
 
     (xf, nx_cost), (new_Xs, new_Us) = lax.scan(
-        fwd_step, init=(x_hat0, 0.0), xs=(Xs[:-1], Us, Ks.K, Ks.k)
+        fwd_step, init=(x_hat0, 0.0), xs=(tps, Xs[:-1], Us, Ks.K, Ks.k)
     )
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
