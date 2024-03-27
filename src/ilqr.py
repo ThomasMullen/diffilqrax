@@ -11,7 +11,6 @@ import src as lqr
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
 
-# TODO separate dimesions from System and parse through ModelDims through functions
 
 class System(NamedTuple):
     """iLQR System
@@ -22,21 +21,14 @@ class System(NamedTuple):
         final state cost lf(xf, params)
     dynamics : Callable
         dynamical update f(t, x, u, params)
-    horizon : int
-        ilQR evaluate time horizon
-    n : int
-        state dimension
-    m : int
-        input dimensions
+    dims : ModelDims
+        ilQR evaluate time horizon, dt, state and input dimension
     """
 
     cost: Callable[[int, Array, Array, Optional[Any]], Array]
     costf: Callable[[Array, Optional[Any]], Array]
     dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
-    horizon: int
-    n: int
-    m: int
-    dt:float
+    dims: lqr.ModelDims
 
 
 class Theta(NamedTuple):
@@ -49,7 +41,6 @@ class Params(NamedTuple):
     """Non-linear parameter struct"""
 
     x0: ArrayLike
-    # horizon: int
     theta: Any
 
 
@@ -119,7 +110,7 @@ def approx_lqr(
     lqr_params = lqr.LQR(
         A=Fx,
         B=Fu,
-        a=np.zeros((model.horizon, model.n, 1)),
+        a=np.zeros((model.dims.horizon, model.dims.n, 1)),
         Q=Cxx,
         q=Cx[:, :, None],
         Qf=fCxx,
@@ -129,7 +120,7 @@ def approx_lqr(
         S=Cxu,
     )()
 
-    return lqr_params, lqr.ModelDims(n=model.n, m=model.m, horizon=model.horizon)
+    return lqr_params
 
 
 def ilqr_simulate(
@@ -250,10 +241,10 @@ def ilQR_solver(
         # unravel carry
         old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
         # approximate dyn and loss to LQR with initial {u} and {x}
-        lqr_params, sys_dims = approx_lqr(model, old_Xs, old_Us, params)
+        lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dJ0
         exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, sys_dims, expected_change=False, verbose=False
+            lqr_params, sys_dims=model.dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
@@ -283,7 +274,7 @@ def ilQR_solver(
         print(f"Converged in {n_iters}/{max_iter} iterations")
     lqr_params_stars = approx_lqr(model, Xs_stars, Us_stars, params)
     Lambs_stars = lqr.lqr_adjoint_pass(
-        Xs_stars, Us_stars, lqr.Params(Xs_stars[0], model.horizon, lqr_params_stars)
+        Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
     )
     return Xs_stars, Us_stars, Lambs_stars
 
@@ -298,7 +289,7 @@ def define_model():
     def dynamics(t: int, x: Array, u: Array, theta: Theta):
         return np.tanh(theta.Uh @ x + theta.Wh @ u)
 
-    return System(cost, costf, dynamics, horizon=20, n=3, m=2, dt=0.1)
+    return System(cost, costf, dynamics, lqr.ModelDims(horizon=20, n=3, m=2, dt=0.1))
 
 
 if __name__ == "__main__":
