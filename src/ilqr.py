@@ -4,10 +4,15 @@ from jax import Array
 from jax.typing import ArrayLike
 import jax
 import jax.lax as lax
-import jax.numpy as np
+import jax.numpy as jnp
 from functools import partial
 import jaxopt
 import src as lqr
+import jax.random as jr
+import matplotlib.pyplot as plt
+
+
+jax.config.update("jax_enable_x64", True)  # double precision
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
 
@@ -83,8 +88,8 @@ def vectorise_fun_in_time(fun: Callable) -> Callable:
 
 
 def approx_lqr(
-    model: System, Xs: np.ndarray, Us: np.ndarray, params: Params
-) -> Tuple[lqr.LQR, lqr.ModelDims]:
+    model: System, Xs: Array, Us: Array, params: Params
+) -> lqr.LQR:
     """Calls linearisation and quadratisation function
 
     Returns:
@@ -110,7 +115,7 @@ def approx_lqr(
     lqr_params = lqr.LQR(
         A=Fx,
         B=Fu,
-        a=np.zeros((model.dims.horizon, model.dims.n, 1)),
+        a=jnp.zeros((model.dims.horizon, model.dims.n, 1)),
         Q=Cxx,
         q=Cx[:, :, None],
         Qf=fCxx,
@@ -124,7 +129,7 @@ def approx_lqr(
 
 
 def ilqr_simulate(
-    model: System, Us: np.ndarray, params: Params
+    model: System, Us: Array, params: Params
 ) -> Tuple[Tuple[Array, Array], float]:
     """Simulate forward trajectory and cost with nonlinear params
 
@@ -147,7 +152,7 @@ def ilqr_simulate(
 
     (xf, nx_cost), (new_Xs, new_Us) = lax.scan(fwd_step, init=(x0, 0.0), xs=Us)
     total_cost = nx_cost + model.costf(xf, theta)
-    new_Xs = np.vstack([x0[None], new_Xs])
+    new_Xs = jnp.vstack([x0[None], new_Xs])
 
     return (new_Xs, new_Us), total_cost
 
@@ -195,7 +200,7 @@ def ilqr_forward_pass(
         fwd_step, init=(x_hat0, 0.0), xs=(Xs[:-1], Us, Ks.K, Ks.k)
     )
     total_cost = nx_cost + model.costf(xf, theta)
-    new_Xs = np.vstack([x0[None], new_Xs])
+    new_Xs = jnp.vstack([x0[None], new_Xs])
 
     return (new_Xs, new_Us), total_cost
 
@@ -244,7 +249,7 @@ def ilQR_solver(
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dJ0
         exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, sys_dims=model.dims, expected_change=False, verbose=False
+            lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
@@ -255,9 +260,9 @@ def ilQR_solver(
             exp_cost_red, alpha=1.0
         )
         # determine cond: ΔJ0 > threshold
-        carry_on = np.abs(z) > tol
+        carry_on = jnp.abs(z) > tol
         if verbose:
-            print(f"z-val: {z}")
+            jax.debug.print(f"z-val: {z}")
 
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
@@ -272,54 +277,57 @@ def ilQR_solver(
     )
     if verbose:
         print(f"Converged in {n_iters}/{max_iter} iterations")
+        print(f"J0: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_stars, Us_stars, params)
     Lambs_stars = lqr.lqr_adjoint_pass(
         Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
     )
-    return Xs_stars, Us_stars, Lambs_stars
+    return (Xs_stars, Us_stars, Lambs_stars), total_cost
 
 
 def define_model():
     def cost(t: int, x: Array, u: Array, theta: Theta):
-        return np.sum(x**2) + np.sum(u**2)
+        return jnp.sum(x**2) + jnp.sum(u**2)
 
     def costf(x: Array, theta: Theta):
-        return np.sum(np.abs(x))
+        # return jnp.sum(jnp.abs(x))
+        return jnp.sum(x**2)
 
     def dynamics(t: int, x: Array, u: Array, theta: Theta):
-        return np.tanh(theta.Uh @ x + theta.Wh @ u)
+        return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
-    return System(cost, costf, dynamics, lqr.ModelDims(horizon=20, n=3, m=2, dt=0.1))
+    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=2, m=2, dt=0.1))
 
 
 if __name__ == "__main__":
+    key = jr.PRNGKey(seed=234)
+    key, skeys = lqr.keygen(key, 2)
     # test data
-    Uh = np.array(
-        [
-            [-0.63462433, -1.22943886, -0.07712939],
-            [-0.22857423, -1.36123108, -0.04661756],
-            [-0.14380682, 1.75378683, -1.77218787],
-        ]
-    )
-    Wh = np.array(
-        [
-            [0.37087464, -1.1752595],
-            [-0.51433962, 1.94757307],
-            [-1.29836488, -0.61030051],
-        ]
-    )
+    dt=0.1
+    Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
+    Wh = jnp.array([[0,0],[1,0]])*dt
     # initialise params
-    theta = Theta(Uh=Uh, Wh=Wh, sigma=np.zeros((3, 1)))
-    params = Params(x0=np.zeros((3, 1)), theta=theta)
+    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2, 1)))
+    params = Params(x0=jnp.array([[0.3], [0.]]), theta=theta)
     model = define_model()
     # generate input
-    Us = np.zeros((model.horizon, model.m, 1))
-    Us = Us.at[2].set(2)
+    # Us_init = jnp.zeros((model.dims.horizon, model.dims.m, 1))
+    Us_init = 0.1 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
     # rollout model non-linear dynamics
-    Xs = lqr.simulate_trajectory(model.dynamics, Us, params)
-    # approx lqr with U and X trajectorys
+    Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
+    (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
+    # test approx lqr with U and X trajectorys
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
-
-    Xs_stars, Us_stars, Lambs_stars = ilQR_solver(
-        model, params, Xs, Us, max_iter=10, tol=1e-6
+    # test ilqr solver
+    (Xs_stars, Us_stars, Lambs_stars), total_cost = ilQR_solver(
+        model, params, Xs, Us, max_iter=20, tol=1e-2, verbose=True
     )
+    
+    print(f"Initial J0: {cost_init:.03f}, Final J0: {total_cost:.03f}")
+    fig, ax = plt.subplots(2,2, sharey=True)
+    ax[0,0].plot(Xs.squeeze())
+    ax[0,0].set(title="X")
+    ax[0,1].plot(Us.squeeze())
+    ax[0,1].set(title="U")
+    ax[1,0].plot(Xs_stars.squeeze())
+    ax[1,1].plot(Us_stars.squeeze())

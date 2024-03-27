@@ -8,6 +8,7 @@ from .lqr import (
     lqr_adjoint_pass,
     lin_dyn_step,
     lqr_forward_pass,
+    calc_expected_change,
     lqr_tracking_forward_pass,
     lqr_backward_pass,
     solve_lqr,
