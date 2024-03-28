@@ -1,11 +1,14 @@
 import unittest
 import pytest
-import chex
+import chex, jax 
 from jax import Array, grad
 import jax.random as jr
 import jax.numpy as jnp
 from jaxopt import linear_solve, implicit_diff
+import numpy as np
+from src.exact import quad_solve, exact_solve
 
+jax.config.update('jax_default_device', jax.devices('cpu')[0])
 # from tests.fixtures import sys_matrices, sys_dims
 from src.lqr import (
     Gains,
@@ -167,7 +170,7 @@ class TestLQRSolution(unittest.TestCase):
         key = jr.PRNGKey(seed=234)
         subkeys = jr.split(key, 11)
 
-        A = jr.normal(subkeys[0], self.dims["TNN"])
+        A = (0.6*jr.normal(subkeys[0], self.dims["TNN"]) / np.sqrt(self.dims["N"])) - jnp.eye(self.dims["N"][0])
         B = jr.normal(subkeys[1], self.dims["TNM"])
         a = jr.normal(subkeys[2], self.dims["TNX"])
         Qf = jnp.eye(self.dims["N"][0])
@@ -210,11 +213,11 @@ class TestLQRSolution(unittest.TestCase):
         assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-01, atol=1e-01)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-01, atol=1e-01)
         #TODO: Inspect why U not near 0 and how to set threhold
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-01, atol=1e-01) 
-        # assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
-        # assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
-        # assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
-        # assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-01, atol=1e-01) 
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
         
     def test_gradients(self):
         # Setup the LQR problem
@@ -248,5 +251,56 @@ class TestLQRSolution(unittest.TestCase):
         pass
 
 
+class TestLQRSolutionExact(unittest.TestCase):
+    """Test LQR solution comparing to the exact solution using a CG solve (in a case in which the dynamics are constant)"""
+
+    def setUp(self):
+        """Instantiate LQR example using the pendulum example to compare against Ocaml"""
+        print("\nRunning setUp method...")
+        self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
+        key = jr.PRNGKey(seed=234)
+        subkeys = jr.split(key, 11)
+        dt = 0.1
+
+        A = jnp.float64(jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"]))
+        B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
+        a = jnp.zeros(self.dims["TNX"])
+        Qf = 0. *jnp.eye(self.dims["N"][0])
+        qf = 0. * jnp.ones(self.dims["NX"])
+        Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
+        q = 0. * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
+        R =  0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
+        r = 0. * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
+        S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+
+        self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+        print("LQR Q shape", self.lqr.Q.shape)
+
+        print("\nMake initial state x0 and input U")
+        self.x0 = jnp.array([[0.3], [0.]])
+        Us = jnp.zeros(self.dims["TMX"]) * 1.0
+        Us = Us.at[2].set(1.0)
+        self.Us = Us
+        self.params = Params(self.x0, self.dims["T"][0], self.lqr)
+
+
+        
+        
+    def test_lqr_solution(self):
+        """test LQR solution using jaxopt conjugate gradient solution"""
+        # Exercise the LQR solver function
+        K_dir, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params)
+        Xs_quad, Us_quad = quad_solve(self.params, self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], self.x0) 
+        Xs_exact, Us_exact = exact_solve(self.params, self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], self.x0)   
+        np.savetxt("Us_ext", Us_exact[...,0]) 
+        np.savetxt("Xs_ext", Xs_exact[...,0]) 
+        np.savetxt("Us_quad", Us_quad[...,0]) 
+        np.savetxt("Xs_auqd", Xs_quad[...,0]) 
+        np.savetxt("Us_dir", Us_dir[...,0]) 
+        np.savetxt("Xs_dir", Xs_dir[...,0])
+        # Verify that the two solutions are close
+        assert jnp.allclose(Us_dir[:-1], Us_exact, rtol=1e-05, atol=1e-08)
+        
+        
 if __name__ == "__main__":
     unittest.main()
