@@ -8,6 +8,8 @@ __pycache__/
 # C extensions
 *.so
 
+fig_dump/
+
 # Distribution / packaging
 .Python
 build/
