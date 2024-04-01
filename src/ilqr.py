@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from functools import partial
 import jaxopt
 import src.lqr as lqr
+from src.utils import keygen
 import jax.random as jr
 import matplotlib.pyplot as plt
 
@@ -308,7 +309,7 @@ def define_model():
 
 if __name__ == "__main__":
     key = jr.PRNGKey(seed=234)
-    key, skeys = lqr.keygen(key, 2)
+    key, skeys = keygen(key, 2)
     # test data
     dt=0.1
     Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
