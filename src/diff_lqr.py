@@ -1,5 +1,6 @@
 from functools import partial
 import jax.lax as lax
+from jax.lax import batch_matmul as bmm
 import jax.numpy as np
 from jax.typing import ArrayLike
 from typing import Tuple
@@ -7,17 +8,16 @@ from jax import Array, custom_vjp
 from .lqr import (
     LQR,
     Params,
+    ModelDims,
     solve_lqr, symmetrise_tensor
 )
 
-bmm = lax.batch_matmul
 
-
-def get_qra_bar(params: Params, tau_bar: Array) -> Tuple[Array, Array, Array]:
+def get_qra_bar(params: Params, dims: ModelDims,tau_bar: Array) -> Tuple[Array, Array, Array]:
     """Helper function to get gradients wrt to q, r, a."""
     # q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
     lqr = params.lqr
-    n, m = lqr.A[0].shape()[1], lqr.B[0].shape()[1]
+    n, m = dims.n, dims.m
     x_bar, u_bar = tau_bar[..., :n], tau_bar[..., n:]
     swapped_lqr = lqr.copy()
     Lambs_bar = np.zeros_like(lqr.a)
@@ -29,8 +29,8 @@ def get_qra_bar(params: Params, tau_bar: Array) -> Tuple[Array, Array, Array]:
     return q_bar, r_bar, a_bar
 
 
-@partial(custom_vjp, nondiff_argnums=(0,))
-def dlqr(params: LQR):
+@partial(custom_vjp, nondiff_argnums=(0,1,))
+def dlqr(params: Params, dims: ModelDims) -> Tuple[Array, Array, Array, Array]:
     """params vector contains all the LQR parameters : here, this assumes an LQR problem
     In the more general case, depending on where we are defining this, we may to take into account the fact that we are at around the solution, so the effective problem has extra linear terms, as follows :
 
@@ -38,19 +38,19 @@ def dlqr(params: LQR):
     local_LQR.q = local_LQR.q - bmm(Xs_star, local_LQR.Q) - bmm(Us_star, local_LQR.S)
     local_LQR.r = local_LQR.r - bmm(Xs_star, np.transpose(local_LQR.S, axis = (0,2,1))) - bmm(Us_star, local_LQR.R)
     params.lqr = local_LQR"""
-    return solve_lqr(params)
+    return solve_lqr(params, dims)
 
 
-def fwd_dlqr(params: Params):
-    _, Xs_star, Us_star, Lambs = dlqr(params)
+def fwd_dlqr(params: Params, dims: ModelDims):
+    _, Xs_star, Us_star, Lambs = dlqr(params, dims)
     tau_star = np.concatenate([Xs_star, np.concatenate([Us_star, np.zeros_like(Us_star)[0]], axis = 0)], axis=1)
-    return tau_star, (params, Lambs, tau_star)
+    return tau_star, (params, dims, Lambs, tau_star)
 
 
 def rev_dlqr(res, tau_bar: Array) -> Params:
-    params, Lambs, tau_star = res
+    params, dims, Lambs, tau_star = res
     """
-  Inputs : params (contains lqr parameters, x0, and the horizon), tau_star_bar (gradients wrt to tau at tau_star)
+  Inputs : params (contains lqr parameters, x0), tau_star_bar (gradients wrt to tau at tau_star)
   params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
   A : T x N x N
   B : T x N x M
@@ -72,8 +72,8 @@ def rev_dlqr(res, tau_bar: Array) -> Params:
   - we don't want to differentiate wrt to the horizon so maybe we shouldn't use the vector containing it
   """
     # this asssumes we are passing dimension parameters
-    n, m = params.dims.n, params.dims.m # LQR.A[0].shape()[1], LQR.B[0].shape()[1]
-    q_bar, r_bar, a_bar = get_qra_bar(params, tau_bar)
+    n = dims.n # LQR.A[0].shape()[1], LQR.B[0].shape()[1]
+    q_bar, r_bar, a_bar = get_qra_bar(params, dims, tau_bar)
     c_bar = np.concatenate([q_bar, r_bar], axis=1)
     F_bar = bmm(Lambs[1:], np.transpose(c_bar[:-1], axis=(0, 2, 1))) + bmm(
         a_bar[1:], np.transpose(tau_star[:-1], axis=(0, 2, 1))
