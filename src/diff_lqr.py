@@ -1,7 +1,7 @@
 from functools import partial
 import jax.lax as lax
 from jax.lax import batch_matmul as bmm
-import jax.numpy as np
+import jax.numpy as jnp
 from jax.typing import ArrayLike
 from typing import Tuple
 from jax import Array, custom_vjp
@@ -17,14 +17,17 @@ def get_qra_bar(params: Params, dims: ModelDims,tau_bar: Array) -> Tuple[Array, 
     """Helper function to get gradients wrt to q, r, a."""
     # q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
     lqr = params.lqr
-    n, m = dims.n, dims.m
+    n = dims.n
     x_bar, u_bar = tau_bar[..., :n], tau_bar[..., n:]
-    swapped_lqr = lqr.copy()
-    Lambs_bar = np.zeros_like(lqr.a)
-    swapped_lqr.q, swapped_lqr.r, swapped_lqr.a = x_bar, u_bar, Lambs_bar
-    swapped_params = params
-    swapped_params.lqr = swapped_lqr
-    _, q_bar, r_bar, a_bar = solve_lqr(swapped_params)
+    # Lambs_bar = jnp.zeros_like(lqr.a)
+    # set-up LQR problem with r_rev = u_bar, q_rev = x_bar, a_rev = lambda_bar (set to 0 here)
+    swapped_lqr = LQR(A=lqr.A, B=lqr.B, a=jnp.zeros_like(lqr.a), 
+                      Q=lqr.Q, q=x_bar, 
+                      Qf=lqr.Qf, qf=lqr.qf, 
+                      R=lqr.R, r=u_bar, S=lqr.S)
+    
+    swapped_params = Params(params.x0, swapped_lqr)
+    _, q_bar, r_bar, a_bar = solve_lqr(swapped_params, dims)
     ##TODO : check the indices for a_bar
     return q_bar, r_bar, a_bar
 
@@ -43,7 +46,7 @@ def dlqr(params: Params, dims: ModelDims) -> Tuple[Array, Array, Array, Array]:
 
 def fwd_dlqr(params: Params, dims: ModelDims):
     _, Xs_star, Us_star, Lambs = dlqr(params, dims)
-    tau_star = np.concatenate([Xs_star, np.concatenate([Us_star, np.zeros_like(Us_star)[0]], axis = 0)], axis=1)
+    tau_star = jnp.concatenate([Xs_star, jnp.concatenate([Us_star, jnp.zeros_like(Us_star)[0]], axis = 0)], axis=1)
     return tau_star, (params, dims, Lambs, tau_star)
 
 
@@ -74,9 +77,9 @@ def rev_dlqr(res, tau_bar: Array) -> Params:
     # this asssumes we are passing dimension parameters
     n = dims.n # LQR.A[0].shape()[1], LQR.B[0].shape()[1]
     q_bar, r_bar, a_bar = get_qra_bar(params, dims, tau_bar)
-    c_bar = np.concatenate([q_bar, r_bar], axis=1)
-    F_bar = bmm(Lambs[1:], np.transpose(c_bar[:-1], axis=(0, 2, 1))) + bmm(
-        a_bar[1:], np.transpose(tau_star[:-1], axis=(0, 2, 1))
+    c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
+    F_bar = bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axis=(0, 2, 1))) + bmm(
+        a_bar[1:], jnp.transpose(tau_star[:-1], axis=(0, 2, 1))
     )
     C_bar = 0.5 * (symmetrise_tensor(bmm(c_bar, tau_star.T))) 
     Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
@@ -94,7 +97,7 @@ def rev_dlqr(res, tau_bar: Array) -> Params:
         r=r_bar,
         S=S_bar,
     )
-    x0_bar = np.zeros_like(params.x0)
+    x0_bar = jnp.zeros_like(params.x0)
     return Params(x0=x0_bar, lqr=LQR_bar)
 
 
