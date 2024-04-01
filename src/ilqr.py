@@ -261,9 +261,11 @@ def ilQR_solver(
             model, params, gains, old_Xs, old_Us, alpha=1.0
         )
         # calc change in dJ0 w.r.t old dJ0
-        z = (old_cost - new_total_cost) / lqr.calc_expected_change(
-            exp_cost_red, alpha=1.0
-        )
+        # z = (old_cost - new_total_cost) / lqr.calc_expected_change(
+        #     exp_cost_red, alpha=1.0
+        # )
+        z = (old_cost - new_total_cost) / old_cost
+        
         # determine cond: ΔJ0 > threshold
         carry_on = jnp.abs(z) > tol
         if verbose:
