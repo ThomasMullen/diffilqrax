@@ -1,0 +1,305 @@
+import unittest
+import pytest
+import chex, jax 
+from jax import Array, grad
+from typing import Tuple
+import jax.random as jr
+import jax.numpy as jnp
+from jaxopt import linear_solve, implicit_diff
+from matplotlib.pyplot import subplots, close
+from os import getcwd
+from pathlib import Path
+
+import numpy as onp
+from src.exact import quad_solve, exact_solve
+
+jax.config.update('jax_default_device', jax.devices('cpu')[0])
+jax.config.update("jax_enable_x64", True)  # double precision
+
+from src import (
+    Gains,
+    CostToGo,
+    LQR,
+    Params,
+    ModelDims,
+    simulate_trajectory,
+    lqr_adjoint_pass,
+    lin_dyn_step,
+    lqr_forward_pass,
+    lqr_tracking_forward_pass,
+    lqr_backward_pass,
+    solve_lqr,
+    kkt,
+)
+
+from src import keygen, initialise_stable_dynamics
+
+is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
+
+def setup_lqr(dims: chex.Dimensions,
+              pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}) -> LQR:
+    """Setup LQR problem"""
+    key = jr.PRNGKey(seed=234)
+    key, skeys = keygen(key, 3)
+    # initialise dynamics
+    span_time=dims["TXX"]
+    A = initialise_stable_dynamics(next(skeys), dims['N'][0], dims['T'][0],radii=0.6)
+    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time)
+    a = jnp.tile(jr.normal(next(skeys), dims['NX']), span_time)
+    # define cost matrices
+    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time)
+    q = 2*1e-1 * jnp.tile(jnp.ones(dims['NX']), span_time)
+    R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time)
+    r = 1e-6 * jnp.tile(jnp.ones(dims['MX']), span_time)
+    S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time)
+    Qf = pen_weight["Q"] * jnp.eye(dims['N'][0])
+    qf = 2*1e-1 * jnp.ones(dims['NX'])
+    # construct LQR
+    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    return lqr()
+
+
+class TestLQR(unittest.TestCase):
+    """Test LQR dimensions and dtypes"""
+
+    def setUp(self):
+        """Instantiate dummy LQR"""
+        print("\nRunning setUp method...")
+        self.dims = chex.Dimensions(T=60, N=3, M=2, X=1)
+        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        print("Model dimensionality", self.dims["TNMX"])
+        print("\nMake LQR struct")
+        self.lqr = setup_lqr(self.dims)
+
+        print("\nMake initial state x0 and input U")
+        self.x0 = jnp.array([[2.0], [1.0], [1.0]])
+        Us = jnp.zeros(self.dims["TMX"], dtype=float)
+        Us = Us.at[2].set(1.0)
+        self.Us = Us
+
+    def test_lqr_params_struct(self):
+        print("Construct params")
+        params = Params(self.x0, self.lqr)
+        chex.assert_trees_all_close(params[0], self.x0)
+        chex.assert_trees_all_close(params.x0, self.x0)
+        chex.assert_type(params.x0, float)
+        assert isinstance(params.lqr, LQR)
+        assert isinstance(params[1], LQR)
+        assert isinstance(params[-1], LQR)
+        print("Params struct passed.")
+
+    def test_lqr_struct(self):
+        """Test test shape of LQR"""
+        print("Running test_lqr_struct")
+
+        # test cost is positive symmetric
+        chex.assert_trees_all_close(self.lqr.Q[0], self.lqr.Q[0].T)
+        chex.assert_trees_all_close(self.lqr.R[0], self.lqr.R[0].T)
+        # check if Q is positive definite
+        assert jnp.all(jnp.linalg.eigvals(self.lqr.Q[0]) > 0), "Q is not positive definite"
+        assert jnp.all(jnp.linalg.eigvals(self.lqr.R[0]) > 0), "R is not positive definite"
+
+        # check shape
+        chex.assert_shape(self.lqr.A, self.dims["TNN"])
+        chex.assert_shape(self.lqr.B, self.dims["TNM"])
+        chex.assert_shape(self.lqr.Q, self.dims["TNN"])
+        chex.assert_shape(self.lqr.R, self.dims["TMM"])
+        chex.assert_shape(self.lqr.S, self.dims["TNM"])
+
+        # check dtypes
+        chex.assert_type(self.lqr.S.dtype, float)
+        chex.assert_type(self.lqr.Qf.dtype, float)
+        # test jax arrays
+        assert is_jax_Array(self.lqr.Q)
+        assert is_jax_Array(self.lqr.R)
+        assert is_jax_Array(self.lqr.S)
+        assert is_jax_Array(self.lqr.Qf)
+        assert is_jax_Array(self.lqr.A)
+        assert is_jax_Array(self.lqr.B)
+        print("LQR struct passed.")
+
+    def test_simulate_trajectory(self):
+        print("Running test_simulate_trajectory")
+        params = Params(self.x0, self.lqr)
+        Xs = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
+        chex.assert_type(Xs, float)
+        chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["NX"])
+
+    def test_lqr_adjoint_pass(self):
+        print("Running test_lqr_adjoint_pass")
+        params = Params(self.x0, self.lqr)
+        Xs_sim = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
+        Lambs = lqr_adjoint_pass(Xs_sim, self.Us, params)
+        chex.assert_type(Lambs, float)
+        chex.assert_shape(Lambs, (self.dims["T"][0] + 1,) + self.dims["NX"])
+
+    def test_lqr_backward_pass(self):
+        params = Params(self.x0, self.lqr)
+        (dJ, Ks), exp_dJ = lqr_backward_pass(
+            lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
+        )
+        chex.assert_type(Ks.K, float)
+        chex.assert_shape(Ks.K, self.dims["TMN"])
+        chex.assert_type(Ks.k, float)
+        chex.assert_shape(Ks.k, self.dims["TMX"])
+        chex.assert_type(dJ, float)
+        chex.assert_type(exp_dJ, float)
+
+    def test_lqr_forward_pass(self):
+        params = Params(self.x0, self.lqr)
+        (dJ, Ks), exp_dJ = lqr_backward_pass(
+            lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
+        )
+        Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
+        chex.assert_type(Xs_lqr, float)
+        chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_type(Us_lqr, float)
+        chex.assert_shape(Us_lqr, self.dims["TMX"])
+
+    def test_solve_lqr(self):
+        params = Params(self.x0, self.lqr)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
+        chex.assert_type(gains_lqr.K, float)
+        chex.assert_shape(gains_lqr.K, self.dims["TMN"])
+        chex.assert_type(gains_lqr.k, float)
+        chex.assert_shape(gains_lqr.k, self.dims["TMX"])
+        chex.assert_type(Xs_lqr, float)
+        chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_type(Us_lqr, float)
+        chex.assert_shape(Us_lqr, self.dims["TMX"])
+        chex.assert_type(Lambs_lqr, float)
+        chex.assert_shape(Lambs_lqr, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        # verify output jax arrays
+        assert is_jax_Array(gains_lqr.K)
+        assert is_jax_Array(gains_lqr.k)
+        assert is_jax_Array(Xs_lqr)
+        assert is_jax_Array(Us_lqr)
+        assert is_jax_Array(Lambs_lqr)
+        
+    def test_solution_output(self):
+        params = Params(self.x0, self.lqr)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
+        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir.mkdir(exist_ok=True)
+        fig, ax = subplots(1,3,figsize=(10,3))
+        ax[0].plot(Xs_lqr.squeeze())
+        ax[1].plot(Us_lqr.squeeze())
+        ax[2].plot(Lambs_lqr.squeeze())
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/lqr_solution.png")
+        close()
+        
+        
+    def tearDown(self):
+        """Destruct test class"""
+        print("Running tearDown method...")
+
+
+class TestLQRSolutionExact(unittest.TestCase):
+    """Test LQR solution comparing to the exact solution using a CG solve (in a case in which the dynamics are constant)"""
+
+    def setUp(self):
+        """Instantiate LQR example using the pendulum example to compare against Ocaml"""
+        print("\nRunning setUp method...")
+        self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
+        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        dt = self.sys_dims.dt
+
+        A = jnp.float64(jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"]))
+        B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
+        a = jnp.zeros(self.dims["TNX"])
+        Qf = 0. *jnp.eye(self.dims["N"][0])
+        qf = 0. * jnp.ones(self.dims["NX"])
+        Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
+        q = 0. * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
+        R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
+        r = 0. * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
+        S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+        self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+
+        print("\nMake initial state x0 and input U")
+        self.x0 = jnp.array([[0.3], [0.]])
+        Us = jnp.zeros(self.dims["TMX"]) * 1.0
+        Us = Us.at[2].set(1.0)
+        self.Us = Us
+        self.params = Params(self.x0, self.lqr)
+        
+    def test_lqr_solution(self):
+        """test LQR solution using jaxopt conjugate gradient solution"""
+        # setup
+        params = Params(self.x0, self.lqr)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
+        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir.mkdir(exist_ok=True)
+        print("Make tmp dir")
+        # Exercise the LQR solver function
+        _, Xs_dir, Us_dir, _ = solve_lqr(params=self.params, sys_dims=self.sys_dims)
+        print("Lqr solve")
+        Xs_quad, Us_quad = quad_solve(self.params, self.sys_dims, self.x0) 
+        print("CG solve")
+        Xs_exact, Us_exact = exact_solve(self.params, self.sys_dims, self.x0)   
+        print("Mat inversion solve")
+        fig, ax = subplots(1,3, figsize=(10,3), sharey=True)
+        ax[0].plot(Us_dir.squeeze())
+        ax[0].set(title="LQR solve")
+        ax[1].plot(Us_quad.squeeze())
+        ax[1].set(title="CG solve")
+        ax[2].plot(Us_exact.squeeze())
+        ax[2].set(title="Inv solve")
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/u_star_solvers.png")
+        close()
+        print("Plot u solutions")
+        # onp.savetxt("Us_ext", Us_exact[...,0]) 
+        # onp.savetxt("Xs_ext", Xs_exact[...,0]) 
+        # onp.savetxt("Us_quad", Us_quad[...,0]) 
+        # onp.savetxt("Xs_quad", Xs_quad[...,0]) 
+        # onp.savetxt("Us_dir", Us_dir[...,0]) 
+        # onp.savetxt("Xs_dir", Xs_dir[...,0])
+        # Verify that the two solutions are close
+        assert jnp.allclose(Us_dir[:-1], Us_exact, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(Xs_dir[:-1], Xs_exact, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(Xs_dir[:-1], Xs_quad, rtol=1e-04, atol=1e-05)
+        assert jnp.allclose(Us_dir[:-1], Us_quad, rtol=1e-04, atol=1e-05)
+        
+    def test_kkt_optimal(self):
+        # Setup the LQR problem
+        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir.mkdir(exist_ok=True)
+        
+        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params, sys_dims=self.sys_dims)
+        # Exercise the KKT function
+        dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
+        # Plot the KKT residuals
+        fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
+        ax[0,0].plot(Xs_dir.squeeze())
+        ax[0,0].set(title="X")
+        ax[0,1].plot(Us_dir.squeeze())
+        ax[0,1].set(title="U")
+        ax[0,2].plot(Lambs_dir.squeeze())
+        ax[0,2].set(title="λ")
+        ax[1,0].plot(dLdXs.squeeze())
+        ax[1,0].set(title="dLdX")
+        ax[1,1].plot(dLdUs.squeeze())
+        ax[1,1].set(title="dLdUs")
+        ax[1,2].plot(dLdLambs.squeeze())
+        ax[1,2].set(title="dLdλ")
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/lqr_kkt.png")
+        close()
+        # Verify that the average KKT conditions are satisfied
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
+        
+        # Verify that the terminal state KKT conditions is satisfied
+        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        
+        # Verify that all KKT conditions are satisfied
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+        
+        
+if __name__ == "__main__":
+    unittest.main()
