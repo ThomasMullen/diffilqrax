@@ -1,5 +1,6 @@
 from functools import partial
 import jax.lax as lax
+import jax
 from jax.lax import batch_matmul as bmm
 import jax.numpy as jnp
 from jax.typing import ArrayLike
@@ -32,8 +33,8 @@ def get_qra_bar(params: Params, dims: ModelDims,tau_bar: Array) -> Tuple[Array, 
     return q_bar, r_bar, a_bar
 
 
-@partial(custom_vjp, nondiff_argnums=(0,1,))
-def dlqr(params: Params, dims: ModelDims) -> Tuple[Array, Array, Array, Array]:
+@partial(custom_vjp, nondiff_argnums=(0,))
+def dlqr(dims: ModelDims, params: Params) -> Tuple[Array, Array, Array, Array]:
     """params vector contains all the LQR parameters : here, this assumes an LQR problem
     In the more general case, depending on where we are defining this, we may to take into account the fact that we are at around the solution, so the effective problem has extra linear terms, as follows :
 
@@ -44,14 +45,14 @@ def dlqr(params: Params, dims: ModelDims) -> Tuple[Array, Array, Array, Array]:
     return solve_lqr(params, dims)
 
 
-def fwd_dlqr(params: Params, dims: ModelDims):
-    _, Xs_star, Us_star, Lambs = dlqr(params, dims)
+def fwd_dlqr(dims: ModelDims, params: Params):
+    _, Xs_star, Us_star, Lambs = dlqr(dims, params)
     tau_star = jnp.concatenate([Xs_star, jnp.concatenate([Us_star, jnp.zeros_like(Us_star)[0]], axis = 0)], axis=1)
-    return tau_star, (params, dims, Lambs, tau_star)
+    return tau_star, (dims, params, Lambs, tau_star)
 
 
 def rev_dlqr(res, tau_bar: Array) -> Params:
-    params, dims, Lambs, tau_star = res
+    dims, params, Lambs, tau_star = res
     """
   Inputs : params (contains lqr parameters, x0), tau_star_bar (gradients wrt to tau at tau_star)
   params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
@@ -98,7 +99,7 @@ def rev_dlqr(res, tau_bar: Array) -> Params:
         S=S_bar,
     )
     x0_bar = jnp.zeros_like(params.x0)
-    return Params(x0=x0_bar, lqr=LQR_bar)
+    return (Params(x0=x0_bar, lqr=LQR_bar),)
 
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
