@@ -189,6 +189,26 @@ class TestLQR(unittest.TestCase):
         fig.savefig(f"{fig_dir}/lqr_solution.png")
         close()
         
+    def test_kkt_optimal(self):
+        # Setup the LQR problem
+        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir.mkdir(exist_ok=True)
+        
+        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params, sys_dims=self.sys_dims)
+        # Exercise the KKT function
+        dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
+        # Verify that the average KKT conditions are satisfied
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
+        
+        # Verify that the terminal state KKT conditions is satisfied
+        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        
+        # Verify that all KKT conditions are satisfied
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
         
     def tearDown(self):
         """Destruct test class"""

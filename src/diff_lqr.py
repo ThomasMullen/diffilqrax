@@ -14,12 +14,12 @@ from .lqr import (
 )
 
 
-def get_qra_bar(params: Params, dims: ModelDims,tau_bar: Array) -> Tuple[Array, Array, Array]:
+def get_qra_bar(dims: ModelDims,params: Params, tau_bar: Array) -> Tuple[Array, Array, Array]:
     """Helper function to get gradients wrt to q, r, a."""
     # q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
     lqr = params.lqr
     n = dims.n
-    x_bar, u_bar = tau_bar[..., :n], tau_bar[..., n:]
+    x_bar, u_bar = tau_bar[:, :n, :], tau_bar[:, n:,:]
     # Lambs_bar = jnp.zeros_like(lqr.a)
     # set-up LQR problem with r_rev = u_bar, q_rev = x_bar, a_rev = lambda_bar (set to 0 here)
     swapped_lqr = LQR(A=lqr.A, B=lqr.B, a=jnp.zeros_like(lqr.a), 
@@ -30,11 +30,11 @@ def get_qra_bar(params: Params, dims: ModelDims,tau_bar: Array) -> Tuple[Array, 
     swapped_params = Params(params.x0, swapped_lqr)
     _, q_bar, r_bar, a_bar = solve_lqr(swapped_params, dims)
     ##TODO : check the indices for a_bar
-    return q_bar, r_bar, a_bar
+    return q_bar, jnp.concatenate([r_bar, jnp.zeros(shape=(1,dims.m,1))], axis = 0), a_bar
 
-
+  
 @partial(custom_vjp, nondiff_argnums=(0,))
-def dlqr(dims: ModelDims, params: Params) -> Tuple[Array, Array, Array, Array]:
+def dlqr(dims: ModelDims, params: Params, tau_guess: Array) -> Tuple[Array, Array, Array, Array]:
     """params vector contains all the LQR parameters : here, this assumes an LQR problem
     In the more general case, depending on where we are defining this, we may to take into account the fact that we are at around the solution, so the effective problem has extra linear terms, as follows :
 
@@ -42,17 +42,23 @@ def dlqr(dims: ModelDims, params: Params) -> Tuple[Array, Array, Array, Array]:
     local_LQR.q = local_LQR.q - bmm(Xs_star, local_LQR.Q) - bmm(Us_star, local_LQR.S)
     local_LQR.r = local_LQR.r - bmm(Xs_star, np.transpose(local_LQR.S, axis = (0,2,1))) - bmm(Us_star, local_LQR.R)
     params.lqr = local_LQR"""
+    #then will need to do ilqr, for now placeholder
     return solve_lqr(params, dims)
 
 
-def fwd_dlqr(dims: ModelDims, params: Params):
-    _, Xs_star, Us_star, Lambs = dlqr(dims, params)
-    tau_star = jnp.concatenate([Xs_star, jnp.concatenate([Us_star, jnp.zeros_like(Us_star)[0]], axis = 0)], axis=1)
-    return tau_star, (dims, params, Lambs, tau_star)
+def fwd_dlqr(dims: ModelDims, params: Params, tau_guess: Array):
+    sol = dlqr(dims, params,  tau_guess)
+    gains, Xs_star, Us_star, Lambs = sol
+    tau_star =  jnp.concatenate([Xs_star[:-1,...], Us_star], axis = 1)
+    return tau_star, (params, sol) #sol, res
+  #not entirely sure of the format of this
 
-
-def rev_dlqr(res, tau_bar: Array) -> Params:
-    dims, params, Lambs, tau_star = res
+def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
+    params, sol = res
+    (gains, Xs_star, Us_star, Lambs) = sol
+    M = dims.m
+    print("catcat", params.lqr.A.shape)
+    tau_star = jnp.concatenate([Xs_star, jnp.concatenate([Us_star, jnp.zeros(shape=(1,M,1))], axis = 0)], axis=1)
     """
   Inputs : params (contains lqr parameters, x0), tau_star_bar (gradients wrt to tau at tau_star)
   params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
@@ -77,14 +83,15 @@ def rev_dlqr(res, tau_bar: Array) -> Params:
   """
     # this asssumes we are passing dimension parameters
     n = dims.n # LQR.A[0].shape()[1], LQR.B[0].shape()[1]
-    q_bar, r_bar, a_bar = get_qra_bar(params, dims, tau_bar)
+    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar)
     c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
-    F_bar = bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axis=(0, 2, 1))) + bmm(
-        a_bar[1:], jnp.transpose(tau_star[:-1], axis=(0, 2, 1))
+    F_bar = bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axes=(0, 2, 1))) + bmm(
+        a_bar[1:], jnp.transpose(tau_star[:-1], axes=(0, 2, 1))
     )
-    C_bar = 0.5 * (symmetrise_tensor(bmm(c_bar, tau_star.T))) 
+    print(c_bar.shape, tau_star.shape)
+    C_bar = 0.5 * (symmetrise_tensor(bmm(c_bar, jnp.transpose(tau_star, axes=(0, 2, 1)))))
     Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
-    S_bar = 0.5 * (symmetrise_tensor(C_bar[:, :n, n:])) 
+    S_bar = 0.5 * (C_bar[:, :n, n:])
     A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
     LQR_bar = LQR(
         A=A_bar,
@@ -99,8 +106,7 @@ def rev_dlqr(res, tau_bar: Array) -> Params:
         S=S_bar,
     )
     x0_bar = jnp.zeros_like(params.x0)
-    return (Params(x0=x0_bar, lqr=LQR_bar),)
-
+    return Params(x0=x0_bar, lqr=LQR_bar), None
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
 
