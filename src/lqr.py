@@ -126,7 +126,7 @@ def lqr_adjoint_pass(Xs: jnp.ndarray, Us: jnp.ndarray, params: Params) -> jnp.nd
     """Adjoint backward pass with LQR params"""
     x0, lqr = params.x0, params[1]
     AT = lqr.A.transpose(0, 2, 1)
-    lambf = lqr.Qf @ Xs[-1]
+    lambf = lqr.Qf @ Xs[-1] + lqr.qf
 
     def adjoint_step(lamb, inputs):
         x, u, aT, Q, q, S = inputs
