@@ -186,7 +186,7 @@ class TestLQR(unittest.TestCase):
         ax[1].plot(Us_lqr.squeeze())
         ax[2].plot(Lambs_lqr.squeeze())
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/lqr_solution.png")
+        fig.savefig(f"{fig_dir}/lqr_solution_TestLQR.png")
         close()
         
     def test_kkt_optimal(self):
@@ -194,9 +194,27 @@ class TestLQR(unittest.TestCase):
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         
-        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params, sys_dims=self.sys_dims)
+        params = Params(self.x0, self.lqr)
+        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=params, sys_dims=self.sys_dims)
         # Exercise the KKT function
-        dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
+        dLdXs, dLdUs, dLdLambs = kkt(params, Xs_dir, Us_dir, Lambs_dir)
+        # Plot the KKT residuals
+        fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
+        ax[0,0].plot(Xs_dir.squeeze())
+        ax[0,0].set(title="X")
+        ax[0,1].plot(Us_dir.squeeze())
+        ax[0,1].set(title="U")
+        ax[0,2].plot(Lambs_dir.squeeze())
+        ax[0,2].set(title="λ")
+        ax[1,0].plot(dLdXs.squeeze())
+        ax[1,0].set(title="dLdX")
+        ax[1,1].plot(dLdUs.squeeze())
+        ax[1,1].set(title="dLdUs")
+        ax[1,2].plot(dLdLambs.squeeze())
+        ax[1,2].set(title="dLdλ")
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/lqr_kkt_TestLQR.png")
+        close()
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
@@ -229,7 +247,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
         a = jnp.zeros(self.dims["TNX"])
         Qf = 0. *jnp.eye(self.dims["N"][0])
-        qf = 0. * jnp.ones(self.dims["NX"])
+        qf = 0.   * jnp.ones(self.dims["NX"])
         Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
         q = 0. * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
         R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
@@ -248,7 +266,6 @@ class TestLQRSolutionExact(unittest.TestCase):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # setup
         params = Params(self.x0, self.lqr)
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         print("Make tmp dir")
@@ -270,12 +287,6 @@ class TestLQRSolutionExact(unittest.TestCase):
         fig.savefig(f"{fig_dir}/u_star_solvers.png")
         close()
         print("Plot u solutions")
-        # onp.savetxt("Us_ext", Us_exact[...,0]) 
-        # onp.savetxt("Xs_ext", Xs_exact[...,0]) 
-        # onp.savetxt("Us_quad", Us_quad[...,0]) 
-        # onp.savetxt("Xs_quad", Xs_quad[...,0]) 
-        # onp.savetxt("Us_dir", Us_dir[...,0]) 
-        # onp.savetxt("Xs_dir", Xs_dir[...,0])
         # Verify that the two solutions are close
         assert jnp.allclose(Us_dir[:-1], Us_exact, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(Xs_dir[:-1], Xs_exact, rtol=1e-05, atol=1e-08)

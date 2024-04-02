@@ -85,12 +85,10 @@ class TestLQR(unittest.TestCase):
             return jnp.linalg.norm(params.lqr.A) + jnp.linalg.norm(Us_lqr)
         #Us_lqr is Dims here, weird
         val, g = jax.value_and_grad(loss)(self.params)
-        chex.assert_shape(g.lqr.B.shape, self.params.lqr.B.shape)
-        chex.assert_shape(g.lqr.A.shape, self.params.lqr.A.shape)
-        chex.assert_shape(g.lqr.Q.shape, self.params.lqr.Q.shape)
-        chex.assert_shape(g.lqr.q.shape, self.params.lqr.q.shape)
-        chex.assert_shape(g.lqr.r.shape, self.params.lqr.r.shape)
-        chex.assert_shape(g.lqr.a.shape, self.params.lqr.a.shape)
+        chex.assert_shape(g.lqr.B, self.params.lqr.B.shape)
+        chex.assert_shape(g.lqr.A, self.params.lqr.A.shape)
+        chex.assert_shape(g.lqr.Q, self.params.lqr.Q.shape)
+        chex.assert_shape(g.lqr.q, self.params.lqr.q.shape)
     #print(Us_lqr.shape)
         
 

@@ -16,7 +16,7 @@ Partials
 $$
 \begin{align}
 	\nabla_{x_{t}}\mathcal{L}(x,u, \bm{\lambda}) &= Q_{t}x_{t} + S_{t}u_{t} + q_{t} + A_{t}^{T}\bm{\lambda}_{t+1} - \bm{\lambda}_{t}= 0 \\
-	\nabla_{x_{T}} \mathcal{L}(x,u, \bm{\lambda})&= Q_{f}x_{T} - \bm{\lambda}_{T} = 0 \\
+	\nabla_{x_{T}} \mathcal{L}(x,u, \bm{\lambda})&= Q_{f}x_{T} + q_{f} - \bm{\lambda}_{T} = 0 \\
 	\nabla_{\bm{\lambda}_{0}}\mathcal{L}(x,u, \bm{\lambda}) &= x_{0} - \mathbb{I}x_{0} = 0 \\
 	\nabla_{\bm{\lambda}_{t+1}}\mathcal{L}(x,u, \bm{\lambda}) &= A_{t}x_{t} + B_{t}u_{t} +a_{t}- \mathbb{I}x_{t+1} = 0 \\
 	\nabla_{u_{t}}\mathcal{L}(x,u,\bm{\lambda}) &= S_{t}^{T}x_{t} + R_{t}u_{t} + r_{t}+ B_{t}^{T}\lambda_{t+1} = 0.
