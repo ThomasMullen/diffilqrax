@@ -8,7 +8,7 @@ import jax.numpy as jnp
 from functools import partial
 import jaxopt
 import src.lqr as lqr
-from src.utils import keygen
+from src.utils import keygen, initialise_stable_dynamics
 import jax.random as jr
 import matplotlib.pyplot as plt
 
@@ -304,23 +304,28 @@ def define_model():
     def dynamics(t: int, x: Array, u: Array, theta: Theta):
         return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
-    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=2, m=2, dt=0.1))
+    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
 
 
 if __name__ == "__main__":
     key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 2)
+    key, skeys = keygen(key, 4)
     # test data
     dt=0.1
-    Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
-    Wh = jnp.array([[0,0],[1,0]])*dt
+    # Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
+    Uh = initialise_stable_dynamics(next(skeys), 8 , 100, 0.6)[0]
+    A, _ = jnp.linalg.qr(Uh)
+    # Wh = jnp.array([[0,0],[1,0]])*dt
+    Wh = 0.1 * jr.normal(next(skeys), (8, 2))
+    
     # initialise params
-    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2, 1)))
-    params = Params(x0=jnp.array([[0.3], [0.]]), theta=theta)
+    theta = Theta(Uh=A, Wh=Wh, sigma=jnp.zeros((8, 1)))
+    # params = Params(x0=jnp.array([[0.3], [0.]]), theta=theta)
+    params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
     model = define_model()
     # generate input
     # Us_init = jnp.zeros((model.dims.horizon, model.dims.m, 1))
-    Us_init = 0.1 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
+    Us_init = 0.01 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
@@ -339,3 +344,5 @@ if __name__ == "__main__":
     ax[0,1].set(title="U")
     ax[1,0].plot(Xs_stars.squeeze())
     ax[1,1].plot(Us_stars.squeeze())
+    
+    lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
