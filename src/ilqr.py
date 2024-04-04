@@ -259,7 +259,7 @@ def ilQR_solver(
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
-            model, params, gains, old_Xs, old_Us, alpha=1.0
+            model, params, gains, old_Xs, old_Us, alpha=.8
         )
         # calc change in dJ0 w.r.t old dJ0
         # z = (old_cost - new_total_cost) / lqr.calc_expected_change(
@@ -277,10 +277,10 @@ def ilQR_solver(
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
         """if cond false return existing carry else run another iteration of lqr_iter"""
         updated_carry = lax.cond(carry_tuple[-1], lqr_iter, lambda x: x, carry_tuple)
-        return updated_carry, _
+        return updated_carry, updated_carry[2]
 
     # scan through with max iterations
-    (Xs_stars, Us_stars, total_cost, n_iters, _), _ = lax.scan(
+    (Xs_stars, Us_stars, total_cost, n_iters, _), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
     if verbose:
@@ -290,7 +290,7 @@ def ilQR_solver(
     Lambs_stars = lqr.lqr_adjoint_pass(
         Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
     )
-    return (Xs_stars, Us_stars, Lambs_stars), total_cost
+    return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
 def define_model():
@@ -309,31 +309,32 @@ def define_model():
 
 if __name__ == "__main__":
     key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 4)
+    key, skeys = keygen(key, 5)
     # test data
     dt=0.1
     # Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
     Uh = initialise_stable_dynamics(next(skeys), 8 , 100, 0.6)[0]
-    A, _ = jnp.linalg.qr(Uh)
+    Uh, _ = jnp.linalg.qr(Uh)
+    # A, _ = jnp.linalg.qr(Uh)
     # Wh = jnp.array([[0,0],[1,0]])*dt
-    Wh = 0.1 * jr.normal(next(skeys), (8, 2))
+    Wh = jr.normal(next(skeys), (8, 2))
     
     # initialise params
-    theta = Theta(Uh=A, Wh=Wh, sigma=jnp.zeros((8, 1)))
+    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
     # params = Params(x0=jnp.array([[0.3], [0.]]), theta=theta)
     params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
     model = define_model()
     # generate input
-    # Us_init = jnp.zeros((model.dims.horizon, model.dims.m, 1))
-    Us_init = 0.01 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
+    Us_init = jnp.zeros((model.dims.horizon, model.dims.m, 1))
+    # Us_init = 1. * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
     # test approx lqr with U and X trajectorys
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
-    (Xs_stars, Us_stars, Lambs_stars), total_cost = ilQR_solver(
-        model, params, Xs, Us, max_iter=20, tol=1e-2, verbose=True
+    (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
+        model, params, Xs, Us, max_iter=40, tol=1e-8, verbose=True
     )
     
     print(f"Initial J0: {cost_init:.03f}, Final J0: {total_cost:.03f}")
@@ -345,4 +346,25 @@ if __name__ == "__main__":
     ax[1,0].plot(Xs_stars.squeeze())
     ax[1,1].plot(Us_stars.squeeze())
     
+    lqr_tilde = approx_lqr(model=model, Xs=Xs_stars, Us=Us_stars, params=params)
     lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
+    dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
+    
+    fig, ax = plt.subplots(2,3, figsize=(10,3), sharey=False)
+    ax[0,0].plot(Xs_stars.squeeze())
+    ax[0,0].set(title="X")
+    ax[0,1].plot(Us_stars.squeeze())
+    ax[0,1].set(title="U")
+    ax[0,2].plot(Lambs_stars.squeeze())
+    ax[0,2].set(title="λ")
+    ax[1,0].plot(dLdXs.squeeze())
+    ax[1,0].set(title="dLdX")
+    ax[1,1].plot(dLdUs.squeeze())
+    ax[1,1].set(title="dLdUs")
+    ax[1,2].plot(dLdLambs.squeeze())
+    ax[1,2].set(title="dLdλ")
+    fig.tight_layout()
+    
+    fig,ax = plt.subplots()
+    ax.scatter(jnp.arange(cost_log.size), cost_log)
+    ax.set(xlabel="Iteration", ylabel="Total cost")
