@@ -1,5 +1,5 @@
 """iterative LQR solver"""
-from typing import Callable, Any, Optional, NamedTuple, Tuple
+from typing import Callable, Any, Optional, NamedTuple, Tuple, Union
 from jax import Array
 from jax.typing import ArrayLike
 import jax
@@ -293,18 +293,59 @@ def ilQR_solver(
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
+class PendulumParams(NamedTuple):
+    m: float
+    l: float
+    g: float
+    
+
+def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
+    """simulate the dynamics of a pendulum. x0 is sin(theta), x1 is cos(theta), x2 is theta_dot. 
+    u is the torque applied to the pendulum.
+
+    Args:
+        t (int): _description_
+        x (Array): state params
+        u (Array): external input
+        theta (Theta): parameters
+    """
+    dt=0.1
+    # sin_theta = x[0].squeeze()
+    # cos_theta = x[1].squeeze()
+    # theta_dot = x[2].squeeze()
+    # torque = u.squeeze()
+    sin_theta = x[0]
+    cos_theta = x[1]
+    theta_dot = x[2]
+    torque = u
+    
+    # Deal with angle wrap-around.
+    theta_state = jnp.arctan2(sin_theta, cos_theta)[None]
+
+    # Define acceleration.
+    theta_dot_dot = -3.0 * theta.g / (2 * theta.l) * jnp.sin(theta_state + jnp.pi)
+    theta_dot_dot += 3.0 / (theta.m * theta.l**2) * torque
+
+    next_theta = theta_state + theta_dot * dt
+    
+    next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
+    return next_state#[...,None]
+
+
 def define_model():
-    def cost(t: int, x: Array, u: Array, theta: Theta):
+    def cost(t: int, x: Array, u: Array, theta: Any):
         return jnp.sum(x**2) + jnp.sum(u**2)
 
     def costf(x: Array, theta: Theta):
         # return jnp.sum(jnp.abs(x))
         return jnp.sum(x**2)
 
-    def dynamics(t: int, x: Array, u: Array, theta: Theta):
-        return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+    def dynamics(t: int, x: Array, u: Array, theta: Union[Theta, PendulumParams]):
+        return pendulum_dynamics(t,x,u,theta)
+        # return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
-    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
+    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=3, m=1, dt=0.1))
+    # return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
 
 
 if __name__ == "__main__":
@@ -320,9 +361,12 @@ if __name__ == "__main__":
     Wh = jr.normal(next(skeys), (8, 2))
     
     # initialise params
+    # theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
     theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
     # params = Params(x0=jnp.array([[0.3], [0.]]), theta=theta)
-    params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
+    # params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
+    theta = PendulumParams(m=1,l=2,g=9.81)
+    params = Params(x0=jr.normal(next(skeys), (3, 1)), theta=theta)
     model = define_model()
     # generate input
     Us_init = jnp.zeros((model.dims.horizon, model.dims.m, 1))
