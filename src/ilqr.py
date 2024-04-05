@@ -252,6 +252,8 @@ def ilQR_solver(
 
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
     initial_carry = (X_inits, U_inits, c_init, 0, True)
+    
+    rollout = partial(ilqr_forward_pass, model, params)
 
     # define body_fun(carry_tuple)
     def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
@@ -267,14 +269,11 @@ def ilQR_solver(
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # no line search: α = 1.0
         if not use_linesearch:
-            (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
-                model, params, gains, old_Xs, old_Us, alpha=alpha0
-            )
+            (new_Xs, new_Us), new_total_cost = rollout(gains, old_Xs, old_Us, alpha=alpha0)
         # dynamics line search:
         else:
             (new_Xs, new_Us), new_total_cost, cost_iterations = linesearch(
-                model,
-                params,
+                rollout,
                 old_Xs,
                 old_Us,
                 gains,
@@ -317,8 +316,7 @@ def ilQR_solver(
 
 
 def linesearch(
-    model: System,
-    params: Params,
+    update: Callable,
     Xs: Array,
     Us: Array,
     Ks: lqr.Gains,
@@ -330,8 +328,7 @@ def linesearch(
     alpha_min=0.0001,
     verbose: bool = False,
 ):
-    rollout = partial(ilqr_forward_pass, model, params)
-    (Xs, Us), cost = rollout(Ks, Xs, Us, alpha=alpha_0)
+    (Xs, Us), cost = update(Ks, Xs, Us, alpha=alpha_0)
 
     # initialise carry
     initial_carry = (Xs, Us, cost, alpha_0, 0, True)
@@ -343,7 +340,7 @@ def linesearch(
         # update alpha
         alpha *= beta
         # rollout with alpha
-        (new_Xs, new_Us), new_cost = rollout(Ks, Xs, Us, alpha=alpha)
+        (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
         # calc expected cost reduction
 
