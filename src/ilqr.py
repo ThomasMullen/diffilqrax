@@ -417,7 +417,7 @@ if __name__ == "__main__":
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
     (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
-        model, params, Xs, Us, max_iter=40, tol=1e-8, alpha0=0.8, verbose=True
+        model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.8, verbose=True
     )
 
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
