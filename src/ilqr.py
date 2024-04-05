@@ -95,9 +95,7 @@ def vectorise_fun_in_time(fun: Callable) -> Callable:
     # return jax.vmap(fun, in_axes=(None, 0, 0, None))
 
 
-def approx_lqr(
-    model: System, Xs: Array, Us: Array, params: Params
-) -> lqr.LQR:
+def approx_lqr(model: System, Xs: Array, Us: Array, params: Params) -> lqr.LQR:
     """Calls linearisation and quadratisation function
 
     Returns:
@@ -110,9 +108,7 @@ def approx_lqr(
     Xs = Xs.squeeze()
     Us = Us.squeeze()
 
-    (Fx, Fu) = vectorise_fun_in_time(linearise(model.dynamics))(
-        tps, Xs[:-1], Us, theta
-    )
+    (Fx, Fu) = vectorise_fun_in_time(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
     (Cx, Cu) = vectorise_fun_in_time(linearise(model.cost))(tps, Xs[:-1], Us, theta)
     (Cxx, Cxu), (Cux, Cuu) = vectorise_fun_in_time(quadratise(model.cost))(
         tps, Xs[:-1], Us, theta
@@ -177,7 +173,7 @@ def ilqr_forward_pass(
     alpha: float = 1.0,
 ) -> Tuple[Tuple[Array, Array], float]:
     """
-    Performs a forward pass of the iterative Linear Quadratic Regulator (iLQR) algorithm. Uses the deviations of 
+    Performs a forward pass of the iterative Linear Quadratic Regulator (iLQR) algorithm. Uses the deviations of
     target state and system generated state to update control inputs using gains obtained from LQR solver.
 
     Args:
@@ -224,6 +220,7 @@ def ilQR_solver(
     U_inits: Array,
     max_iter: int = 10,
     tol: float = 1e-6,
+    alpha0: float = 1.0,
     verbose: bool = False,
     use_linesearch: bool = False,
 ):
@@ -242,6 +239,9 @@ def ilQR_solver(
         U_inits (Array): The initial control trajectory.
         max_iter (int, optional): The maximum number of iterations. Defaults to 10.
         tol (float, optional): The tolerance for convergence. Defaults to 1e-6.
+        alpha0 (float, optional): The initial step size for the forward pass. Defaults to 1.0.
+        verbose (bool, optional): Whether to print debug information. Defaults to False.
+        use_linesearch (bool, optional): Whether to use line search for the forward pass. Defaults to False.
 
     Returns:
         Tuple[Array, Array, Array]: A tuple containing the final state trajectory, control trajectory, and
@@ -265,17 +265,31 @@ def ilQR_solver(
             lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
-        # no line search: α = 1.0 
-        (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
-            model, params, gains, old_Xs, old_Us, alpha=.8
-        )
-        # dynamics line search: 
-        if use_linesearch:
-            pass
-        
+        # no line search: α = 1.0
+        if not use_linesearch:
+            (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
+                model, params, gains, old_Xs, old_Us, alpha=alpha0
+            )
+        # dynamics line search:
+        else:
+            (new_Xs, new_Us), new_total_cost, cost_iterations = linesearch(
+                model,
+                params,
+                old_Xs,
+                old_Us,
+                gains,
+                exp_cost_red,
+                beta=0.8,
+                alpha_0=alpha0,
+                max_iter=8,
+                tol=1e-6,
+                alpha_min=0.0001,
+                verbose=False,
+            )
+
         # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / old_cost
-        
+
         # determine cond: Δold_cost > threshold
         carry_on = jnp.abs(z) > tol
         if verbose:
@@ -302,13 +316,26 @@ def ilQR_solver(
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
-def linesearch(model: System, params: Params, Xs: Array, Us: Array, Ks: lqr.Gains, expected_dJ:lqr.CostToGo, beta:float, alpha_0:float=1., max_iter:int=8, tol:float=1e-6, alpha_min=0.0001, verbose:bool=False):
+def linesearch(
+    model: System,
+    params: Params,
+    Xs: Array,
+    Us: Array,
+    Ks: lqr.Gains,
+    expected_dJ: lqr.CostToGo,
+    beta: float,
+    alpha_0: float = 1.0,
+    max_iter: int = 8,
+    tol: float = 1e-6,
+    alpha_min=0.0001,
+    verbose: bool = False,
+):
     rollout = partial(ilqr_forward_pass, model=model, params=params)
-    
+    (Xs, Us), cost = rollout(Ks, Xs, Us, alpha=alpha_0)
+
     # initialise carry
-    (new_Xs, new_Us), new_total_cost = rollout(Ks, Xs, Us, alpha=alpha_0)
-    initial_carry = (Xs, Us, 0.0, 0, True)
-    
+    initial_carry = (Xs, Us, cost, alpha_0, 0, True)
+
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
@@ -317,14 +344,12 @@ def linesearch(model: System, params: Params, Xs: Array, Us: Array, Ks: lqr.Gain
         alpha *= beta
         # rollout with alpha
         (new_Xs, new_Us), new_cost = rollout(Ks, Xs, Us, alpha=alpha)
-        
+
         # calc expected cost reduction
-        
+
         # calc z-value
-        z = (old_cost - new_cost) / lqr.calc_expected_change(
-            expected_dJ, alpha=alpha
-        )
-        
+        z = (old_cost - new_cost) / lqr.calc_expected_change(expected_dJ, alpha=alpha)
+
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), old_cost, new_cost)
         # Only return new trajs if leads to a strict cost decrease
@@ -334,16 +359,17 @@ def linesearch(model: System, params: Params, Xs: Array, Us: Array, Ks: lqr.Gain
         below_threshold = jnp.abs(z) > tol
         carry_on = jnp.logical_and(alpha > alpha_min, below_threshold)
         # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
-        
-        return (new_Xs, new_Us, new_cost, alpha, n_iter+1, carry_on)
-    
-    
+
+        return (new_Xs, new_Us, new_cost, alpha, n_iter + 1, carry_on)
+
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
         # assign function given carry_on condition
-        updated_carry = lax.cond(carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple)
+        updated_carry = lax.cond(
+            carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple
+        )
         return updated_carry, (updated_carry[2], updated_carry[3])
-    
+
     # scan through with max iterations
     (Xs_opt, Us_opt, cost_opt, *_), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
@@ -372,18 +398,18 @@ if __name__ == "__main__":
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 5)
     # test data
-    dt=0.1
-    Uh = initialise_stable_dynamics(next(skeys), 8 , 100, 0.6)[0]
+    dt = 0.1
+    Uh = initialise_stable_dynamics(next(skeys), 8, 100, 0.6)[0]
     # Uh, _ = jnp.linalg.qr(Uh)
     Wh = jr.normal(next(skeys), (8, 2))
-    
+
     # initialise params
     theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
     params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
     model = define_model()
-    
+
     # generate input
-    Us_init = 0. * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
+    Us_init = 0.0 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
@@ -391,47 +417,44 @@ if __name__ == "__main__":
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
     (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
-        model, params, Xs, Us, max_iter=40, tol=1e-8, verbose=True
+        model, params, Xs, Us, max_iter=40, tol=1e-8, alpha0=0.8, verbose=True
     )
-    
+
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
-    fig, ax = plt.subplots(2,2, sharey=True)
-    ax[0,0].plot(Xs.squeeze())
-    ax[0,0].set(title="X")
-    ax[0,1].plot(Us.squeeze())
-    ax[0,1].set(title="U")
-    ax[1,0].plot(Xs_stars.squeeze())
-    ax[1,1].plot(Us_stars.squeeze())
-    
+    fig, ax = plt.subplots(2, 2, sharey=True)
+    ax[0, 0].plot(Xs.squeeze())
+    ax[0, 0].set(title="X")
+    ax[0, 1].plot(Us.squeeze())
+    ax[0, 1].set(title="U")
+    ax[1, 0].plot(Xs_stars.squeeze())
+    ax[1, 1].plot(Us_stars.squeeze())
+    # find kkt conditions
     lqr_tilde = approx_lqr(model=model, Xs=Xs_stars, Us=Us_stars, params=params)
     lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
     dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
-    
-    fig, ax = plt.subplots(2,3, figsize=(10,3), sharey=False)
-    ax[0,0].plot(Xs_stars.squeeze())
-    ax[0,0].set(title="X")
-    ax[0,1].plot(Us_stars.squeeze())
-    ax[0,1].set(title="U")
-    ax[0,2].plot(Lambs_stars.squeeze())
-    ax[0,2].set(title="λ")
-    ax[1,0].plot(dLdXs.squeeze())
-    ax[1,0].set(title="dLdX")
-    ax[1,1].plot(dLdUs.squeeze())
-    ax[1,1].set(title="dLdUs")
-    ax[1,2].plot(dLdLambs.squeeze())
-    ax[1,2].set(title="dLdλ")
+    # plot kkt
+    fig, ax = plt.subplots(2, 3, figsize=(10, 3), sharey=False)
+    ax[0, 0].plot(Xs_stars.squeeze())
+    ax[0, 0].set(title="X")
+    ax[0, 1].plot(Us_stars.squeeze())
+    ax[0, 1].set(title="U")
+    ax[0, 2].plot(Lambs_stars.squeeze())
+    ax[0, 2].set(title="λ")
+    ax[1, 0].plot(dLdXs.squeeze())
+    ax[1, 0].set(title="dLdX")
+    ax[1, 1].plot(dLdUs.squeeze())
+    ax[1, 1].set(title="dLdUs")
+    ax[1, 2].plot(dLdLambs.squeeze())
+    ax[1, 2].set(title="dLdλ")
     fig.tight_layout()
-    
-    fig,ax = plt.subplots()
+
+    fig, ax = plt.subplots()
     ax.scatter(jnp.arange(cost_log.size), cost_log)
     ax.set(xlabel="Iteration", ylabel="Total cost")
-    
-    
-    
-    
+
 
 # def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
-#     """simulate the dynamics of a pendulum. x0 is sin(theta), x1 is cos(theta), x2 is theta_dot. 
+#     """simulate the dynamics of a pendulum. x0 is sin(theta), x1 is cos(theta), x2 is theta_dot.
 #     u is the torque applied to the pendulum.
 
 #     Args:
@@ -449,7 +472,7 @@ if __name__ == "__main__":
 #     cos_theta = x[1]
 #     theta_dot = x[2]
 #     torque = u
-    
+
 #     # Deal with angle wrap-around.
 #     theta_state = jnp.arctan2(sin_theta, cos_theta)[None]
 
@@ -458,8 +481,6 @@ if __name__ == "__main__":
 #     theta_dot_dot += 3.0 / (theta.m * theta.l**2) * torque
 
 #     next_theta = theta_state + theta_dot * dt
-    
+
 #     next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
 #     return next_state#[...,None]
-
-
