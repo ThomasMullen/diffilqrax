@@ -274,12 +274,12 @@ def ilQR_solver(
         else:
             (new_Xs, new_Us), new_total_cost, cost_iterations = linesearch(
                 rollout,
+                gains,
                 old_Xs,
                 old_Us,
-                gains,
-                exp_cost_red,
+                alpha0,
+                expected_dJ=exp_cost_red,
                 beta=0.8,
-                alpha_0=alpha0,
                 max_iter=8,
                 tol=1e-6,
                 alpha_min=0.0001,
@@ -317,12 +317,12 @@ def ilQR_solver(
 
 def linesearch(
     update: Callable,
+    Ks: lqr.Gains,
     Xs: Array,
     Us: Array,
-    Ks: lqr.Gains,
+    alpha_0: float,
     expected_dJ: lqr.CostToGo,
     beta: float,
-    alpha_0: float = 1.0,
     max_iter: int = 8,
     tol: float = 1e-6,
     alpha_min=0.0001,
