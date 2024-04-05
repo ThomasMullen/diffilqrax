@@ -43,6 +43,12 @@ class Theta(NamedTuple):
     sigma: ArrayLike
 
 
+class PendulumParams(NamedTuple):
+    m: float
+    l: float
+    g: float
+
+
 class Params(NamedTuple):
     """Non-linear parameter struct"""
 
@@ -219,6 +225,7 @@ def ilQR_solver(
     max_iter: int = 10,
     tol: float = 1e-6,
     verbose: bool = False,
+    use_linesearch: bool = False,
 ):
     """Solves the iterative Linear Quadratic Regulator (iLQR) problem.
 
@@ -293,43 +300,32 @@ def ilQR_solver(
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
-class PendulumParams(NamedTuple):
-    m: float
-    l: float
-    g: float
+def linesearch(model: System, params: Params, Xs: Array, Us: Array, Ks: lqr.Gains):
+    rollout = partial(ilqr_forward_pass, model=model, params=params)
     
-
-def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
-    """simulate the dynamics of a pendulum. x0 is sin(theta), x1 is cos(theta), x2 is theta_dot. 
-    u is the torque applied to the pendulum.
-
-    Args:
-        t (int): _description_
-        x (Array): state params
-        u (Array): external input
-        theta (Theta): parameters
-    """
-    dt=0.1
-    # sin_theta = x[0].squeeze()
-    # cos_theta = x[1].squeeze()
-    # theta_dot = x[2].squeeze()
-    # torque = u.squeeze()
-    sin_theta = x[0]
-    cos_theta = x[1]
-    theta_dot = x[2]
-    torque = u
+    # initialise carry
+    initial_carry = (Xs, Us, 0.0, 0, True)
     
-    # Deal with angle wrap-around.
-    theta_state = jnp.arctan2(sin_theta, cos_theta)[None]
-
-    # Define acceleration.
-    theta_dot_dot = -3.0 * theta.g / (2 * theta.l) * jnp.sin(theta_state + jnp.pi)
-    theta_dot_dot += 3.0 / (theta.m * theta.l**2) * torque
-
-    next_theta = theta_state + theta_dot * dt
+    # back track iteration
+    def backtrack_iter(carry):
+        # rollout with alpha
+        
+        # calc expected cost reduction
+        
+        # calc z-value
+        
+        # ensure to keep Xs and Us that reduce z-value
+        
+        # add control flow to carry on or not
+        pass
     
-    next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
-    return next_state#[...,None]
+    def loop_fun():
+        # assign function given carry_on condition
+        pass
+    
+    pass
+
+
 
 
 def define_model():
@@ -341,11 +337,11 @@ def define_model():
         return jnp.sum(x**2)
 
     def dynamics(t: int, x: Array, u: Array, theta: Union[Theta, PendulumParams]):
-        return pendulum_dynamics(t,x,u,theta)
-        # return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+        # return pendulum_dynamics(t,x,u,theta)
+        return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
-    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=3, m=1, dt=0.1))
-    # return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
+    # return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=3, m=1, dt=0.1))
+    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
 
 
 if __name__ == "__main__":
@@ -353,24 +349,17 @@ if __name__ == "__main__":
     key, skeys = keygen(key, 5)
     # test data
     dt=0.1
-    # Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
     Uh = initialise_stable_dynamics(next(skeys), 8 , 100, 0.6)[0]
-    Uh, _ = jnp.linalg.qr(Uh)
-    # A, _ = jnp.linalg.qr(Uh)
-    # Wh = jnp.array([[0,0],[1,0]])*dt
+    # Uh, _ = jnp.linalg.qr(Uh)
     Wh = jr.normal(next(skeys), (8, 2))
     
     # initialise params
-    # theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
     theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
-    # params = Params(x0=jnp.array([[0.3], [0.]]), theta=theta)
-    # params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
-    theta = PendulumParams(m=1,l=2,g=9.81)
-    params = Params(x0=jr.normal(next(skeys), (3, 1)), theta=theta)
+    params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
     model = define_model()
+    
     # generate input
-    Us_init = jnp.zeros((model.dims.horizon, model.dims.m, 1))
-    # Us_init = 1. * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
+    Us_init = 0. * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
@@ -412,3 +401,41 @@ if __name__ == "__main__":
     fig,ax = plt.subplots()
     ax.scatter(jnp.arange(cost_log.size), cost_log)
     ax.set(xlabel="Iteration", ylabel="Total cost")
+    
+    
+    
+    
+
+# def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
+#     """simulate the dynamics of a pendulum. x0 is sin(theta), x1 is cos(theta), x2 is theta_dot. 
+#     u is the torque applied to the pendulum.
+
+#     Args:
+#         t (int): _description_
+#         x (Array): state params
+#         u (Array): external input
+#         theta (Theta): parameters
+#     """
+#     dt=0.1
+#     # sin_theta = x[0].squeeze()
+#     # cos_theta = x[1].squeeze()
+#     # theta_dot = x[2].squeeze()
+#     # torque = u.squeeze()
+#     sin_theta = x[0]
+#     cos_theta = x[1]
+#     theta_dot = x[2]
+#     torque = u
+    
+#     # Deal with angle wrap-around.
+#     theta_state = jnp.arctan2(sin_theta, cos_theta)[None]
+
+#     # Define acceleration.
+#     theta_dot_dot = -3.0 * theta.g / (2 * theta.l) * jnp.sin(theta_state + jnp.pi)
+#     theta_dot_dot += 3.0 / (theta.m * theta.l**2) * torque
+
+#     next_theta = theta_state + theta_dot * dt
+    
+#     next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
+#     return next_state#[...,None]
+
+
