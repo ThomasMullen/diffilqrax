@@ -59,10 +59,10 @@ def fwd_dlqr(dims: ModelDims, params: Params, tau_guess: Array):
                         Qf=lqr.Qf, qf=lqr.qf - bmm(lqr.Qf, Xs_star[-1]), 
                         R=lqr.R, r=lqr.r - bmm(lqr.R, Us_star) - bmm(jnp.transpose(lqr.S, axes = (0,2,1)), Xs_star[:-1]), S=lqr.S)
     new_params = Params(params.x0, new_lqr)
-    new_sol = dlqr(dims, new_params,  tau_guess)
-    gains, Xs_star, Us_star, Lambs = new_sol
+    _gains, new_Xs_star, new_Us_star, new_Lambs = dlqr(dims, new_params,  tau_guess)
+    new_sol = gains, new_Xs_star, new_Us_star, Lambs
     new_tau_star =  jnp.concatenate([Xs_star[:,...],  jnp.concatenate([Us_star, jnp.zeros(shape=(1,dims.m,1))])], axis = 1)
-    return tau_star, (params, new_sol) #sol, res
+    return tau_star, (new_params, sol) #sol, res
   #not entirely sure of the format of this
 
 def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
@@ -99,7 +99,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
     c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
     F_bar = bmm(a_bar[1:], jnp.transpose(tau_star[:-1], axes=(0, 2, 1))) + bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axes=(0, 2, 1))) 
     
-    C_bar = 0.5*(symmetrise_tensor(bmm(c_bar, jnp.transpose(tau_star, axes=(0, 2, 1))))) #should have factor of 0.5 -> related to the previous bug
+    C_bar = (symmetrise_tensor(bmm(c_bar, jnp.transpose(tau_star, axes=(0, 2, 1))))) #factor of 2 included in symmetrization
     Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
     S_bar = 0.5 * (C_bar[:, :n, n:])
     A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
