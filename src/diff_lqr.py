@@ -10,11 +10,12 @@ from .lqr import (
     LQR,
     Params,
     ModelDims,
-    solve_lqr, symmetrise_tensor
+    kkt,
+    solve_lqr, solve_lqr_swapx0, symmetrise_tensor
 )
 
 
-def get_qra_bar(dims: ModelDims,params: Params, tau_bar: Array) -> Tuple[Array, Array, Array]:
+def get_qra_bar(dims: ModelDims,params: Params, tau_bar: Array, tau_bar_f: Array) -> Tuple[Array, Array, Array]:
     """Helper function to get gradients wrt to q, r, a."""
     # q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
     lqr = params.lqr
@@ -22,13 +23,15 @@ def get_qra_bar(dims: ModelDims,params: Params, tau_bar: Array) -> Tuple[Array, 
     x_bar, u_bar = tau_bar[:, :n, :], tau_bar[:, n:,:]
     # Lambs_bar = jnp.zeros_like(lqr.a)
     # set-up LQR problem with r_rev = u_bar, q_rev = x_bar, a_rev = lambda_bar (set to 0 here)
+    #s.rlx - (s.x *@ s.rlxx) - (s.u *@ s.rlux)
+        #           ; s.rlu - (s.u *@ s.rluu) - (s.x *@ transpose s.rlux)
     swapped_lqr = LQR(A=lqr.A, B=lqr.B, a=jnp.zeros_like(lqr.a), 
                       Q=lqr.Q, q=x_bar, 
-                      Qf=lqr.Qf, qf=lqr.qf, 
+                      Qf=lqr.Qf, qf=tau_bar_f[:n], 
                       R=lqr.R, r=u_bar, S=lqr.S)
     
     swapped_params = Params(params.x0, swapped_lqr)
-    _, q_bar, r_bar, a_bar = solve_lqr(swapped_params, dims)
+    Gains_bar, q_bar, r_bar, a_bar = solve_lqr_swapx0(swapped_params, dims)
     ##TODO : check the indices for a_bar
     return q_bar, jnp.concatenate([r_bar, jnp.zeros(shape=(1,dims.m,1))], axis = 0), a_bar
 
@@ -47,18 +50,22 @@ def dlqr(dims: ModelDims, params: Params, tau_guess: Array) -> Tuple[Array, Arra
 
 
 def fwd_dlqr(dims: ModelDims, params: Params, tau_guess: Array):
+    lqr = params.lqr
     sol = dlqr(dims, params,  tau_guess)
     gains, Xs_star, Us_star, Lambs = sol
-    tau_star =  jnp.concatenate([Xs_star[:-1,...], Us_star], axis = 1)
-    return tau_star, (params, sol) #sol, res
+    tau_star =  jnp.concatenate([Xs_star[:,...],  jnp.concatenate([Us_star, jnp.zeros(shape=(1,dims.m,1))])], axis = 1)
+    new_lqr = LQR(A=lqr.A, B=lqr.B, a=jnp.zeros_like(lqr.a), 
+                        Q=lqr.Q, q=lqr.q - bmm(lqr.Q, Xs_star[:-1]) - bmm(lqr.S, Us_star),
+                        Qf=lqr.Qf, qf=lqr.qf - bmm(lqr.Qf, Xs_star[-1]), 
+                        R=lqr.R, r=lqr.r - bmm(lqr.R, Us_star) - bmm(jnp.transpose(lqr.S, axes = (0,2,1)), Xs_star[:-1]), S=lqr.S)
+    new_params = Params(params.x0, new_lqr)
+    new_sol = dlqr(dims, new_params,  tau_guess)
+    gains, Xs_star, Us_star, Lambs = new_sol
+    new_tau_star =  jnp.concatenate([Xs_star[:,...],  jnp.concatenate([Us_star, jnp.zeros(shape=(1,dims.m,1))])], axis = 1)
+    return tau_star, (params, new_sol) #sol, res
   #not entirely sure of the format of this
 
 def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
-    params, sol = res
-    (gains, Xs_star, Us_star, Lambs) = sol
-    M = dims.m
-    print("catcat", params.lqr.A.shape)
-    tau_star = jnp.concatenate([Xs_star, jnp.concatenate([Us_star, jnp.zeros(shape=(1,M,1))], axis = 0)], axis=1)
     """
   Inputs : params (contains lqr parameters, x0), tau_star_bar (gradients wrt to tau at tau_star)
   params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
@@ -82,14 +89,17 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
   - we don't want to differentiate wrt to the horizon so maybe we shouldn't use the vector containing it
   """
     # this asssumes we are passing dimension parameters
+    params, sol = res
+    (gains, Xs_star, Us_star, Lambs) = sol
+    M = dims.m
+    tau_bar, tau_bar_f = tau_bar[:-1], tau_bar[-1]
+    tau_star = jnp.concatenate([Xs_star, jnp.concatenate([Us_star, jnp.zeros(shape=(1,M,1))], axis = 0)], axis=1)
     n = dims.n # LQR.A[0].shape()[1], LQR.B[0].shape()[1]
-    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar)
+    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar, tau_bar_f)
     c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
-    F_bar = bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axes=(0, 2, 1))) + bmm(
-        a_bar[1:], jnp.transpose(tau_star[:-1], axes=(0, 2, 1))
-    )
-    print(c_bar.shape, tau_star.shape)
-    C_bar = 0.5 * (symmetrise_tensor(bmm(c_bar, jnp.transpose(tau_star, axes=(0, 2, 1)))))
+    F_bar = bmm(a_bar[1:], jnp.transpose(tau_star[:-1], axes=(0, 2, 1))) + bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axes=(0, 2, 1))) 
+    
+    C_bar = 0.5*(symmetrise_tensor(bmm(c_bar, jnp.transpose(tau_star, axes=(0, 2, 1))))) #should have factor of 0.5 -> related to the previous bug
     Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
     S_bar = 0.5 * (C_bar[:, :n, n:])
     A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
