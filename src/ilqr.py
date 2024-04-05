@@ -330,7 +330,7 @@ def linesearch(
     alpha_min=0.0001,
     verbose: bool = False,
 ):
-    rollout = partial(ilqr_forward_pass, model=model, params=params)
+    rollout = partial(ilqr_forward_pass, model, params)
     (Xs, Us), cost = rollout(Ks, Xs, Us, alpha=alpha_0)
 
     # initialise carry
