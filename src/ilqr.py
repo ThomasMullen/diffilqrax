@@ -260,21 +260,23 @@ def ilQR_solver(
         old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
         # approximate dyn and loss to LQR with initial {u} and {x}
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
-        # calc gains and expected dJ0
+        # calc gains and expected dold_cost
         exp_cost_red, gains = lqr.lqr_backward_pass(
             lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
+        # no line search: α = 1.0 
         (new_Xs, new_Us), new_total_cost = ilqr_forward_pass(
             model, params, gains, old_Xs, old_Us, alpha=.8
         )
-        # calc change in dJ0 w.r.t old dJ0
-        # z = (old_cost - new_total_cost) / lqr.calc_expected_change(
-        #     exp_cost_red, alpha=1.0
-        # )
+        # dynamics line search: 
+        if use_linesearch:
+            pass
+        
+        # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / old_cost
         
-        # determine cond: ΔJ0 > threshold
+        # determine cond: Δold_cost > threshold
         carry_on = jnp.abs(z) > tol
         if verbose:
             jax.debug.print(f"z-val: {z}")
@@ -292,7 +294,7 @@ def ilQR_solver(
     )
     if verbose:
         print(f"Converged in {n_iters}/{max_iter} iterations")
-        print(f"J0: {total_cost}")
+        print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_stars, Us_stars, params)
     Lambs_stars = lqr.lqr_adjoint_pass(
         Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
@@ -300,32 +302,54 @@ def ilQR_solver(
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
-def linesearch(model: System, params: Params, Xs: Array, Us: Array, Ks: lqr.Gains):
+def linesearch(model: System, params: Params, Xs: Array, Us: Array, Ks: lqr.Gains, expected_dJ:lqr.CostToGo, beta:float, alpha_0:float=1., max_iter:int=8, tol:float=1e-6, alpha_min=0.0001, verbose:bool=False):
     rollout = partial(ilqr_forward_pass, model=model, params=params)
     
     # initialise carry
+    (new_Xs, new_Us), new_total_cost = rollout(Ks, Xs, Us, alpha=alpha_0)
     initial_carry = (Xs, Us, 0.0, 0, True)
     
-    # back track iteration
     def backtrack_iter(carry):
+        """Rollout with new alpha and update alpha if z-value is above threshold"""
+        # parse out carry
+        Xs, Us, old_cost, alpha, n_iter, carry_on = carry
+        # update alpha
+        alpha *= beta
         # rollout with alpha
+        (new_Xs, new_Us), new_cost = rollout(Ks, Xs, Us, alpha=alpha)
         
         # calc expected cost reduction
         
         # calc z-value
+        z = (old_cost - new_cost) / lqr.calc_expected_change(
+            expected_dJ, alpha=alpha
+        )
         
         # ensure to keep Xs and Us that reduce z-value
-        
+        new_cost = jnp.where(jnp.isnan(new_cost), old_cost, new_cost)
+        # Only return new trajs if leads to a strict cost decrease
+        new_Xs = jnp.where(new_cost < old_cost, new_Xs, Xs)
+        new_Us = jnp.where(new_cost < old_cost, new_Us, Us)
         # add control flow to carry on or not
-        pass
+        below_threshold = jnp.abs(z) > tol
+        carry_on = jnp.logical_and(alpha > alpha_min, below_threshold)
+        # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
+        
+        return (new_Xs, new_Us, new_cost, alpha, n_iter+1, carry_on)
     
-    def loop_fun():
+    
+    def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
+        """if cond false return existing carry else run another rollout with new alpha"""
         # assign function given carry_on condition
-        pass
+        updated_carry = lax.cond(carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple)
+        return updated_carry, (updated_carry[2], updated_carry[3])
     
-    pass
+    # scan through with max iterations
+    (Xs_opt, Us_opt, cost_opt, *_), costs = lax.scan(
+        loop_fun, initial_carry, None, length=max_iter
+    )
 
-
+    return (Xs_opt, Us_opt), cost_opt, costs
 
 
 def define_model():
@@ -370,7 +394,7 @@ if __name__ == "__main__":
         model, params, Xs, Us, max_iter=40, tol=1e-8, verbose=True
     )
     
-    print(f"Initial J0: {cost_init:.03f}, Final J0: {total_cost:.03f}")
+    print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
     fig, ax = plt.subplots(2,2, sharey=True)
     ax[0,0].plot(Xs.squeeze())
     ax[0,0].set(title="X")
