@@ -292,6 +292,17 @@ def solve_lqr(params: Params, sys_dims: ModelDims):
     Lambs = lqr_adjoint_pass(Xs, Us, params)
     return gains, Xs, Us, Lambs
 
+def solve_lqr_swap_x0(params: Params, sys_dims: ModelDims):
+    "run backward forward sweep to find optimal control"
+    # backward
+    #print("r", new_params.lqr.r[-10:])
+    _, gains = lqr_backward_pass(params.lqr, sys_dims)
+    #print("k", gains.k[-10:])
+    new_params = Params(jnp.zeros_like(params.x0), params.lqr)
+    Xs, Us = lqr_forward_pass(gains, new_params)
+    # adjoint
+    Lambs = lqr_adjoint_pass(Xs, Us, new_params)
+    return gains, Xs, Us, Lambs
 
 def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6, 
                    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}):
