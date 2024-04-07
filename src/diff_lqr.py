@@ -11,7 +11,7 @@ from .lqr import (
     Params,
     ModelDims,
     kkt,
-    solve_lqr, solve_lqr_swapx0, symmetrise_tensor
+    solve_lqr, solve_lqr_swap_x0, symmetrise_tensor
 )
 
 
@@ -31,11 +31,10 @@ def get_qra_bar(dims: ModelDims,params: Params, tau_bar: Array, tau_bar_f: Array
                       R=lqr.R, r=u_bar, S=lqr.S)
     
     swapped_params = Params(params.x0, swapped_lqr)
-    Gains_bar, q_bar, r_bar, a_bar = solve_lqr_swapx0(swapped_params, dims)
+    Gains_bar, q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params, dims)
     ##TODO : check the indices for a_bar
     return q_bar, jnp.concatenate([r_bar, jnp.zeros(shape=(1,dims.m,1))], axis = 0), a_bar
 
-  
 @partial(custom_vjp, nondiff_argnums=(0,))
 def dlqr(dims: ModelDims, params: Params, tau_guess: Array) -> Tuple[Array, Array, Array, Array]:
     """params vector contains all the LQR parameters : here, this assumes an LQR problem
@@ -46,12 +45,16 @@ def dlqr(dims: ModelDims, params: Params, tau_guess: Array) -> Tuple[Array, Arra
     local_LQR.r = local_LQR.r - bmm(Xs_star, np.transpose(local_LQR.S, axis = (0,2,1))) - bmm(Us_star, local_LQR.R)
     params.lqr = local_LQR"""
     #then will need to do ilqr, for now placeholder
-    return solve_lqr(params, dims)
+    sol = solve_lqr(params, dims) #  tau_guess)
+    gains, Xs_star, Us_star, Lambs = sol
+    tau_star =  jnp.concatenate([Xs_star[:,...],  jnp.concatenate([Us_star, jnp.zeros(shape=(1,dims.m,1))])], axis = 1)
+    return tau_star #solve_lqr(params, dims) 
 
 
 def fwd_dlqr(dims: ModelDims, params: Params, tau_guess: Array):
     lqr = params.lqr
-    sol = dlqr(dims, params,  tau_guess)
+    sol = solve_lqr(params, dims)
+    #sol = dlqr(dims, params,  tau_guess)
     gains, Xs_star, Us_star, Lambs = sol
     tau_star =  jnp.concatenate([Xs_star[:,...],  jnp.concatenate([Us_star, jnp.zeros(shape=(1,dims.m,1))])], axis = 1)
     new_lqr = LQR(A=lqr.A, B=lqr.B, a=jnp.zeros_like(lqr.a), 
@@ -59,10 +62,10 @@ def fwd_dlqr(dims: ModelDims, params: Params, tau_guess: Array):
                         Qf=lqr.Qf, qf=lqr.qf - bmm(lqr.Qf, Xs_star[-1]), 
                         R=lqr.R, r=lqr.r - bmm(lqr.R, Us_star) - bmm(jnp.transpose(lqr.S, axes = (0,2,1)), Xs_star[:-1]), S=lqr.S)
     new_params = Params(params.x0, new_lqr)
-    _gains, new_Xs_star, new_Us_star, new_Lambs = dlqr(dims, new_params,  tau_guess)
+    _gains, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params,  dims) #tau_guess)
     new_sol = gains, new_Xs_star, new_Us_star, Lambs
     new_tau_star =  jnp.concatenate([Xs_star[:,...],  jnp.concatenate([Us_star, jnp.zeros(shape=(1,dims.m,1))])], axis = 1)
-    return tau_star, (new_params, sol) #sol, res
+    return tau_star, (new_params, sol) #check whether params or new_params
   #not entirely sure of the format of this
 
 def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
