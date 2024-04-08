@@ -220,7 +220,7 @@ def lqr_tracking_forward_pass(
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
-    return dJ.V * alpha**2 + dJ.v * alpha
+    return - (dJ.V * alpha**2 + dJ.v * alpha)
 
 
 def lqr_backward_pass(
