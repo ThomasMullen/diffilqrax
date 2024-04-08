@@ -11,7 +11,7 @@ import src.lqr as lqr
 from src.utils import keygen, initialise_stable_dynamics
 import jax.random as jr
 import matplotlib.pyplot as plt
-
+from jax.debug import breakpoint
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
@@ -277,6 +277,7 @@ def ilQR_solver(
                 gains,
                 old_Xs,
                 old_Us,
+                old_cost,
                 alpha0,
                 expected_dJ=exp_cost_red,
                 beta=0.8,
@@ -315,37 +316,50 @@ def ilQR_solver(
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
+# TODO: Rewrite linesearch
+# -------------------------
+# vmap a rollout of alpha gains:
+    # jnp.geomspace(alpha0, alpha0*beta**max_iter, num=max_iter+1)
+# update new Xs and Us with where max Delta J
+# calculate z-value
+# continue iteration if z-value is above threshold
+
 def linesearch(
     update: Callable,
     Ks: lqr.Gains,
-    Xs: Array,
-    Us: Array,
+    Xs_init: Array,
+    Us_init: Array,
+    cost_init: float,
     alpha_0: float,
     expected_dJ: lqr.CostToGo,
     beta: float,
-    max_iter: int = 8,
+    max_iter: int = 20,
     tol: float = 1e-6,
     alpha_min=0.0001,
     verbose: bool = False,
 ):
-    (Xs, Us), cost = update(Ks, Xs, Us, alpha=alpha_0)
+    
+    # breakpoint()
+    # _, cost = update(Ks, Xs_init, Us_init, alpha=alpha_0)
 
-    # initialise carry
-    initial_carry = (Xs, Us, cost, alpha_0, 0, True)
+    # initialise carry: Xs, Us, cost, alpha, n_iter, carry_on
+    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, True)
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
         Xs, Us, old_cost, alpha, n_iter, carry_on = carry
-        # update alpha
-        alpha *= beta
+        # breakpoint()
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
         # calc expected cost reduction
 
         # calc z-value
-        z = (old_cost - new_cost) / lqr.calc_expected_change(expected_dJ, alpha=alpha)
+        expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
+        # breakpoint()
+        z = (old_cost - new_cost) / expected_delta_j
+        # breakpoint()
 
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), old_cost, new_cost)
@@ -356,6 +370,9 @@ def linesearch(
         below_threshold = jnp.abs(z) > tol
         carry_on = jnp.logical_and(alpha > alpha_min, below_threshold)
         # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
+        
+        # update alpha
+        alpha *= beta
 
         return (new_Xs, new_Us, new_cost, alpha, n_iter + 1, carry_on)
 
@@ -414,7 +431,7 @@ if __name__ == "__main__":
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
     (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
-        model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.8, verbose=True
+        model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.8, verbose=True, use_linesearch=True
     )
 
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
