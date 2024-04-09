@@ -87,14 +87,14 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
     LQR_bar = LQR(
         A=A_bar,
         B=B_bar,
-        a=a_bar,
+        a=a_bar[:-1],
         Q=Q_bar[:-1],
         q=q_bar[:-1],
-        Qf=Q_bar[-1][None, ...],
-        qf=q_bar[-1][None, ...],
-        R=R_bar,
-        r=r_bar,
-        S=S_bar,
+        Qf=Q_bar[-1],
+        qf=q_bar[-1],
+        R=R_bar[:-1],
+        r=r_bar[:-1],
+        S=S_bar[:-1],
     )
     x0_bar = jnp.zeros_like(params.x0)
     return Params(x0=x0_bar, lqr=LQR_bar), None

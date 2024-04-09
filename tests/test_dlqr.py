@@ -99,13 +99,8 @@ class TestLQR(unittest.TestCase):
             Us_lqr = dlqr(ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1), p, jnp.array([[2.0], [1.0]]))
             return jnp.linalg.norm(p.lqr.A) + jnp.linalg.norm(Us_lqr)
         val, g = jax.value_and_grad(loss)(self.params)
-        chex.assert_shape(g.lqr.B, self.params.lqr.B.shape)
-        chex.assert_shape(g.lqr.A, self.params.lqr.A.shape)
-        chex.assert_shape(g.lqr.Q, self.params.lqr.Q.shape)
-        chex.assert_shape(g.lqr.q, self.params.lqr.q.shape)
-        
+        chex.assert_trees_all_equal_shapes_and_dtypes(g, self.params)
 
-        
     def tearDown(self):
         """Destruct test class"""
         print("Running tearDown method...")
@@ -191,15 +186,21 @@ class TestDLQR(unittest.TestCase):
             print("\n || Printing  A || \n ")
             print(direct_g.A[:4])
             print(lqr_g.A[:4])
-        assert jnp.allclose(lqr_g.q, direct_g.q)
-        assert jnp.allclose(lqr_g.r[:-1], direct_g.r)
-        assert jnp.allclose(lqr_g.Q, direct_g.Q)
-        assert jnp.allclose(lqr_g.R[:-1], direct_g.R)
-        assert jnp.allclose(lqr_g.A, direct_g.A)
-        #assert jnp.allclose(implicit_g.q, direct_g.q, rtol=1e-03, atol=1e-01)
-        #assert jnp.allclose(implicit_g.r, direct_g.r, rtol=1e-03, atol=1e-01)
-        #assert jnp.allclose(implicit_g.Q, direct_g.Q, rtol=1e-03, atol=1e-01)
-        
+        # assert jnp.allclose(lqr_g.q, direct_g.q)
+        # assert jnp.allclose(lqr_g.r[:-1], direct_g.r)
+        # assert jnp.allclose(lqr_g.Q, direct_g.Q)
+        # assert jnp.allclose(lqr_g.R[:-1], direct_g.R)
+        # assert jnp.allclose(lqr_g.A, direct_g.A)
+        # verify shapes and dtypes
+        chex.assert_trees_all_equal_shapes_and_dtypes(lqr_val, direct_val)
+        chex.assert_trees_all_equal_shapes_and_dtypes(lqr_g, direct_g)
+        chex.assert_trees_all_equal_shapes_and_dtypes(implicit_val, direct_val)
+        chex.assert_trees_all_equal_shapes_and_dtypes(implicit_g, direct_g)
+        # verify numerics
+        chex.assert_trees_all_close(lqr_val, direct_val)
+        chex.assert_trees_all_close(lqr_g, direct_g)
+        chex.assert_trees_all_close(implicit_val, direct_val)
+        chex.assert_trees_all_close(implicit_g, direct_g)
 
         
     def tearDown(self):
