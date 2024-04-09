@@ -82,7 +82,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
     F_bar = bmm(a_bar[1:], jnp.transpose(tau_star[:-1], axes=(0, 2, 1))) + bmm(Lambs[1:], jnp.transpose(c_bar[:-1], axes=(0, 2, 1))) 
     C_bar = (symmetrise_tensor(bmm(c_bar, jnp.transpose(tau_star, axes=(0, 2, 1))))) #factor of 2 included in symmetrization
     Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
-    S_bar = 0.5 * (C_bar[:, :n, n:])
+    S_bar = 2*C_bar[:, :n, n:]
     A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
     LQR_bar = LQR(
         A=A_bar,
