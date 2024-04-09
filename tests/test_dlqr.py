@@ -123,6 +123,7 @@ class Prms(NamedTuple):
     R: Array
     A: Array
     S: Array
+    x0: Array
 
 def state_kkt(Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray, params: Params):
     Xs, Us, Lambs = Xs
@@ -148,7 +149,7 @@ class TestDLQR(unittest.TestCase):
     def test_dlqr(self):
         def replace_params(p):
             lqr = LQR(A = p.A, B = self.params.lqr.B, a = self.params.lqr.a, Q = p.Q, q = p.q, Qf = self.params.lqr.Qf, qf = self.params.lqr.qf, R = p.R, r = p.r, S = p.S)
-            return Params(self.params.x0, lqr)
+            return Params(self.x0, lqr)
         @jax.jit
         def loss(prms):
             tau_lqr = dlqr(self.sys_dims, replace_params(prms), self.x0)
@@ -170,7 +171,7 @@ class TestDLQR(unittest.TestCase):
             gains, Xs, Us, Lambs = solve_lqr(replace_params(prms), self.sys_dims)
             return jnp.linalg.norm(Us)**2 
 
-        prms = Prms(S = self.params.lqr.S, A = self.params.lqr.A, R = self.params.lqr.R, Q = self.params.lqr.Q, q = 10*jnp.ones(self.dims["TNX"]), r = jnp.ones(self.dims["TNX"]))
+        prms = Prms(x0 = jnp.array([[100.0], [100.0]]), S = self.params.lqr.S, A = self.params.lqr.A, R = self.params.lqr.R, Q = self.params.lqr.Q, q = 10*jnp.ones(self.dims["TNX"]), r = jnp.ones(self.dims["TNX"]))
         lqr_val, lqr_g = jax.value_and_grad(loss)(prms)
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)

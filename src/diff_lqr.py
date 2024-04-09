@@ -96,7 +96,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
         r=r_bar[:-1],
         S=S_bar[:-1],
     )
-    x0_bar = jnp.zeros_like(params.x0)
+    x0_bar = jnp.zeros_like(params.x0) #Lambs[0]#
     return Params(x0=x0_bar, lqr=LQR_bar), None
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
