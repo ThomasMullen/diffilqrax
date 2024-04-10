@@ -280,9 +280,9 @@ def ilQR_solver(
                 old_cost,
                 alpha0,
                 expected_dJ=exp_cost_red,
-                beta=0.8,
+                beta=0.5,
                 max_iter=8,
-                tol=1e-6,
+                tol=1e-1,
                 alpha_min=0.0001,
                 verbose=False,
             )
@@ -334,7 +334,7 @@ def linesearch(
     expected_dJ: lqr.CostToGo,
     beta: float,
     max_iter: int = 20,
-    tol: float = 1e-6,
+    tol: float = 1e-1,
     alpha_min=0.0001,
     verbose: bool = False,
 ):
@@ -367,7 +367,7 @@ def linesearch(
         new_Xs = jnp.where(new_cost < old_cost, new_Xs, Xs)
         new_Us = jnp.where(new_cost < old_cost, new_Us, Us)
         # add control flow to carry on or not
-        below_threshold = jnp.abs(z) > tol
+        below_threshold = z > tol
         carry_on = jnp.logical_and(alpha > alpha_min, below_threshold)
         # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
         
