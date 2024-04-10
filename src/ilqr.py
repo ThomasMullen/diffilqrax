@@ -292,8 +292,6 @@ def ilQR_solver(
 
         # determine cond: Δold_cost > threshold
         carry_on = jnp.abs(z) > tol
-        if verbose:
-            jax.debug.print(f"z-val: {z}")
 
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 

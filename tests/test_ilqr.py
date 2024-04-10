@@ -1,7 +1,7 @@
 """Test functions in src/ilqr.py"""
 import unittest
 import pytest
-import chex, jax 
+import chex, jax
 from jax import Array, grad
 import jax.random as jr
 import jax.numpy as jnp
@@ -9,37 +9,50 @@ import numpy as onp
 from os import getcwd
 from pathlib import Path
 from matplotlib.pyplot import subplots, close
+from typing import Union, Any
 
-from src.utils import keygen
+from src.utils import keygen, initialise_stable_dynamics
 import src.ilqr as ilqr
 import src.lqr as lqr
 
+jax.config.update('jax_default_device', jax.devices('cpu')[0])
+jax.config.update("jax_enable_x64", True)  # double precision
+
+
 class TestiLQRStructs(unittest.TestCase):
     """Test LQR dimensions and data structures"""
+
     def setUp(self):
         """Setup LQR problem"""
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 3)
-        
-        dt=0.1
-        Uh = jnp.array([[1,dt],[-1*dt,1-0.5*dt]])
-        Wh = jnp.array([[0,0],[1,0]])*dt
+
+        dt = 0.1
+        Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
+        Wh = jnp.array([[0, 0], [1, 0]]) * dt
         # initialise params
         self.theta = ilqr.Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2, 1)))
-        self.params = ilqr.Params(x0=jnp.array([[0.3], [0.]]), theta=self.theta)
+        self.params = ilqr.Params(x0=jnp.array([[0.3], [0.0]]), theta=self.theta)
+
         # define model
         def cost(t: int, x: Array, u: Array, theta: ilqr.Theta):
             return jnp.sum(x**2) + jnp.sum(u**2)
+
         def costf(x: Array, theta: ilqr.Theta):
             # return jnp.sum(jnp.abs(x))
             return jnp.sum(x**2)
+
         def dynamics(t: int, x: Array, u: Array, theta: ilqr.Theta):
             return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
-        
-        self.model = ilqr.System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=2, m=2, dt=dt))
+
+        self.model = ilqr.System(
+            cost, costf, dynamics, lqr.ModelDims(horizon=100, n=2, m=2, dt=dt)
+        )
         self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
-        self.Us_init = 0.1 * jr.normal(next(skeys), (self.model.dims.horizon, self.model.dims.m, 1))
-        
+        self.Us_init = 0.1 * jr.normal(
+            next(skeys), (self.model.dims.horizon, self.model.dims.m, 1)
+        )
+
     def test_vectorise_fun_in_time(self):
         # setup
         (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
@@ -47,33 +60,37 @@ class TestiLQRStructs(unittest.TestCase):
         Us = Us[:].squeeze()
         tps = jnp.arange(self.model.dims.horizon)
         # exercise
-        (Fx, Fu) = ilqr.vectorise_fun_in_time(ilqr.linearise(self.model.dynamics))(tps, Xs, Us, self.theta)
+        (Fx, Fu) = ilqr.vectorise_fun_in_time(ilqr.linearise(self.model.dynamics))(
+            tps, Xs, Us, self.theta
+        )
         # verify
         chex.assert_shape(Fx, self.dims["TNN"])
         chex.assert_shape(Fu, self.dims["TNM"])
-        
+
     def test_quadratise(self):
         # setup
         (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         Xs = Xs[0].squeeze()
         Us = Us[0].squeeze()
         # exercise
-        (Cxx, Cxu), (Cux, Cuu) = ilqr.quadratise(self.model.cost)(0,Xs, Us, self.params.theta)
+        (Cxx, Cxu), (Cux, Cuu) = ilqr.quadratise(self.model.cost)(
+            0, Xs, Us, self.params.theta
+        )
         # verify
         chex.assert_shape(Cxx, self.dims["NN"])
         chex.assert_shape(Cxu, self.dims["NM"])
         chex.assert_shape(Cuu, self.dims["MM"])
         chex.assert_shape(Cux, self.dims["MN"])
         chex.assert_type(J0.dtype, float)
-        
+
     def test_linearise(self):
         # setup
         (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         Xs = Xs[0].squeeze()
         Us = Us[0].squeeze()
         # exercise
-        Fx, Fu = ilqr.linearise(self.model.dynamics)(0,Xs, Us, self.params.theta)
-        Cx, Cu = ilqr.linearise(self.model.cost)(0,Xs, Us, self.params.theta)
+        Fx, Fu = ilqr.linearise(self.model.dynamics)(0, Xs, Us, self.params.theta)
+        Cx, Cu = ilqr.linearise(self.model.cost)(0, Xs, Us, self.params.theta)
         # verify
         chex.assert_shape(Fx, self.dims["NN"])
         chex.assert_shape(Fu, self.dims["NM"])
@@ -84,7 +101,9 @@ class TestiLQRStructs(unittest.TestCase):
         # setup
         (Xs, _), _ = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         # exercise
-        lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs, Us=self.Us_init, params=self.params)
+        lqr_tilde = ilqr.approx_lqr(
+            model=self.model, Xs=Xs, Us=self.Us_init, params=self.params
+        )
         # verify
         assert isinstance(lqr_tilde, lqr.LQR)
         # check shape
@@ -94,21 +113,24 @@ class TestiLQRStructs(unittest.TestCase):
         chex.assert_shape(lqr_tilde.R, self.dims["TMM"])
         chex.assert_shape(lqr_tilde.S, self.dims["TNM"])
         chex.assert_shape(lqr_tilde.Qf, self.dims["NN"])
-        
+
     def test_ilqr_simulate(self):
         # setup
-        Xs_lqr_sim = lqr.simulate_trajectory(self.model.dynamics, self.Us_init, self.params, self.model.dims)
+        Xs_lqr_sim = lqr.simulate_trajectory(
+            self.model.dynamics, self.Us_init, self.params, self.model.dims
+        )
         # exercise
         (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         # verify
         chex.assert_trees_all_equal(Us, self.Us_init)
-        chex.assert_shape(Xs, (self.dims["T"][0]+1,) + self.dims["NX"])
+        chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["NX"])
         chex.assert_trees_all_equal(Xs, Xs_lqr_sim)
-        
-        
+
     def test_ilqr_forward_pass(self):
         # setup
-        (old_Xs,_), initial_cost = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
+        (old_Xs, _), initial_cost = ilqr.ilqr_simulate(
+            self.model, self.Us_init, self.params
+        )
         lqr_params = ilqr.approx_lqr(self.model, old_Xs, self.Us_init, self.params)
         exp_cost_red, gains = lqr.lqr_backward_pass(
             lqr_params, dims=self.model.dims, expected_change=False, verbose=False
@@ -119,48 +141,59 @@ class TestiLQRStructs(unittest.TestCase):
             self.model, self.params, gains, old_Xs, self.Us_init, alpha=1.0
         )
         # verify
-        print(f"\nInitial J0: {initial_cost}, New J0: {new_total_cost}, Expected ΔJ0 (α=1): {exp_change_J0}")
+        print(
+            f"\nInitial J0: {initial_cost}, New J0: {new_total_cost}, Expected ΔJ0 (α=1): {exp_change_J0}"
+        )
         chex.assert_shape(new_Xs, old_Xs.shape)
         chex.assert_shape(new_Us, self.Us_init.shape)
         assert new_total_cost < initial_cost
-        assert new_total_cost-initial_cost < exp_change_J0
-        
-        
+        assert new_total_cost - initial_cost < exp_change_J0
+
     def test_ilQR_solver(self):
         # setup
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
-        (Xs_init,_), initial_cost = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
+        (Xs_init, _), initial_cost = ilqr.ilqr_simulate(
+            self.model, self.Us_init, self.params
+        )
         # exercise
         (Xs_stars, Us_stars, Lambs_stars), converged_cost = ilqr.ilQR_solver(
-            self.model, self.params, Xs_init, self.Us_init, max_iter=20, tol=1e-2, verbose=True
+            self.model,
+            self.params,
+            Xs_init,
+            self.Us_init,
+            max_iter=20,
+            tol=1e-2,
+            verbose=True,
         )
-        fig, ax = subplots(2,2, sharey=True)
-        ax[0,0].plot(Xs_init.squeeze())
-        ax[0,0].set(title="X")
-        ax[0,1].plot(self.Us_init.squeeze())
-        ax[0,1].set(title="U")
-        ax[1,0].plot(Xs_stars.squeeze())
-        ax[1,1].plot(Us_stars.squeeze())
+        fig, ax = subplots(2, 2, sharey=True)
+        ax[0, 0].plot(Xs_init.squeeze())
+        ax[0, 0].set(title="X")
+        ax[0, 1].plot(self.Us_init.squeeze())
+        ax[0, 1].set(title="U")
+        ax[1, 0].plot(Xs_stars.squeeze())
+        ax[1, 1].plot(Us_stars.squeeze())
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/ilqr_solver.png")
         close()
         lqr_params_stars = ilqr.approx_lqr(self.model, Xs_stars, Us_stars, self.params)
-        lqr_tilde_params = lqr.Params(Xs_stars[0],lqr_params_stars)
-        dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_tilde_params, Xs_stars, Us_stars, Lambs_stars)
-        fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
-        ax[0,0].plot(Xs_stars.squeeze())
-        ax[0,0].set(title="X")
-        ax[0,1].plot(Us_stars.squeeze())
-        ax[0,1].set(title="U")
-        ax[0,2].plot(Lambs_stars.squeeze())
-        ax[0,2].set(title="λ")
-        ax[1,0].plot(dLdXs.squeeze())
-        ax[1,0].set(title="dLdX")
-        ax[1,1].plot(dLdUs.squeeze())
-        ax[1,1].set(title="dLdUs")
-        ax[1,2].plot(dLdLambs.squeeze())
-        ax[1,2].set(title="dLdλ")
+        lqr_tilde_params = lqr.Params(Xs_stars[0], lqr_params_stars)
+        dLdXs, dLdUs, dLdLambs = lqr.kkt(
+            lqr_tilde_params, Xs_stars, Us_stars, Lambs_stars
+        )
+        fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
+        ax[0, 0].plot(Xs_stars.squeeze())
+        ax[0, 0].set(title="X")
+        ax[0, 1].plot(Us_stars.squeeze())
+        ax[0, 1].set(title="U")
+        ax[0, 2].plot(Lambs_stars.squeeze())
+        ax[0, 2].set(title="λ")
+        ax[1, 0].plot(dLdXs.squeeze())
+        ax[1, 0].set(title="dLdX")
+        ax[1, 1].plot(dLdUs.squeeze())
+        ax[1, 1].set(title="dLdUs")
+        ax[1, 2].plot(dLdLambs.squeeze())
+        ax[1, 2].set(title="dLdλ")
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/ilqr_kkt.png")
         close()
@@ -172,15 +205,172 @@ class TestiLQRStructs(unittest.TestCase):
         # assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-03, atol=1e-04)
 
 
+# load test data
+# description of tajax data
+
+
 class TestiLQRExactSolution(unittest.TestCase):
+    """Test iLQR solver with exact solution"""
+
     def setUp(self):
+        # load fixtures
+        self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")
+
+        # dimensions
+        self.dims = chex.Dimensions(T=100, N=8, M=2, X=1)
+
+        # set-up model
+        key = jr.PRNGKey(seed=234)
+        key, skeys = keygen(key, 5)
+        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], 0.6)[0]
+        Wh = jr.normal(next(skeys), self.dims["NM"])
+        chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
+        chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
+        theta = ilqr.Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["NX"]))
+        self.params = ilqr.Params(
+            x0=jr.normal(next(skeys), self.dims["NX"]), theta=theta
+        )
+        self.Us = jnp.zeros(self.dims["TMX"])
+        assert jnp.allclose(self.fixtures["x0"], self.params.x0.squeeze())
+
+        def cost(t: int, x: Array, u: Array, theta: Any):
+            return jnp.sum(x**2) + jnp.sum(u**2)
+
+        def costf(x: Array, theta: ilqr.Theta):
+            return jnp.sum(x**2)
+
+        def dynamics(t: int, x: Array, u: Array, theta: ilqr.Theta):
+            return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+
+        self.model = ilqr.System(
+            cost, costf, dynamics, lqr.ModelDims(*self.dims["NMT"], dt=0.1)
+        )
+
+    def test_ilqr_nolinesearch(self):
+        # exercise rollout
+        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(
+            self.model, self.Us, self.params
+        )
+        # verify
+        chex.assert_trees_all_equal(self.fixtures["X_orig"][..., None], Xs_init[1:])
+
+        # exercise ilqr solver
+        (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
+            self.model,
+            self.params,
+            Xs_init,
+            Us_init,
+            max_iter=70,
+            tol=1e-8,
+            alpha0=0.8, #NOTE: When this is set to 1.0, the solver diverges?!
+            verbose=True,
+            use_linesearch=False,
+        )
+        
+        # verify
+        chex.assert_trees_all_close(Xs_stars.squeeze(), self.fixtures["X"], rtol=1e-06, atol=1e-04)
+        chex.assert_trees_all_close(Us_stars.squeeze(), self.fixtures["U"], rtol=1e-06, atol=1e-04)
+        print(f"iLQR solver cost:\t{total_cost:.6f}\nOther solver cost:\t{self.fixtures['obj']:.6f}")
+        assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
+
         pass
-    
-    def test_1(self):
-        pass
+
     def test_2(self):
         pass
+
     def test_3(self):
         pass
-    
-    
+
+
+
+class TestiLQRWithLQRProblem(unittest.TestCase):
+    """Test iLQR solver with exact solution"""
+
+    def setUp(self):
+        # dimensions
+        self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
+        self.sys_dims = lqr.ModelDims(*self.dims["NMT"], dt=0.1)
+        dt = self.sys_dims.dt
+        self.Us = jnp.zeros(self.dims["TMX"])
+        self.x0 = jnp.array([[0.3], [0.]])
+        
+        # load LQR problem
+        span_time=self.dims["TXX"]
+        A = jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), span_time)
+        B = jnp.tile(jnp.array([[0,0],[1,0]]), span_time)*dt
+        a = jnp.zeros(self.dims["TNX"])
+        Qf = 1. *jnp.eye(self.dims["N"][0])
+        qf = 0.   * jnp.ones(self.dims["NX"])
+        Q = 1. * jnp.tile(jnp.eye(self.dims["N"][0]), span_time)
+        q = 0. * jnp.tile(jnp.ones(self.dims["NX"]), span_time)
+        R = 1. * jnp.tile(jnp.eye(self.dims["M"][0]), span_time)
+        r = 0. * jnp.tile(jnp.ones(self.dims["MX"]), span_time)
+        S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), span_time)
+        self.lqr_struct = lqr.LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+        self.lqr_params = lqr.Params(self.x0, self.lqr_struct)
+
+
+        # set-up lqr in the model
+        Uh = self.lqr_struct.A[0]
+        Wh = self.lqr_struct.B[0]
+        theta = ilqr.Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["NX"]))
+        self.ilqr_params = ilqr.Params(x0=self.x0, theta=theta)
+
+        def cost(t: int, x: Array, u: Array, theta: Any):
+            return 0.5*jnp.sum(x**2) + 0.5*jnp.sum(u**2)
+
+        def costf(x: Array, theta: ilqr.Theta):
+            return 0.5*jnp.sum(x**2)
+
+        def dynamics(t: int, x: Array, u: Array, theta: ilqr.Theta):
+            return theta.Uh @ x + theta.Wh @ u
+
+        self.model = ilqr.System(
+            cost, costf, dynamics, lqr.ModelDims(*self.dims["NMT"], dt=0.1)
+        )
+
+    def test_lqr_solution(self):
+        # setup: simulate dynamics
+        lqr_Xs_sim = lqr.simulate_trajectory(
+            dynamics=lqr.lin_dyn_step, 
+            Us=self.Us, 
+            params=self.lqr_params, 
+            dims=self.sys_dims
+            )
+        # exercise rollout
+        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(self.model, self.Us, self.ilqr_params)
+        # verify
+        chex.assert_trees_all_equal(Xs_init, lqr_Xs_sim)
+        
+        # setup: lqr solver
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params, self.sys_dims)
+        # exercise ilqr solver
+        (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
+            self.model,
+            self.ilqr_params,
+            Xs_init,
+            Us_init,
+            max_iter=70,
+            tol=1e-8,
+            alpha0=1., #NOTE: When this is set to 1.0, the solver diverges?!
+            verbose=True,
+            use_linesearch=False,
+        )
+        # verify
+        chex.assert_trees_all_close(Xs_stars, Xs_lqr, rtol=1e-04, atol=1e-04)
+        chex.assert_trees_all_close(Us_stars, Us_lqr, rtol=1e-04, atol=1e-04)
+
+        # exercise lqr approximation
+        lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_init, Us=self.Us, params=self.ilqr_params)
+        # verify
+        # chex.assert_trees_all_close(lqr_tilde, self.lqr_struct)
+        chex.assert_trees_all_close(lqr_tilde.A, self.lqr_struct.A)
+        chex.assert_trees_all_close(lqr_tilde.B, self.lqr_struct.B)
+        chex.assert_trees_all_close(lqr_tilde.a, self.lqr_struct.a)
+        chex.assert_trees_all_close(lqr_tilde.Q, self.lqr_struct.Q)
+        chex.assert_trees_all_close(lqr_tilde.Qf, self.lqr_struct.Qf)
+        chex.assert_trees_all_close(lqr_tilde.R, self.lqr_struct.R)
+        chex.assert_trees_all_close(lqr_tilde.S, self.lqr_struct.S)
+        chex.assert_trees_all_close(lqr_tilde.r, self.lqr_struct.r)
+        chex.assert_trees_all_close(lqr_tilde.q, self.lqr_struct.q)
+        chex.assert_trees_all_close(lqr_tilde.qf, self.lqr_struct.qf)
