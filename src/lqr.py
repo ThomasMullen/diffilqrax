@@ -7,7 +7,7 @@ from jax.lax import batch_matmul as bmm
 import jax.random as jr
 from functools import partial
 
-# from src import keygen, initialise_stable_dynamics
+from utils import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
@@ -107,7 +107,6 @@ def simulate_trajectory(
 
     def step(x, inputs):
         t, u = inputs
-        # TODO: add dims.dt to dynamics
         nx = dynamics(t, x, u, lqr)
         return nx, nx
 
@@ -214,14 +213,14 @@ def lqr_backward_pass(
 
         if verbose:
             assert I_mu.shape == (dims.m, dims.m)
-            assert v.shape == (dims.n, 1)
+            assert v.shape == (dims.n,)
             assert V.shape == (dims.n, dims.n)
             assert Hxx.shape == (dims.n, dims.n)
             assert Huu.shape == (dims.m, dims.m)
             assert Hxu.shape == (dims.n, dims.m)
-            assert hx.shape == (dims.n, 1)
-            assert hu.shape == (dims.m, 1)
-            assert k.shape == (dims.m, 1)
+            assert hx.shape == (dims.n,)
+            assert hu.shape == (dims.m,)
+            assert k.shape == (dims.m,)
             assert K.shape == (dims.m, dims.n)
 
         # Find value iteration at current time
@@ -308,34 +307,35 @@ def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6,
                    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}):
     """Generate time-invariant LQR parameters"""
     # # generate random seeds
-    # key = jr.PRNGKey(seed=234)
-    # key, skeys = keygen(key, 3)
-    # # initialise dynamics
-    # span_time=(sys_dims.horizon, 1, 1)
-    # A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
-    # B = jnp.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
-    # a = jnp.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
-    # # define cost matrices
-    # Q = pen_weight["Q"] * jnp.tile(jnp.eye(sys_dims.n), span_time)
-    # q = 2*1e-1 * jnp.tile(jnp.ones((sys_dims.n,1)), span_time)
-    # R = pen_weight["R"] * jnp.tile(jnp.eye(sys_dims.m), span_time)
-    # r = 1e-6 * jnp.tile(jnp.ones((sys_dims.m,1)), span_time)
-    # S = pen_weight["S"] * jnp.tile(jnp.ones((sys_dims.n,sys_dims.m)), span_time)
-    # Qf = pen_weight["Q"] * jnp.eye(sys_dims.n)
-    # qf = 2*1e-1 * jnp.ones((sys_dims.n,1))
-    # # construct LQR
-    # lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
-    lqr = LQR(None, None, None, None, None, None, None, None, None, None)
+    key = jr.PRNGKey(seed=234)
+    key, skeys = keygen(key, 3)
+    # initialise dynamics
+    span_time_m=(sys_dims.horizon, 1, 1)
+    span_time_v=(sys_dims.horizon, 1)
+    A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
+    B = jnp.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time_m)
+    a = jnp.tile(jr.normal(next(skeys), (sys_dims.n,)), span_time_v)
+    # define cost matrices
+    Q = pen_weight["Q"] * jnp.tile(jnp.eye(sys_dims.n), span_time_m)
+    q = 2*1e-1 * jnp.tile(jnp.ones((sys_dims.n,)), span_time_v)
+    R = pen_weight["R"] * jnp.tile(jnp.eye(sys_dims.m), span_time_m)
+    r = 1e-6 * jnp.tile(jnp.ones((sys_dims.m,)), span_time_v)
+    S = pen_weight["S"] * jnp.tile(jnp.ones((sys_dims.n,sys_dims.m)), span_time_m)
+    Qf = pen_weight["Q"] * jnp.eye(sys_dims.n)
+    qf = 2*1e-1 * jnp.ones((sys_dims.n,))
+    # construct LQR
+    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    # lqr = LQR(None, None, None, None, None, None, None, None, None, None)
     return lqr()
 
 
 if __name__ == "__main__":
     # generate data
     sys_dims = ModelDims(n=3, m=2, horizon=60, dt=0.1)
-    x0 = jnp.array([[2.0], [1.0], [1.0]])
+    x0 = jnp.array([2.0, 1.0, 1.0])
     lqr = initialise_lqr(sys_dims=sys_dims, spectral_radius=0.6)
     params = Params(x0, lqr)
-    Us = jnp.zeros((sys_dims.horizon,sys_dims.m, 1), dtype=float)
+    Us = jnp.zeros((sys_dims.horizon,sys_dims.m), dtype=float)
     Us = Us.at[2].set(1.0)
 
     # simulate trajectory
