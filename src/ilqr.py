@@ -254,6 +254,7 @@ def ilQR_solver(
     initial_carry = (X_inits, U_inits, c_init, 0, True)
     
     rollout = partial(ilqr_forward_pass, model, params)
+    parallel_rollout = jax.vmap(rollout,in_axes=(None, None, None, 0))
 
     # define body_fun(carry_tuple)
     def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
@@ -280,8 +281,10 @@ def ilQR_solver(
                 old_cost,
                 alpha0,
                 expected_dJ=exp_cost_red,
-                beta=0.5,
-                max_iter=8,
+                beta=0.8,
+                # beta=0.5,
+                # max_iter=8,
+                max_iter=16,
                 tol=1e-1,
                 alpha_min=0.0001,
                 verbose=False,
@@ -321,6 +324,7 @@ def ilQR_solver(
 # update new Xs and Us with where max Delta J
 # calculate z-value
 # continue iteration if z-value is above threshold
+
 
 def linesearch(
     update: Callable,
@@ -362,12 +366,16 @@ def linesearch(
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), old_cost, new_cost)
         # Only return new trajs if leads to a strict cost decrease
+        # add control flow to carry on or not
         new_Xs = jnp.where(new_cost < old_cost, new_Xs, Xs)
         new_Us = jnp.where(new_cost < old_cost, new_Us, Us)
-        # add control flow to carry on or not
+        # new_cost = jnp.where(new_cost < old_cost, new_cost, old_cost)
         below_threshold = z > tol
         carry_on = jnp.logical_and(alpha > alpha_min, below_threshold)
         # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
+        # new_cost = jnp.where(lax.bitwise_not(carry_on), new_cost, old_cost)
+        # new_Xs = jnp.where(lax.bitwise_not(carry_on), new_Xs, Xs)
+        # new_Us = jnp.where(lax.bitwise_not(carry_on), new_Us, Us)
         
         # update alpha
         alpha *= beta
