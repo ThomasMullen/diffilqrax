@@ -3,7 +3,7 @@ from typing import Callable, NamedTuple, Tuple, Union
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-from jax.lax import batch_matmul as bmm
+# from jax.lax import batch_matmul as bmm
 import jax.random as jr
 from functools import partial
 
@@ -15,6 +15,8 @@ jax.config.update("jax_enable_x64", True)  # double precision
 symmetrise_tensor = lambda x: (x + x.transpose(0, 2, 1)) / 2
 symmetrise_matrix = lambda x: (x + x.T) / 2
 
+# matrix multiplication through time
+bmm = jax.vmap(jnp.matmul)
 
 # LQR struct
 LQRBackParams = Tuple[
@@ -262,7 +264,7 @@ def kkt(params: Params, Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray):
         + bmm(AT, Lambs[1:])
         - Lambs[:-1]
     )
-    dLdXf = bmm(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
+    dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
     dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
     dLdUs = (
         bmm(ST, Xs[:-1])

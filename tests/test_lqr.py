@@ -257,7 +257,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
 
         print("\nMake initial state x0 and input U")
-        self.x0 = jnp.array([[0.3], [0.]])
+        self.x0 = jnp.array([0.3, 0.])
         Us = jnp.zeros(self.dims["TM"]) * 1.0
         Us = Us.at[2].set(1.0)
         self.Us = Us
