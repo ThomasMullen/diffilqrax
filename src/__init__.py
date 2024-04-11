@@ -18,3 +18,7 @@ from .utils import (
     keygen,
     initialise_stable_dynamics
 )
+from .exact import (
+    quad_solve, 
+    exact_solve
+)
