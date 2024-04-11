@@ -1,33 +1,64 @@
 """LQR solver via dynamic programming"""
-from typing import Callable, NamedTuple, Tuple
+from typing import Callable, NamedTuple, Tuple, Union
 import jax
 import jax.lax as lax
-import jax.numpy as np
+import jax.numpy as jnp
+from jax.lax import batch_matmul as bmm
+import jax.random as jr
+from functools import partial
 
-jax.config.update("jax_enable_x64", True)
+# from src import keygen, initialise_stable_dynamics
+
+jax.config.update("jax_enable_x64", True)  # double precision
 
 # symmetrise
-symmetrise = lambda x: (x + x.transpose(0, 2, 1)) / 2
+symmetrise_tensor = lambda x: (x + x.transpose(0, 2, 1)) / 2
+symmetrise_matrix = lambda x: (x + x.T) / 2
 
 
 # LQR struct
+LQRBackParams = Tuple[
+    jnp.ndarray, jnp.ndarray, jnp.array, jnp.ndarray, jnp.array, jnp.ndarray, jnp.array
+]
+LQRTrackParams = Tuple[
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.array,
+    jnp.ndarray,
+    jnp.array,
+    jnp.ndarray,
+    jnp.array,
+    jnp.array,
+    jnp.array,
+]
+
+
+class ModelDims(NamedTuple):
+    """Model dimensions"""
+
+    n: int
+    m: int
+    horizon: int
+    dt: float
+
+
 class LQR(NamedTuple):
     """LQR params
 
     Args:
-        NamedTuple (np.ndarray): Dynamics and Cost parameters. Shape [T,X,Y]
+        NamedTuple (jnp.ndarray): Dynamics and Cost parameters. Shape [T,X,Y]
     """
 
-    A: np.ndarray
-    B: np.ndarray
-    a: np.ndarray
-    Q: np.ndarray
-    q: np.ndarray
-    Qf: np.ndarray
-    qf: np.ndarray
-    R: np.ndarray
-    r: np.ndarray
-    S: np.ndarray
+    A: jnp.ndarray
+    B: jnp.ndarray
+    a: jnp.ndarray
+    Q: jnp.ndarray
+    q: jnp.ndarray
+    Qf: jnp.ndarray
+    qf: jnp.ndarray
+    R: jnp.ndarray
+    r: jnp.ndarray
+    S: jnp.ndarray
 
     def __call__(self):
         """Symmetrise quadratic costs"""
@@ -35,11 +66,11 @@ class LQR(NamedTuple):
             A=self.A,
             B=self.B,
             a=self.a,
-            Q=symmetrise(self.Q),
+            Q=symmetrise_tensor(self.Q),
             q=self.q,
-            Qf=(self.Qf+self.Qf.T)/2,
+            Qf=(self.Qf + self.Qf.T) / 2,
             qf=self.qf,
-            R=symmetrise(self.R),
+            R=symmetrise_tensor(self.R),
             r=self.r,
             S=self.S,
         )
@@ -47,159 +78,276 @@ class LQR(NamedTuple):
 
 class Params(NamedTuple):
     """Contains initial states and LQR parameters"""
-    x0: np.ndarray
-    lqr: LQR
+
+    x0: jnp.ndarray
+    lqr: Union[LQR, Tuple[jnp.ndarray]]
+
 
 class Gains(NamedTuple):
     """Linear input gains"""
 
-    K: np.ndarray
-    k: np.ndarray
+    K: jnp.ndarray
+    k: jnp.ndarray
 
 
-class ValueIter(NamedTuple):
+class CostToGo(NamedTuple):
     """Cost-to-go"""
 
-    V: np.ndarray
-    v: np.ndarray
-    
-    
-def rollout(dynamics: Callable, Us: np.ndarray, params: Params):
+    V: jnp.ndarray
+    v: jnp.ndarray
+
+
+# simulate trajectory
+def simulate_trajectory(
+    dynamics: Callable, Us: jnp.ndarray, params: Params, dims: ModelDims
+) -> jnp.ndarray:
     """Simulate forward pass with LQR params"""
+    horizon = dims.horizon
     x0, lqr = params.x0, params[1]
-    def step(x, u):
-        nx = dynamics(x, u, lqr)
+
+    def step(x, inputs):
+        t, u = inputs
+        # TODO: add dims.dt to dynamics
+        nx = dynamics(t, x, u, lqr)
         return nx, nx
-    return np.vstack([x0[None], lax.scan(step, x0, Us)[1]])
+
+    _, Xs = lax.scan(step, x0, (jnp.arange(horizon), Us))
+
+    return jnp.vstack([x0[None], Xs])
 
 
-# # step for forward rollout
-# def linear_step(x, params):
-#     A, B, a, K, k = params
-#     u = K @ x + k
-#     nx = A @ x + B @ u + a
-#     return nx, (nx, u)
+def lin_dyn_step(t: int, x: jnp.array, u: jnp.array, lqr: LQR) -> jnp.array:
+    """State space linear step"""
+    nx = lqr.A[t] @ x + lqr.B[t] @ u + lqr.a[t]
+    return nx
 
-# # step for forward tracking we rollout
-# def track_step(x, params):
-#     A, B, a, K, k, x_star, u_star = params
-#     δx = x - x_star
-#     δu = K @ δx + k
-#     u_hat = u_star + δu
-#     nx = A @ x + B @ u_hat + a
-#     return nx, (nx, u_hat)
 
-# forward pass
-def forward(gains: Gains, params: Params
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Forward iteration of LDS using gains"""
+def lqr_adjoint_pass(Xs: jnp.ndarray, Us: jnp.ndarray, params: Params) -> jnp.ndarray:
+    """Adjoint backward pass with LQR params"""
+    x0, lqr = params.x0, params[1]
+    AT = lqr.A.transpose(0, 2, 1)
+    lambf = lqr.Qf @ Xs[-1] + lqr.qf
+
+    def adjoint_step(lamb, inputs):
+        x, u, aT, Q, q, S = inputs
+        nlamb = aT @ lamb + Q @ x + q + S @ u
+        return nlamb, nlamb
+
+    _, lambs = lax.scan(
+        adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
+    )
+    return jnp.vstack([lambs,lambf[None]])
+
+
+def lqr_forward_pass(gains: Gains, params: Params) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """LQR forward pass using gain state feedback"""
     x0, lqr = params.x0, params.lqr
-    def dynamics(x, params):
+
+    def dynamics(x: jnp.array, params: LQRBackParams):
+        # TODO: add dims.dt to dynamics
         A, B, a, K, k = params
         u = K @ x + k
         nx = A @ x + B @ u + a
         return nx, (nx, u)
 
-    xf, (Xs, Us) = lax.scan(dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k))
-    return Xs, Us
+    xf, (Xs, Us) = lax.scan(
+        dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k)
+    )
+
+    return jnp.vstack([x0[None], Xs]), Us
 
 
-# backward pass
-def backward(
+def lqr_tracking_forward_pass(
+    gains: Gains, params: Params, Xs_star: jnp.ndarray, Us_star: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """LQR forward pass tracking using gain state feedback on state-input deviations"""
+    x0, lqr = params.x0, params.lqr
+    dx0 = x0 - Xs_star[0]
+
+    def dynamics(x: jnp.array, params: LQRTrackParams):
+        A, B, a, K, k, x_star, u_star = params
+        delta_x = x - x_star
+        delta_u = K @ delta_x + k
+        u_hat = u_star + delta_u
+        nx = A @ x + B @ u_hat + a
+        return nx, (nx, u_hat)
+
+    xf, (Xs, Us) = lax.scan(
+        dynamics,
+        init=dx0,
+        xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k, Xs_star[1:], Us_star),
+    )
+
+    return jnp.vstack([x0[None], Xs]), Us
+
+
+def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
+    return dJ.V * alpha**2 + dJ.v * alpha
+
+
+def lqr_backward_pass(
     lqr: LQR,
-    T: int,
-    expected_change: bool=False,
-    verbose: bool=False,
+    dims: ModelDims,
+    expected_change: bool = False,
+    verbose: bool = False,
 ) -> Gains:
-    I_mu = np.eye(lqr.R.shape[-1])*1e-8
-    def riccati_step(carry: Tuple[ValueIter, ValueIter], t: int) -> Tuple[ValueIter, Gains]:
-        symmetrise = lambda x: (x + x.T) / 2
+    AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+
+    def riccati_step(
+        carry: Tuple[CostToGo, CostToGo], t: int
+    ) -> Tuple[CostToGo, Gains]:
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
-        Hxx = symmetrise(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
-        Huu = symmetrise(lqr.R[t] + BT[t] @ V @ lqr.B[t])
+        Hxx = symmetrise_matrix(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
+        Huu = symmetrise_matrix(lqr.R[t] + BT[t] @ V @ lqr.B[t])
         Hxu = lqr.S[t] + AT[t] @ V @ lqr.B[t]
         hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
         hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
 
-        # solve gains
         # With Levenberg-Marquardt regulisation
-        K = -np.linalg.solve(Huu+I_mu, Hxu.T)
-        k = -np.linalg.solve(Huu+I_mu, hu)
+        min_eval = jnp.linalg.eigh(Huu)[0][0]
+        I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
+
+        # solve gains
+        K = -jnp.linalg.solve(Huu + I_mu, Hxu.T)
+        k = -jnp.linalg.solve(Huu + I_mu, hu)
 
         if verbose:
-            print("I_mu", I_mu.shape, "v",v.shape, "V",V.shape)
-            print("Hxx",Hxx.shape, "Huu",Huu.shape, "Hxu",Hxu.shape, "hx",hx.shape, "hu",hu.shape)
-            print("k",k.shape, "K",K.shape)
-        
+            assert I_mu.shape == (dims.m, dims.m)
+            assert v.shape == (dims.n, 1)
+            assert V.shape == (dims.n, dims.n)
+            assert Hxx.shape == (dims.n, dims.n)
+            assert Huu.shape == (dims.m, dims.m)
+            assert Hxu.shape == (dims.n, dims.m)
+            assert hx.shape == (dims.n, 1)
+            assert hu.shape == (dims.m, 1)
+            assert k.shape == (dims.m, 1)
+            assert K.shape == (dims.m, dims.n)
+
         # Find value iteration at current time
-        V_curr = symmetrise(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
+        V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
         v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
-        
+
         # expected change in cost
-        dJ = dJ + 0.5*(k.T @ Huu @ k).squeeze()
+        dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
         dj = dj + (k.T @ hu).squeeze()
 
-        return (ValueIter(V_curr, v_curr), ValueIter(dJ, dj)), Gains(K, k)
+        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), Gains(K, k)
 
     (V_0, dJ), Ks = lax.scan(
-        riccati_step, init=(ValueIter(lqr.Qf, lqr.qf), (ValueIter(0., 0.))), xs=np.arange(T), reverse=True
+        riccati_step,
+        init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
+        xs=jnp.arange(dims.horizon),
+        reverse=True,
     )
+    
+    if verbose:
+        assert not jnp.any(jnp.isnan(Ks.K))
+        assert not jnp.any(jnp.isnan(Ks.k))
+    
     if not expected_change:
         return dJ, Ks
-        
+
     return (dJ, Ks), calc_expected_change(dJ=dJ)
 
-def calc_expected_change(alpha:float, dJ: ValueIter):
-    return dJ.V*alpha**2 + dJ.v*alpha
+
+def kkt(params: Params, Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray):
+    """Define KKT conditions for LQR problem"""
+    AT = params.lqr.A.transpose(0, 2, 1)
+    BT = params.lqr.B.transpose(0, 2, 1)
+    ST = params.lqr.S.transpose(0, 2, 1)
+    dLdXs = (
+        bmm(params.lqr.Q, Xs[:-1])
+        + bmm(params.lqr.S, Us[:])
+        + params.lqr.q
+        + bmm(AT, Lambs[1:])
+        - Lambs[:-1]
+    )
+    dLdXf = bmm(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
+    dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
+    dLdUs = (
+        bmm(ST, Xs[:-1])
+        + bmm(params.lqr.R, Us[:])
+        + params.lqr.r
+        + bmm(BT, Lambs[1:])
+    )
+    dLdLambs = (
+        bmm(params.lqr.A, Xs[:-1])
+        + bmm(params.lqr.B, Us[:])
+        + params.lqr.a
+        - Xs[1:]
+    )
+    dLdLamb0 = params.x0 - Xs[0]
+    dLdLambs = jnp.concatenate([dLdLamb0[None], dLdLambs])
+    return dLdXs, dLdUs, dLdLambs
 
 
-# lqr solve
-def solve_lqr(params: Params, horizon: int):
+def solve_lqr(params: Params, sys_dims: ModelDims):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains = backward(params.lqr, horizon)
+    _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # forward
-    Xs, Us = forward(gains, params)
-    return gains, Xs, Us
+    Xs, Us = lqr_forward_pass(gains, params)
+    # adjoint
+    Lambs = lqr_adjoint_pass(Xs, Us, params)
+    return gains, Xs, Us, Lambs
 
+def solve_lqr_swap_x0(params: Params, sys_dims: ModelDims):
+    "run backward forward sweep to find optimal control"
+    # backward
+    #print("r", new_params.lqr.r[-10:])
+    _, gains = lqr_backward_pass(params.lqr, sys_dims)
+    #print("k", gains.k[-10:])
+    new_params = Params(jnp.zeros_like(params.x0), params.lqr)
+    Xs, Us = lqr_forward_pass(gains, new_params)
+    # adjoint
+    Lambs = lqr_adjoint_pass(Xs, Us, new_params)
+    return gains, Xs, Us, Lambs
 
-def init_params():
-    k_spring=10
-    k_damp=5
-    m=10
-    tps=20
-    A = np.array([[0.,1.], [-k_spring/m, -k_damp/m]])
-    B = np.array([[0.5],[1.]])
-    a = np.array([[0.],[0.]])
-    
-    Qf = np.eye(2)*1.
-    qf = np.array([[0.],[0.]])
-    Q = np.eye(2)*1.
-    q = np.array([[0.],[0.]])
-    R = np.eye(1)*1.
-    r = np.array([0.])
-    S = np.zeros((2,1))
-    
-    lqr=LQR(
-        A=np.tile(A,(tps,1,1)),
-        B = np.tile(B,(tps,1,1)),
-        a = np.tile(a,(tps,1,1)),
-        Q=np.tile(Q,(tps,1,1)),
-        q=np.tile(q,(tps,1,1)),
-        Qf=Qf,
-        qf=qf,
-        R=np.tile(R,(tps,1,1)),
-        r=np.tile(r,(tps,1)),
-        S=np.tile(S,(tps,1,1)),
-        )
+def initialise_lqr(sys_dims: ModelDims, spectral_radius: float = 0.6, 
+                   pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}):
+    """Generate time-invariant LQR parameters"""
+    # # generate random seeds
+    # key = jr.PRNGKey(seed=234)
+    # key, skeys = keygen(key, 3)
+    # # initialise dynamics
+    # span_time=(sys_dims.horizon, 1, 1)
+    # A = initialise_stable_dynamics(next(skeys), sys_dims.n, sys_dims.horizon,radii=spectral_radius)
+    # B = jnp.tile(jr.normal(next(skeys), (sys_dims.n, sys_dims.m)), span_time)
+    # a = jnp.tile(jr.normal(next(skeys), (sys_dims.n, 1)), span_time)
+    # # define cost matrices
+    # Q = pen_weight["Q"] * jnp.tile(jnp.eye(sys_dims.n), span_time)
+    # q = 2*1e-1 * jnp.tile(jnp.ones((sys_dims.n,1)), span_time)
+    # R = pen_weight["R"] * jnp.tile(jnp.eye(sys_dims.m), span_time)
+    # r = 1e-6 * jnp.tile(jnp.ones((sys_dims.m,1)), span_time)
+    # S = pen_weight["S"] * jnp.tile(jnp.ones((sys_dims.n,sys_dims.m)), span_time)
+    # Qf = pen_weight["Q"] * jnp.eye(sys_dims.n)
+    # qf = 2*1e-1 * jnp.ones((sys_dims.n,1))
+    # # construct LQR
+    # lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    lqr = LQR(None, None, None, None, None, None, None, None, None, None)
     return lqr()
 
+
 if __name__ == "__main__":
-    # generate some dynamics
-    x0 = np.array([[2.],[1.]])
-    lqr = init_params()
+    # generate data
+    sys_dims = ModelDims(n=3, m=2, horizon=60, dt=0.1)
+    x0 = jnp.array([[2.0], [1.0], [1.0]])
+    lqr = initialise_lqr(sys_dims=sys_dims, spectral_radius=0.6)
     params = Params(x0, lqr)
-    _, gains = backward(params.lqr, 20)
-    Xs, Us = forward(gains, params)
+    Us = jnp.zeros((sys_dims.horizon,sys_dims.m, 1), dtype=float)
+    Us = Us.at[2].set(1.0)
+
+    # simulate trajectory
+    Xs_sim = simulate_trajectory(dynamics=lin_dyn_step, Us=Us, params=params, dims=sys_dims)
+    # generate adjoints
+    Lambs = lqr_adjoint_pass(Xs_sim, Us, params)
+    # LQR backward pass
+    (dJ, Ks), exp_dJ = lqr_backward_pass(
+        lqr=params.lqr, dims=sys_dims, expected_change=True, verbose=False
+    )
+    # LQR forward update
+    Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
+
+    # LQR solver
+    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, sys_dims)
