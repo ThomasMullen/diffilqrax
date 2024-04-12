@@ -281,12 +281,10 @@ def ilQR_solver(
                 alpha0,
                 expected_dJ=exp_cost_red,
                 beta=0.8,
-                # beta=0.5,
-                # max_iter=8,
                 max_iter=16,
                 tol=1e-1,
                 alpha_min=0.0001,
-                verbose=False,
+                verbose=verbose,
             )
 
         # calc change in dold_cost w.r.t old dold_cost
@@ -316,15 +314,6 @@ def ilQR_solver(
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
 
-# TODO: Rewrite linesearch
-# -------------------------
-# vmap a rollout of alpha gains:
-    # jnp.geomspace(alpha0, alpha0*beta**max_iter, num=max_iter+1)
-# update new Xs and Us with where max Delta J
-# calculate z-value
-# continue iteration if z-value is above threshold
-
-
 def linesearch(
     update: Callable,
     Ks: lqr.Gains,
@@ -340,47 +329,34 @@ def linesearch(
     verbose: bool = False,
 ):
     
-    # breakpoint()
-    # _, cost = update(Ks, Xs_init, Us_init, alpha=alpha_0)
-
-    # initialise carry: Xs, Us, gain_cost, prev_cost alpha, n_iter, carry_on
-    initial_carry = (Xs_init, Us_init, cost_init, cost_init, alpha_0, 0, True)
+    # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
+    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, True)
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
-        Xs, Us, gain_cost, prev_cost, alpha, n_iter, carry_on = carry
-        # breakpoint()
+        Xs, Us, prev_cost, alpha, n_iter, carry_on = carry
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
         # calc expected cost reduction
-
-        # calc z-value
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
-        # breakpoint()
+        # calc z-value
         z = (prev_cost - new_cost) / expected_delta_j
-        # breakpoint()
 
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), prev_cost, new_cost)
-        
-        # Only return new trajs if leads to a strict cost decrease
         # add control flow to carry on or not
-        new_Xs = jnp.where(new_cost < prev_cost, Xs, new_Xs)
-        new_Us = jnp.where(new_cost < prev_cost, Us, new_Us)
-
         above_threshold = z > tol
         carry_on = jnp.logical_and(alpha > alpha_min, above_threshold)
-        # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
-        # new_cost = jnp.where(lax.bitwise_not(carry_on), new_cost, old_cost)
-        # new_Xs = jnp.where(lax.bitwise_not(carry_on), new_Xs, Xs)
-        # new_Us = jnp.where(lax.bitwise_not(carry_on), new_Us, Us)
-        
+        # Only return new trajs if leads to a strict cost decrease
+        new_Xs = jnp.where(above_threshold, new_Xs, Xs)
+        new_Us = jnp.where(above_threshold, new_Us, Us)
+        prev_cost = jnp.where(above_threshold, new_cost, prev_cost)
         # update alpha
         alpha *= beta
 
-        return (new_Xs, new_Us, gain_cost, new_cost, alpha, n_iter + 1, carry_on)
+        return (new_Xs, new_Us, prev_cost, alpha, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
@@ -391,9 +367,12 @@ def linesearch(
         return updated_carry, (updated_carry[2], updated_carry[3])
 
     # scan through with max iterations
-    (Xs_opt, Us_opt, cost_opt, *_), costs = lax.scan(
+    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
+    
+    # if verbose:
+    #     print(f"{its} backtrack-iterations; alpha={alpha:.03f}; Jold={cost_init:.03f}; J={cost_opt:.03f}; alpha_0={alpha_0:.03f}")
 
     return (Xs_opt, Us_opt), cost_opt, costs
 
@@ -437,7 +416,7 @@ if __name__ == "__main__":
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
     (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
-        model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.8, verbose=True, use_linesearch=True
+        model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.3, verbose=True, use_linesearch=True
     )
 
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
