@@ -254,7 +254,6 @@ def ilQR_solver(
     initial_carry = (X_inits, U_inits, c_init, 0, True)
     
     rollout = partial(ilqr_forward_pass, model, params)
-    parallel_rollout = jax.vmap(rollout,in_axes=(None, None, None, 0))
 
     # define body_fun(carry_tuple)
     def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
@@ -344,13 +343,13 @@ def linesearch(
     # breakpoint()
     # _, cost = update(Ks, Xs_init, Us_init, alpha=alpha_0)
 
-    # initialise carry: Xs, Us, cost, alpha, n_iter, carry_on
-    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, True)
+    # initialise carry: Xs, Us, gain_cost, prev_cost alpha, n_iter, carry_on
+    initial_carry = (Xs_init, Us_init, cost_init, cost_init, alpha_0, 0, True)
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
-        Xs, Us, old_cost, alpha, n_iter, carry_on = carry
+        Xs, Us, gain_cost, prev_cost, alpha, n_iter, carry_on = carry
         # breakpoint()
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
@@ -360,18 +359,19 @@ def linesearch(
         # calc z-value
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         # breakpoint()
-        z = (old_cost - new_cost) / expected_delta_j
+        z = (prev_cost - new_cost) / expected_delta_j
         # breakpoint()
 
         # ensure to keep Xs and Us that reduce z-value
-        new_cost = jnp.where(jnp.isnan(new_cost), old_cost, new_cost)
+        new_cost = jnp.where(jnp.isnan(new_cost), prev_cost, new_cost)
+        
         # Only return new trajs if leads to a strict cost decrease
         # add control flow to carry on or not
-        new_Xs = jnp.where(new_cost < old_cost, new_Xs, Xs)
-        new_Us = jnp.where(new_cost < old_cost, new_Us, Us)
-        # new_cost = jnp.where(new_cost < old_cost, new_cost, old_cost)
-        below_threshold = z > tol
-        carry_on = jnp.logical_and(alpha > alpha_min, below_threshold)
+        new_Xs = jnp.where(new_cost < prev_cost, Xs, new_Xs)
+        new_Us = jnp.where(new_cost < prev_cost, Us, new_Us)
+
+        above_threshold = z > tol
+        carry_on = jnp.logical_and(alpha > alpha_min, above_threshold)
         # carry_on = jnp.logical_and(carry_on, n_iter<max_iter)
         # new_cost = jnp.where(lax.bitwise_not(carry_on), new_cost, old_cost)
         # new_Xs = jnp.where(lax.bitwise_not(carry_on), new_Xs, Xs)
@@ -380,7 +380,7 @@ def linesearch(
         # update alpha
         alpha *= beta
 
-        return (new_Xs, new_Us, new_cost, alpha, n_iter + 1, carry_on)
+        return (new_Xs, new_Us, gain_cost, new_cost, alpha, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
