@@ -11,7 +11,10 @@ from .lqr import (
     lqr_tracking_forward_pass,
     lqr_backward_pass,
     solve_lqr,
-    kkt
+    kkt,
+    solve_lqr_swap_x0,
+    symmetrise_tensor,
+    bmm,
 )
 
 from .utils import (
