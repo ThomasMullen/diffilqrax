@@ -103,10 +103,7 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: Params) -> lqr.LQR:
         ModelDims: return the dimensionality of model
     """
     theta = params.theta
-
     tps = jnp.arange(model.dims.horizon)
-    Xs = Xs.squeeze()
-    Us = Us.squeeze()
 
     (Fx, Fu) = vectorise_fun_in_time(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
     (Cx, Cu) = vectorise_fun_in_time(linearise(model.cost))(tps, Xs[:-1], Us, theta)
@@ -120,13 +117,13 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: Params) -> lqr.LQR:
     lqr_params = lqr.LQR(
         A=Fx,
         B=Fu,
-        a=jnp.zeros((model.dims.horizon, model.dims.n, 1)),
+        a=jnp.zeros((model.dims.horizon, model.dims.n)),
         Q=Cxx,
-        q=Cx[:, :, None],
+        q=Cx,
         Qf=fCxx,
-        qf=fCx[:, None],
+        qf=fCx,
         R=Cuu,
-        r=Cu[:, :, None],
+        r=Cu,
         S=Cxu,
     )()
 
@@ -416,12 +413,12 @@ if __name__ == "__main__":
     Wh = jr.normal(next(skeys), (8, 2))
 
     # initialise params
-    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8, 1)))
-    params = Params(x0=jr.normal(next(skeys), (8, 1)), theta=theta)
+    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8,)))
+    params = Params(x0=jr.normal(next(skeys), (8,)), theta=theta)
     model = define_model()
 
     # generate input
-    Us_init = 0.0 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m, 1))
+    Us_init = 0.0 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m,))
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
@@ -434,29 +431,29 @@ if __name__ == "__main__":
 
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
     fig, ax = plt.subplots(2, 2, sharey=True)
-    ax[0, 0].plot(Xs.squeeze())
+    ax[0, 0].plot(Xs)
     ax[0, 0].set(title="X")
-    ax[0, 1].plot(Us.squeeze())
+    ax[0, 1].plot(Us)
     ax[0, 1].set(title="U")
-    ax[1, 0].plot(Xs_stars.squeeze())
-    ax[1, 1].plot(Us_stars.squeeze())
+    ax[1, 0].plot(Xs_stars)
+    ax[1, 1].plot(Us_stars)
     # find kkt conditions
     lqr_tilde = approx_lqr(model=model, Xs=Xs_stars, Us=Us_stars, params=params)
     lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
     dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
     # plot kkt
     fig, ax = plt.subplots(2, 3, figsize=(10, 3), sharey=False)
-    ax[0, 0].plot(Xs_stars.squeeze())
+    ax[0, 0].plot(Xs_stars)
     ax[0, 0].set(title="X")
-    ax[0, 1].plot(Us_stars.squeeze())
+    ax[0, 1].plot(Us_stars)
     ax[0, 1].set(title="U")
-    ax[0, 2].plot(Lambs_stars.squeeze())
+    ax[0, 2].plot(Lambs_stars)
     ax[0, 2].set(title="λ")
-    ax[1, 0].plot(dLdXs.squeeze())
+    ax[1, 0].plot(dLdXs)
     ax[1, 0].set(title="dLdX")
-    ax[1, 1].plot(dLdUs.squeeze())
+    ax[1, 1].plot(dLdUs)
     ax[1, 1].set(title="dLdUs")
-    ax[1, 2].plot(dLdLambs.squeeze())
+    ax[1, 2].plot(dLdLambs)
     ax[1, 2].set(title="dLdλ")
     fig.tight_layout()
 
