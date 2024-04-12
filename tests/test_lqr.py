@@ -16,7 +16,7 @@ from src import quad_solve, exact_solve
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
-from src import (
+from src.lqr import (
     Gains,
     CostToGo,
     LQR,
@@ -32,7 +32,7 @@ from src import (
     kkt,
 )
 
-from src import keygen, initialise_stable_dynamics
+from src.utils import keygen, initialise_stable_dynamics
 
 is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
 
