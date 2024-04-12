@@ -7,7 +7,7 @@ import jaxopt
 from jax.scipy.linalg import block_diag
 from jax.numpy.linalg import matrix_power
 
-from src import ModelDims, Params
+from src.lqr import ModelDims, Params
 
 jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 
@@ -22,14 +22,14 @@ F0 = np.block([[np.linalg.matrix_power(A, j - i) for j in range(T)] for i in ran
 
 def quad_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
     t_span_mpartial = lambda arr: jnp.tile(arr, (dims.horizon,1,1))
-    t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,1))
+    t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,))
 
-    A = params.lqr.A[0].astype(jnp.float64)
-    B = params.lqr.B[0].astype(jnp.float64)
-    Q = params.lqr.Q[0].astype(jnp.float64)
-    R = params.lqr.R[0].astype(jnp.float64)
-    q = params.lqr.q[0].astype(jnp.float64)
-    r = params.lqr.r[0].astype(jnp.float64)
+    A = params.lqr.A[0]
+    B = params.lqr.B[0]
+    Q = params.lqr.Q[0]
+    R = params.lqr.R[0]
+    q = params.lqr.q[0]
+    r = params.lqr.r[0]
     #F0 = np.block([[np.linalg.matrix_power(A, i-j) if (j <= i) else np.zeros((n, n)) for j in range(T)] for i in range(T)])
     F0 = block_diag(*[matrix_power(A, j) for j in range(dims.horizon)])
     # F = jnp.block([[matrix_power(A, i-j-1) @ B if j < i else jnp.zeros((dims.n, dims.m)) for j in range(dims.horizon)] for i in range(dims.horizon)])
@@ -49,26 +49,26 @@ def quad_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
     # big_x0 = np.concatenate([x0 for t in range(dims.horizon)])
 
     big_G = 2*(F.T @ big_Q @ F + big_R)
-    big_g =  F.T@big_q + (F.T @ big_Q @ F0 @ big_x0).squeeze()[...,None] + (big_x0.T @ F0.T @ big_Q.T @ F).squeeze()[...,None] + big_r.squeeze()[...,None]
+    big_g =  F.T@big_q + (F.T @ big_Q @ F0 @ big_x0) + (big_x0.T @ F0.T @ big_Q.T @ F) + big_r
     def matvec(x):
         return big_G @ x
     us_star = jaxopt.linear_solve.solve_cg(matvec, -big_g)
     xs_star = F0 @ big_x0 + F @ us_star
     #c = 0.5*us_star[...,None]^T@big_R@us_star[...,None] + big_r[...,None]^T@us_star[...,None] + 0.5*xs_star[...,None]^T@big_Q@xs_star[...,None] + big_q[...,None]^T@xs_star[...,None]
-    u = np.reshape(us_star, (dims.horizon, dims.m, 1))[:-1]
-    x = np.reshape(xs_star, (dims.horizon, dims.n, 1))
+    u = np.reshape(us_star, (dims.horizon, dims.m,))[:-1]
+    x = np.reshape(xs_star, (dims.horizon, dims.n,))
     return x, u
      
 def exact_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
     t_span_mpartial = lambda arr: jnp.tile(arr, (dims.horizon,1,1))
-    t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,1))
+    t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,))
 
-    A = params.lqr.A[0].astype(jnp.float64)
-    B = params.lqr.B[0].astype(jnp.float64)
-    Q = params.lqr.Q[0].astype(jnp.float64)
-    R = params.lqr.R[0].astype(jnp.float64)
-    q = params.lqr.q[0].astype(jnp.float64)
-    r = params.lqr.r[0].astype(jnp.float64)
+    A = params.lqr.A[0]
+    B = params.lqr.B[0]
+    Q = params.lqr.Q[0]
+    R = params.lqr.R[0]
+    q = params.lqr.q[0]
+    r = params.lqr.r[0]
     #F0 = np.block([[np.linalg.matrix_power(A, i-j) if j <= i else np.zeros((n, n)) for j in range(T)] for i in range(T)])
     F0 = block_diag(*[matrix_power(A, j) for j in range(dims.horizon)])
     F = np.block([[np.linalg.matrix_power(A, i-j-1) @ B if j < i else np.zeros((dims.n, dims.m)) for j in range(dims.horizon)] for i in range(dims.horizon)])
@@ -84,10 +84,10 @@ def exact_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
 
     big_G = 2*(F.T @ big_Q @ F + big_R)
     big_G = 0.5*(big_G + big_G.T)
-    big_g =  F.T@big_q + (F.T @ big_Q @ F0 @ big_x0).squeeze()[...,None] + (big_x0.T @ F0.T @ big_Q.T @ F).squeeze()[...,None] + big_r.squeeze()[...,None]
+    big_g =  F.T@big_q + (F.T @ big_Q @ F0 @ big_x0) + (big_x0.T @ F0.T @ big_Q.T @ F) + big_r
     us_star = np.linalg.solve(big_G, -big_g)
     xs_star = F0 @ big_x0 + F @ us_star
     #c = 0.5*us_star[...,None]^T@big_R@us_star[...,None] + big_r[...,None]^T@us_star[...,None] + 0.5*xs_star[...,None]^T@big_Q@xs_star[...,None] + big_q[...,None]^T@xs_star[...,None]
-    u = np.reshape(us_star, (dims.horizon, dims.m, 1))[:-1]
-    x = np.reshape(xs_star, (dims.horizon, dims.n, 1))
+    u = np.reshape(us_star, (dims.horizon, dims.m,))[:-1]
+    x = np.reshape(xs_star, (dims.horizon, dims.n,))
     return x, u

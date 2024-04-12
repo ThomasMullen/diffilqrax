@@ -16,7 +16,7 @@ from src.diff_lqr import dlqr
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
-from src import (
+from src.lqr import (
     Gains,
     CostToGo,
     LQR,
@@ -32,7 +32,7 @@ from src import (
     kkt,
 )
 
-from src import keygen, initialise_stable_dynamics
+from src.utils import keygen, initialise_stable_dynamics
 
 is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
 printing_on = True
@@ -43,18 +43,19 @@ def setup_lqr_time_varying(dims: chex.Dimensions,
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 3)
     # initialise dynamics
-    span_time=dims["TXX"]
-    A = initialise_stable_dynamics(next(skeys), dims['N'][0], dims['T'][0],radii=0.6)
-    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time)
-    a = jnp.tile(jr.normal(next(skeys), dims['NX']), span_time)
+    span_time_m=dims["TXX"]
+    span_time_v=dims["TX"]
+    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.6)
+    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
+    a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     # define cost matrices
-    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time)
-    q = 2*1e-1 * jnp.tile(jnp.ones(dims['NX']), span_time)
-    R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time)
-    r = 1e-6 * jnp.tile(jnp.ones(dims['MX']), span_time)
-    S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time)
+    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time_m)
+    q = 2*1e-1 * jnp.tile(jnp.ones(dims['N']), span_time_v)
+    R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time_m)
+    r = 1e-6 * jnp.tile(jnp.ones(dims['M']), span_time_v)
+    S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time_m)
     Qf = pen_weight["Q"] * jnp.eye(dims['N'][0])
-    qf = 2*1e-1 * jnp.ones(dims['NX'])
+    qf = 2*1e-1 * jnp.ones(dims['N'])
     # construct LQR
     lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
     return lqr()
@@ -64,19 +65,20 @@ def setup_lqr(dims: chex.Dimensions,
     dt = 0.1
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 3)
-    span_time=dims["TXX"]
-    A = initialise_stable_dynamics(next(skeys), dims['N'][0], dims['T'][0],radii=0.6) #jnp.float64(jnp.tile(jnp.array([[1-0.5*dt,0],[0.2*dt,1-0.5*dt]]), dims["TXX"]))
-    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time)
-    a = jnp.tile(jr.normal(next(skeys), dims['NX']), span_time)
+    span_time_m=dims["TXX"]
+    span_time_v=dims["TX"]
+    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.6) #jnp.float64(jnp.tile(jnp.array([[1-0.5*dt,0],[0.2*dt,1-0.5*dt]]), dims["TXX"]))
+    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
+    a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     #B = jnp.tile(jnp.array([[1.,0],[0,1.]]), dims["TXX"])#*dt
     #a = jnp.zeros(dims["TNX"])
     Qf = 1. *jnp.eye(dims["N"][0])
-    qf = 1.   * jnp.ones(dims["NX"])
-    Q = 1. * jnp.tile(jnp.eye(dims["N"][0]), dims["TXX"])
-    q = 0. * jnp.tile(jnp.ones(dims["NX"]), dims["TXX"])
-    R = 1. * jnp.tile(jnp.eye(dims["M"][0]), dims["TXX"])
-    r = 0. * jnp.tile(jnp.ones(dims["MX"]), dims["TXX"])
-    S = 0.0 * jnp.tile(jnp.ones(dims["NM"]), dims["TXX"])
+    qf = 1.   * jnp.ones(dims["N"])
+    Q = 1. * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
+    q = 0. * jnp.tile(jnp.ones(dims["N"]), span_time_v)
+    R = 1. * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
+    r = 0. * jnp.tile(jnp.ones(dims["M"]), span_time_v)
+    S = 0.0 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
     return LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
 
 class TestLQR(unittest.TestCase):
@@ -84,10 +86,10 @@ class TestLQR(unittest.TestCase):
 
     def setUp(self):
         self.dims = chex.Dimensions(T=60, N=2, M=2, X=1)
-        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         self.lqr = setup_lqr(self.dims)
-        self.x0 = jnp.array([[2.0], [1.0]])
-        Us = jnp.zeros(self.dims["TMX"], dtype=float)
+        self.x0 = jnp.array([2.0, 1.0])
+        Us = jnp.zeros(self.dims["TM"], dtype=float)
         Us = Us.at[2].set(1.0)
         self.Us = Us
         self.params = Params(self.x0, self.lqr)
@@ -96,7 +98,7 @@ class TestLQR(unittest.TestCase):
     def test_dlqr(self):
         @jax.jit
         def loss(p):
-            Us_lqr = dlqr(ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1), p, jnp.array([[2.0], [1.0]]))
+            Us_lqr = dlqr(ModelDims(*self.dims["NMT"], dt=0.1), p, jnp.array([2.0, 1.0]))
             return jnp.linalg.norm(p.lqr.A) + jnp.linalg.norm(Us_lqr)
         val, g = jax.value_and_grad(loss)(self.params)
         chex.assert_trees_all_equal_shapes_and_dtypes(g, self.params)
@@ -136,10 +138,10 @@ class TestDLQR(unittest.TestCase):
     def setUp(self):
         """Instantiate dummy LQR"""
         self.dims = chex.Dimensions(T=15, N=2, M=2, X=1)
-        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         self.lqr = setup_lqr(self.dims)
-        self.x0 = jnp.array([[100.0], [100.0]])
-        Us = jnp.zeros(self.dims["TMX"], dtype=float)
+        self.x0 = jnp.array([100.0, 100.0])
+        Us = jnp.zeros(self.dims["TM"], dtype=float)
         Us = Us.at[2].set(1.0)
         self.Us = Us
         self.params = Params(self.x0, self.lqr)
@@ -171,7 +173,7 @@ class TestDLQR(unittest.TestCase):
             gains, Xs, Us, Lambs = solve_lqr(replace_params(prms), self.sys_dims)
             return jnp.linalg.norm(Us)**2 
 
-        prms = Prms(x0 = jnp.array([[100.0], [100.0]]), S = self.params.lqr.S, A = self.params.lqr.A, R = self.params.lqr.R, Q = self.params.lqr.Q, q = 10*jnp.ones(self.dims["TNX"]), r = jnp.ones(self.dims["TNX"]))
+        prms = Prms(x0 = jnp.array([100.0, 100.0]), S = self.params.lqr.S, A = self.params.lqr.A, R = self.params.lqr.R, Q = self.params.lqr.Q, q = 10*jnp.ones(self.dims["TNX"]), r = jnp.ones(self.dims["TNX"]))
         lqr_val, lqr_g = jax.value_and_grad(loss)(prms)
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
