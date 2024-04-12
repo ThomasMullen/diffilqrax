@@ -42,18 +42,19 @@ def setup_lqr(dims: chex.Dimensions,
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 3)
     # initialise dynamics
-    span_time=dims["TXX"]
+    span_time_m=dims["TXX"]
+    span_time_v=dims["TX"]
     A = initialise_stable_dynamics(next(skeys), dims['N'][0], dims['T'][0],radii=0.6)
-    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time)
-    a = jnp.tile(jr.normal(next(skeys), dims['NX']), span_time)
+    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
+    a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     # define cost matrices
-    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time)
-    q = 2*1e-1 * jnp.tile(jnp.ones(dims['NX']), span_time)
-    R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time)
-    r = 1e-6 * jnp.tile(jnp.ones(dims['MX']), span_time)
-    S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time)
+    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time_m)
+    q = 2*1e-1 * jnp.tile(jnp.ones(dims['N']), span_time_v)
+    R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time_m)
+    r = 1e-6 * jnp.tile(jnp.ones(dims['M']), span_time_v)
+    S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time_m)
     Qf = pen_weight["Q"] * jnp.eye(dims['N'][0])
-    qf = 2*1e-1 * jnp.ones(dims['NX'])
+    qf = 2*1e-1 * jnp.ones(dims['N'])
     # construct LQR
     lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
     return lqr()
@@ -72,8 +73,8 @@ class TestLQR(unittest.TestCase):
         self.lqr = setup_lqr(self.dims)
 
         print("\nMake initial state x0 and input U")
-        self.x0 = jnp.array([[2.0], [1.0], [1.0]])
-        Us = jnp.zeros(self.dims["TMX"], dtype=float)
+        self.x0 = jnp.array([2.0, 1.0, 1.0])
+        Us = jnp.zeros(self.dims["TM"], dtype=float)
         Us = Us.at[2].set(1.0)
         self.Us = Us
 
@@ -123,7 +124,7 @@ class TestLQR(unittest.TestCase):
         params = Params(self.x0, self.lqr)
         Xs = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
         chex.assert_type(Xs, float)
-        chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["N"])
 
     def test_lqr_adjoint_pass(self):
         print("Running test_lqr_adjoint_pass")
@@ -131,7 +132,7 @@ class TestLQR(unittest.TestCase):
         Xs_sim = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
         Lambs = lqr_adjoint_pass(Xs_sim, self.Us, params)
         chex.assert_type(Lambs, float)
-        chex.assert_shape(Lambs, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_shape(Lambs, (self.dims["T"][0] + 1,) + self.dims["N"])
 
     def test_lqr_backward_pass(self):
         params = Params(self.x0, self.lqr)
@@ -141,7 +142,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(Ks.K, float)
         chex.assert_shape(Ks.K, self.dims["TMN"])
         chex.assert_type(Ks.k, float)
-        chex.assert_shape(Ks.k, self.dims["TMX"])
+        chex.assert_shape(Ks.k, self.dims["TM"])
         chex.assert_type(dJ, float)
         chex.assert_type(exp_dJ, float)
 
@@ -152,9 +153,9 @@ class TestLQR(unittest.TestCase):
         )
         Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
         chex.assert_type(Xs_lqr, float)
-        chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         chex.assert_type(Us_lqr, float)
-        chex.assert_shape(Us_lqr, self.dims["TMX"])
+        chex.assert_shape(Us_lqr, self.dims["TM"])
 
     def test_solve_lqr(self):
         params = Params(self.x0, self.lqr)
@@ -162,13 +163,13 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(gains_lqr.K, float)
         chex.assert_shape(gains_lqr.K, self.dims["TMN"])
         chex.assert_type(gains_lqr.k, float)
-        chex.assert_shape(gains_lqr.k, self.dims["TMX"])
+        chex.assert_shape(gains_lqr.k, self.dims["TM"])
         chex.assert_type(Xs_lqr, float)
-        chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         chex.assert_type(Us_lqr, float)
-        chex.assert_shape(Us_lqr, self.dims["TMX"])
+        chex.assert_shape(Us_lqr, self.dims["TM"])
         chex.assert_type(Lambs_lqr, float)
-        chex.assert_shape(Lambs_lqr, (self.dims["T"][0] + 1,) + self.dims["NX"])
+        chex.assert_shape(Lambs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         # verify output jax arrays
         assert is_jax_Array(gains_lqr.K)
         assert is_jax_Array(gains_lqr.k)
@@ -182,9 +183,9 @@ class TestLQR(unittest.TestCase):
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,3,figsize=(10,3))
-        ax[0].plot(Xs_lqr.squeeze())
-        ax[1].plot(Us_lqr.squeeze())
-        ax[2].plot(Lambs_lqr.squeeze())
+        ax[0].plot(Xs_lqr)
+        ax[1].plot(Us_lqr)
+        ax[2].plot(Lambs_lqr)
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/lqr_solution_TestLQR.png")
         close()
@@ -200,17 +201,17 @@ class TestLQR(unittest.TestCase):
         dLdXs, dLdUs, dLdLambs = kkt(params, Xs_dir, Us_dir, Lambs_dir)
         # Plot the KKT residuals
         fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
-        ax[0,0].plot(Xs_dir.squeeze())
+        ax[0,0].plot(Xs_dir)
         ax[0,0].set(title="X")
-        ax[0,1].plot(Us_dir.squeeze())
+        ax[0,1].plot(Us_dir)
         ax[0,1].set(title="U")
-        ax[0,2].plot(Lambs_dir.squeeze())
+        ax[0,2].plot(Lambs_dir)
         ax[0,2].set(title="λ")
-        ax[1,0].plot(dLdXs.squeeze())
+        ax[1,0].plot(dLdXs)
         ax[1,0].set(title="dLdX")
-        ax[1,1].plot(dLdUs.squeeze())
+        ax[1,1].plot(dLdUs)
         ax[1,1].set(title="dLdUs")
-        ax[1,2].plot(dLdLambs.squeeze())
+        ax[1,2].plot(dLdLambs)
         ax[1,2].set(title="dLdλ")
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/lqr_kkt_TestLQR.png")
@@ -245,19 +246,19 @@ class TestLQRSolutionExact(unittest.TestCase):
 
         A = jnp.float64(jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"]))
         B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
-        a = jnp.zeros(self.dims["TNX"])
+        a = jnp.zeros(self.dims["TN"])
         Qf = 0. *jnp.eye(self.dims["N"][0])
-        qf = 0.   * jnp.ones(self.dims["NX"])
+        qf = 0.   * jnp.ones(self.dims["N"])
         Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
-        q = 0. * jnp.tile(jnp.ones(self.dims["NX"]), self.dims["TXX"])
+        q = 0. * jnp.tile(jnp.ones(self.dims["N"]), self.dims["TX"])
         R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
-        r = 0. * jnp.tile(jnp.ones(self.dims["MX"]), self.dims["TXX"])
+        r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
         self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
 
         print("\nMake initial state x0 and input U")
-        self.x0 = jnp.array([[0.3], [0.]])
-        Us = jnp.zeros(self.dims["TMX"]) * 1.0
+        self.x0 = jnp.array([0.3, 0.])
+        Us = jnp.zeros(self.dims["TM"]) * 1.0
         Us = Us.at[2].set(1.0)
         self.Us = Us
         self.params = Params(self.x0, self.lqr)
