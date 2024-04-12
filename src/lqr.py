@@ -5,6 +5,7 @@ from jax import Array
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
+from jax.lax import batch_matmul as bmm
 import jax.random as jr
 from functools import partial
 
@@ -147,7 +148,7 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: Params) -> Array:
     """
     x0, lqr = params.x0, params[1]
     AT = lqr.A.transpose(0, 2, 1)
-    lambf = lqr.Qf @ Xs[-1]
+    lambf = lqr.Qf @ Xs[-1] + lqr.qf
 
     def adjoint_step(lamb, inputs):
         x, u, aT, Q, q, S = inputs
@@ -219,7 +220,7 @@ def lqr_tracking_forward_pass(
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
-    return dJ.V * alpha**2 + dJ.v * alpha
+    return - (dJ.V * alpha**2 + dJ.v * alpha)
 
 
 def lqr_backward_pass(
@@ -305,23 +306,23 @@ def kkt(params: Params, Xs: Array, Us: Array, Lambs: Array):
     BT = params.lqr.B.transpose(0, 2, 1)
     ST = params.lqr.S.transpose(0, 2, 1)
     dLdXs = (
-        jnp.matmul(params.lqr.Q, Xs[:-1])
-        + jnp.matmul(params.lqr.S, Us[:])
+        bmm(params.lqr.Q, Xs[:-1])
+        + bmm(params.lqr.S, Us[:])
         + params.lqr.q
-        + jnp.matmul(AT, Lambs[1:])
+        + bmm(AT, Lambs[1:])
         - Lambs[:-1]
     )
-    dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
+    dLdXf = bmm(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
     dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
     dLdUs = (
-        jnp.matmul(ST, Xs[:-1])
-        + jnp.matmul(params.lqr.R, Us[:])
+        bmm(ST, Xs[:-1])
+        + bmm(params.lqr.R, Us[:])
         + params.lqr.r
-        + jnp.matmul(BT, Lambs[1:])
+        + bmm(BT, Lambs[1:])
     )
     dLdLambs = (
-        jnp.matmul(params.lqr.A, Xs[:-1])
-        + jnp.matmul(params.lqr.B, Us[:])
+        bmm(params.lqr.A, Xs[:-1])
+        + bmm(params.lqr.B, Us[:])
         + params.lqr.a
         - Xs[1:]
     )
