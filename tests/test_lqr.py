@@ -11,7 +11,7 @@ from os import getcwd
 from pathlib import Path
 
 import numpy as onp
-from src import quad_solve, exact_solve
+from src.exact import quad_solve, exact_solve
 
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision

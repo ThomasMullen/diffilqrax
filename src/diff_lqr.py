@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from typing import Tuple
 from jax import Array, custom_vjp
-from .lqr import (
+from src.lqr import (
     LQR,
     Params,
     ModelDims,
