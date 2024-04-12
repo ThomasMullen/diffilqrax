@@ -83,7 +83,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
     F_bar = jnp.einsum('ij,ik->ijk', a_bar[1:], tau_star[:-1]) + jnp.einsum('ij,ik->ijk', Lambs[1:], c_bar[:-1])
     C_bar = (symmetrise_tensor(jnp.einsum('ij,ik->ijk', c_bar, tau_star))) #factor of 2 included in symmetrization
     Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
-    S_bar = 0.5 * (C_bar[:, :n, n:])
+    S_bar = 2*C_bar[:, :n, n:]
     A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
     LQR_bar = LQR(
         A=A_bar,
@@ -97,7 +97,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
         r=r_bar[:-1],
         S=S_bar[:-1],
     )
-    x0_bar = jnp.zeros_like(params.x0)
+    x0_bar = jnp.zeros_like(params.x0) #Lambs[0]#
     return Params(x0=x0_bar, lqr=LQR_bar), None
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
