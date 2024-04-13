@@ -5,8 +5,7 @@ from jax.typing import ArrayLike
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-import numpy as onp
-from functools import partial, reduce
+from functools import partial
 import jaxopt
 import src.lqr as lqr
 from src.utils import keygen, initialise_stable_dynamics
@@ -18,7 +17,6 @@ jax.config.update("jax_enable_x64", True)  # double precision
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
 
-foldl = lambda func, acc, xs: reduce(func, xs, acc)
 
 class System(NamedTuple):
     """iLQR System
@@ -291,20 +289,17 @@ def ilQR_solver(
 
         # determine cond: Δold_cost > threshold
         carry_on = jnp.abs(z) > tol
-        # NOTE: might have to add max_iter in the carry_on cond
 
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
         """if cond false return existing carry else run another iteration of lqr_iter"""
-        # updated_carry = lax.cond(carry_tuple[-1], lqr_iter, lambda x: x, carry_tuple)
-        updated_carry = lqr_iter(carry_tuple) if carry_tuple[-1] else carry_tuple
+        updated_carry = lax.cond(carry_tuple[-1], lqr_iter, lambda x: x, carry_tuple)
         return updated_carry, updated_carry[2]
 
     # scan through with max iterations
-    # (Xs_stars, Us_stars, total_cost, n_iters, _), costs = lax.scan(
-    (Xs_stars, Us_stars, total_cost, n_iters, _), costs = foldl(
-        loop_fun, initial_carry, onp.arange(max_iter),
+    (Xs_stars, Us_stars, total_cost, n_iters, _), costs = lax.scan(
+        loop_fun, initial_carry, None, length=max_iter
     )
     if verbose:
         print(f"Converged in {n_iters}/{max_iter} iterations")
@@ -363,21 +358,18 @@ def linesearch(
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
         # assign function given carry_on condition
-        updated_carry = backtrack_iter(carry_tuple) if carry_tuple[-1] else carry_tuple
-        
-        # updated_carry = lax.cond(
-        #     carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple
-        # )
+        updated_carry = lax.cond(
+            carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple
+        )
         return updated_carry, (updated_carry[2], updated_carry[3])
 
     # scan through with max iterations
-    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.foldl(
-    # (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.scan(
-        loop_fun, initial_carry, onp.arange(max_iter)
+    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.scan(
+        loop_fun, initial_carry, None, length=max_iter
     )
     
-    if verbose:
-        print(f"{its} backtrack-iterations; alpha={alpha:.03f}; Jold={cost_init:.03f}; J={cost_opt:.03f}; alpha_0={alpha_0:.03f}")
+    # if verbose:
+    #     print(f"{its} backtrack-iterations; alpha={alpha:.03f}; Jold={cost_init:.03f}; J={cost_opt:.03f}; alpha_0={alpha_0:.03f}")
 
     return (Xs_opt, Us_opt), cost_opt, costs
 
