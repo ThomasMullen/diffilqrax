@@ -248,15 +248,16 @@ def ilQR_solver(
     _, c_init = ilqr_simulate(model, U_inits, params)
 
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
-    initial_carry = (X_inits, U_inits, c_init, 0, True)
+    iterations_data_null = {"alpha": 0., "z": 0., "exp_Dj": 0.,"it":0, "J": 0., "Jold": 0.}
+    initial_carry = (X_inits, U_inits, c_init, 0, iterations_data_null, True)
     
     rollout = partial(ilqr_forward_pass, model, params)
 
     # define body_fun(carry_tuple)
-    def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
+    def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, dict, bool]):
         """lqr iteration update function"""
         # unravel carry
-        old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
+        old_Xs, old_Us, old_cost, n_iter, iterations_data, carry_on = carry_tuple
         # approximate dyn and loss to LQR with initial {u} and {x}
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dold_cost
@@ -267,9 +268,10 @@ def ilQR_solver(
         # no line search: α = 1.0
         if not use_linesearch:
             (new_Xs, new_Us), new_total_cost = rollout(gains, old_Xs, old_Us, alpha=alpha0)
+            iterations_data={"alpha": 0., "z": 0., "exp_Dj": 0.,"it":0, "J": 0., "Jold": 0.}
         # dynamics line search:
         else:
-            (new_Xs, new_Us), new_total_cost, cost_iterations = linesearch(
+            (new_Xs, new_Us), new_total_cost, iterations_data = linesearch(
                 rollout,
                 gains,
                 old_Xs,
@@ -290,15 +292,15 @@ def ilQR_solver(
         # determine cond: Δold_cost > threshold
         carry_on = jnp.abs(z) > tol
 
-        return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
+        return (new_Xs, new_Us, new_total_cost, n_iter + 1, iterations_data, carry_on)
 
-    def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
+    def loop_fun(carry_tuple: Tuple[Array, Array, float, int, dict, bool], _):
         """if cond false return existing carry else run another iteration of lqr_iter"""
         updated_carry = lax.cond(carry_tuple[-1], lqr_iter, lambda x: x, carry_tuple)
-        return updated_carry, updated_carry[2]
+        return updated_carry, (updated_carry[2], updated_carry[-2])
 
     # scan through with max iterations
-    (Xs_stars, Us_stars, total_cost, n_iters, _), costs = lax.scan(
+    (Xs_stars, Us_stars, total_cost, n_iters, _), (costs, meta_data) = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
     if verbose:
@@ -308,7 +310,7 @@ def ilQR_solver(
     Lambs_stars = lqr.lqr_adjoint_pass(
         Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
     )
-    return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
+    return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs, meta_data
 
 
 def linesearch(
@@ -326,13 +328,14 @@ def linesearch(
     verbose: bool = False,
 ):
     
-    # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
-    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, True)
+    meta_data_null = {"alpha": 0., "z": 0., "exp_Dj": 0.,"it":0, "J": 0., "Jold": 0.}
+    # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, DEBUG, carry_on
+    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, meta_data_null, True)
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
-        Xs, Us, prev_cost, alpha, n_iter, carry_on = carry
+        Xs, Us, prev_cost, alpha, n_iter, meta_data, carry_on = carry
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
@@ -350,28 +353,32 @@ def linesearch(
         new_Xs = jnp.where(above_threshold, new_Xs, Xs)
         new_Us = jnp.where(above_threshold, new_Us, Us)
         prev_cost = jnp.where(above_threshold, new_cost, prev_cost)
+        
+        # DEBUG:
+        meta_data = {"alpha": alpha, "z": z, "exp_Dj": expected_delta_j,"it":n_iter, "J": new_cost, "Jold": prev_cost}
         # update alpha
         alpha *= beta
 
-        return (new_Xs, new_Us, prev_cost, alpha, n_iter + 1, carry_on)
+        return (new_Xs, new_Us, prev_cost, alpha, n_iter + 1, meta_data, carry_on)
 
-    def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
+    def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, dict, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
         # assign function given carry_on condition
         updated_carry = lax.cond(
             carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple
         )
-        return updated_carry, (updated_carry[2], updated_carry[3])
+        # return updated_carry, (updated_carry[2], updated_carry[3])
+        return updated_carry, (updated_carry[-2])
 
     # scan through with max iterations
-    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.scan(
+    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), meta_data = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
     
     # if verbose:
     #     print(f"{its} backtrack-iterations; alpha={alpha:.03f}; Jold={cost_init:.03f}; J={cost_opt:.03f}; alpha_0={alpha_0:.03f}")
 
-    return (Xs_opt, Us_opt), cost_opt, costs
+    return (Xs_opt, Us_opt), cost_opt, meta_data
 
 
 def define_model():
@@ -412,7 +419,7 @@ if __name__ == "__main__":
     # test approx lqr with U and X trajectorys
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
-    (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
+    (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log, meta_data_log = ilQR_solver(
         model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.3, verbose=True, use_linesearch=True
     )
 
