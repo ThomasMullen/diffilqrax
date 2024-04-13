@@ -49,7 +49,7 @@ def fwd_dlqr(dims: ModelDims, params: Params, tau_guess: Array):
                         R=lqr.R, r=lqr.r - bmm(lqr.R, Us_star) - bmm(jnp.transpose(lqr.S, axes = (0,2,1)), Xs_star[:-1]), S=lqr.S)
     new_params = Params(params.x0, new_lqr)
     _gains, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params,  dims) 
-    new_sol = gains, new_Xs_star, new_Us_star, Lambs
+    new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
     return tau_star, (new_params, sol) #check whether params or new_params
 
 def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
@@ -88,7 +88,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
     LQR_bar = LQR(
         A=A_bar,
         B=B_bar,
-        a=a_bar[:-1],
+        a=a_bar[1:],
         Q=Q_bar[:-1],
         q=q_bar[:-1],
         Qf=Q_bar[-1],
@@ -97,7 +97,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> Params:
         r=r_bar[:-1],
         S=S_bar[:-1],
     )
-    x0_bar = jnp.zeros_like(params.x0) #Lambs[0]#
+    x0_bar = a_bar[0]#Lambs[0] #jnp.zeros_like(params.x0) #Lambs[0]#
     return Params(x0=x0_bar, lqr=LQR_bar), None
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
