@@ -280,7 +280,7 @@ def ilQR_solver(
                 expected_dJ=exp_cost_red,
                 beta=0.8,
                 max_iter=16,
-                tol=1e-1,
+                tol=1e0,
                 alpha_min=0.0001,
                 verbose=verbose,
             )
