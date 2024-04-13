@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from jax.debug import breakpoint
 
 jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update('jax_disable_jit', True) # uncomment for debugging purposes
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
 
@@ -327,12 +328,12 @@ def linesearch(
 ):
     
     # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
-    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, True)
+    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, 10., 0., True)
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
-        Xs, Us, prev_cost, alpha, n_iter, carry_on = carry
+        Xs, Us, prev_cost, alpha, n_iter, _, _, carry_on = carry
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
@@ -353,7 +354,7 @@ def linesearch(
         # update alpha
         alpha *= beta
 
-        return (new_Xs, new_Us, prev_cost, alpha, n_iter + 1, carry_on)
+        return (new_Xs, new_Us, prev_cost, alpha, n_iter + 1, z, expected_delta_j, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
@@ -364,12 +365,12 @@ def linesearch(
         return updated_carry, (updated_carry[2], updated_carry[3])
 
     # scan through with max iterations
-    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.scan(
+    (Xs_opt, Us_opt, cost_opt, alpha, its, z, exp_dj, *_), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
     
-    # if verbose:
-    #     print(f"{its} backtrack-iterations; alpha={alpha:.03f}; Jold={cost_init:.03f}; J={cost_opt:.03f}; alpha_0={alpha_0:.03f}")
+    if verbose:
+        jax.debug.print(f"{its-1} ls_iters:\t alpha={alpha/beta:.03f}\t Jold={cost_init:.03f}\t J={cost_opt:.03f}\t DJold={cost_init-cost_opt:.03f}\t exp_DJ={exp_dj:.03f}\t z={z:.03f}\t alpha_0={alpha_0:.03f}")
 
     return (Xs_opt, Us_opt), cost_opt, costs
 
