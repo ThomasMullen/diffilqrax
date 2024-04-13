@@ -261,7 +261,7 @@ def ilQR_solver(
         # approximate dyn and loss to LQR with initial {u} and {x}
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dold_cost
-        exp_cost_red, gains = lqr.lqr_backward_pass(
+        (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
@@ -329,7 +329,7 @@ def linesearch(
     
     # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
     initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, 10., 0., True)
-
+    jax.debug.print(f"Initial LQR cost: {cost_init:.03f} with alpha: {alpha_0:.03f}")
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
@@ -341,16 +341,19 @@ def linesearch(
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         # calc z-value
         z = (prev_cost - new_cost) / expected_delta_j
+        
+        if verbose:
+            jax.debug.print(f"it:{n_iter:02b} exp: {expected_dJ.V:.03f}, {expected_dJ.v:.03f} a:{alpha:.03f} z:{z:.03f} oJ:{cost_init:.03f} pJ:{prev_cost:.03f} nJ:{new_cost:.03f} DJ:{prev_cost-new_cost:.03f} exp_DJ:{expected_delta_j:.03f}")
 
         # ensure to keep Xs and Us that reduce z-value
-        new_cost = jnp.where(jnp.isnan(new_cost), prev_cost, new_cost)
+        new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         # add control flow to carry on or not
         above_threshold = z > tol
         carry_on = jnp.logical_and(alpha > alpha_min, above_threshold)
         # Only return new trajs if leads to a strict cost decrease
         new_Xs = jnp.where(above_threshold, new_Xs, Xs)
         new_Us = jnp.where(above_threshold, new_Us, Us)
-        prev_cost = jnp.where(above_threshold, new_cost, prev_cost)
+        # prev_cost = jnp.where(above_threshold, new_cost, prev_cost)
         # update alpha
         alpha *= beta
 
@@ -371,7 +374,7 @@ def linesearch(
     
     if verbose:
         jax.debug.print(f"{its-1} ls_iters:\t alpha={alpha/beta:.03f}\t Jold={cost_init:.03f}\t J={cost_opt:.03f}\t DJold={cost_init-cost_opt:.03f}\t exp_DJ={exp_dj:.03f}\t z={z:.03f}\t alpha_0={alpha_0:.03f}")
-
+        jax.debug.print(f"New LQR passed: {cost_opt:.03f} with alpha: {alpha:.03f} in {its} iterations")
     return (Xs_opt, Us_opt), cost_opt, costs
 
 
