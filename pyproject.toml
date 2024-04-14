@@ -20,6 +20,6 @@ classifiers = [
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
-"Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax"/issues"
+"Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax/issues"
 
 [tool.setuptools_scm]
