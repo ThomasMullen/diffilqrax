@@ -2,12 +2,14 @@
 DiffiLQRax
 ================
 
-.. figure:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg
+.. image:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg
+   :align: left
+
+.. image:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-package.yml/badge.svg
    :align: center
-.. figure:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-package.yml/badge.svg
-   :align: center
-.. figure:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-publish.yml/badge.svg
-   :align: center
+
+.. image:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-publish.yml/badge.svg
+   :align: right
 
 This repository contains an implementation of the iterative Linear Quadratic Regulator (iLQR) using the JAX library. The iLQR is a powerful algorithm used for optimal control, and this implementation is designed to be fully differentiable.
 
