@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffilqrax"
+version = "0.0.0"
+authors = [
+  { name="Thomas Soares Mullen", email="thomasmullen96@gmail.com" },
+  { name="Marine Schimel", email="marine.schimel@hotmail.fr" },
+]
+description = "Differentiable iLQR algorithm for dynamical systems"
+readme = "README.rst"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ThomasMullen/diffilqrax"
+"Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax"/issues"
+
+[tool.setuptools_scm]
