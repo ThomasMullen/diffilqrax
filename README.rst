@@ -10,10 +10,14 @@ Getting Started
 To get started with this code, clone the repository and install the required dependencies. Then, you can run the main script to see the iLQR in action.
 
 
-Contributing
-============
+Structure
+=========
 
-Contributions to this repository are welcome. Please feel free to open an issue or submit a pull request.
+
+Examples
+========
+
+
 
 License
 =======
