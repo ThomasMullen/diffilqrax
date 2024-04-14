@@ -77,10 +77,10 @@ def quad_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Array
 
     # this is minimized by solving Ax = b where A = big_G, b = -big_g
     big_Q = block_diag(*t_span_mpartial(Q, dims))
-    big_q = t_span_vpartial(q)
+    big_q = t_span_vpartial(q, dims)
     big_R = block_diag(*t_span_mpartial(R, dims))
-    big_r = t_span_vpartial(r)
-    big_x0 = t_span_vpartial(x0)
+    big_r = t_span_vpartial(r, dims)
+    big_x0 = t_span_vpartial(x0, dims)
 
     big_G = 2 * (F.T @ big_Q @ F + big_R)
     big_g = (
@@ -130,10 +130,10 @@ def exact_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Arra
     )
 
     big_Q = block_diag(*t_span_mpartial(Q, dims))
-    big_q = t_span_vpartial(q)
+    big_q = t_span_vpartial(q, dims)
     big_R = block_diag(*t_span_mpartial(R, dims))
-    big_r = t_span_vpartial(r)
-    big_x0 = t_span_vpartial(x0)
+    big_r = t_span_vpartial(r, dims)
+    big_x0 = t_span_vpartial(x0, dims)
 
     big_G = 2 * (F.T @ big_Q @ F + big_R)
     big_G = 0.5 * (big_G + big_G.T)
