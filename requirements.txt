@@ -4,3 +4,4 @@ jaxopt
 chex
 pytest
 matplotlib
+build

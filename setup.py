@@ -1,12 +1,15 @@
 """Metadata describing the configuration of package"""
+import os
 from setuptools import find_packages, setup
+
+BUILD_ID = os.environ.get("BUILD_BUILDID", "0")
 
 with open("README.rst", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
     name="diffilqrax",
-    version="0.0.0",
+    version="0.1" + "." + BUILD_ID,
     packages=find_packages(),
     description="Differentiable iLQR algorithm for dynamical systems with JAX.",
     long_description=long_description,

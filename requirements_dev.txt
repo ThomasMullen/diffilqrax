@@ -9,3 +9,5 @@ jax_dataclasses
 chex
 pytest
 black
+build
+twine
