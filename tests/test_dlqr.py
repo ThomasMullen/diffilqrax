@@ -1,5 +1,8 @@
-import unittest
+"""
+Unit tests for the differentiable LQR solver
+"""
 from typing import NamedTuple
+import unittest
 import chex
 import jax
 from jax import Array
@@ -9,10 +12,6 @@ import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
 from src.diff_lqr import dlqr
-
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
-jax.config.update("jax_enable_x64", True)  # double precision
-
 from src.lqr import (
     LQR,
     Params,
@@ -20,8 +19,11 @@ from src.lqr import (
     solve_lqr,
     kkt,
 )
-
 from src.utils import keygen, initialise_stable_dynamics
+
+jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_enable_x64", True)  # double precision
+
 
 is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(
     arr, onp.ndarray
