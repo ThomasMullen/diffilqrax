@@ -292,8 +292,8 @@ def lqr_backward_pass(
     )
     
     if verbose:
-        assert not jnp.any(jnp.isnan(Ks.K))
-        assert not jnp.any(jnp.isnan(Ks.k))
+        assert lax.bitwise_not(jnp.any(jnp.isnan(Ks.K)))
+        assert lax.bitwise_not(jnp.any(jnp.isnan(Ks.k)))
     
     if not expected_change:
         return dJ, Ks
