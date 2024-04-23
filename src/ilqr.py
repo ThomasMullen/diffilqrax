@@ -1,21 +1,27 @@
 """iterative LQR solver"""
 from typing import Callable, Any, Optional, NamedTuple, Tuple, Union
+from functools import partial
 from jax import Array
 from jax.typing import ArrayLike
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-from functools import partial
-import jaxopt
-import src.lqr as lqr
-from src.utils import keygen, initialise_stable_dynamics
 import jax.random as jr
+import jaxopt
+
+# import src.lqr as lqr
+# from src.utils import keygen, initialise_stable_dynamics
+import lqr
+from utils import keygen, initialise_stable_dynamics
 import matplotlib.pyplot as plt
-from jax.debug import breakpoint
+# from jax.debug import breakpoint
 
 jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
+
+# plt.style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
 
 
 class System(NamedTuple):
@@ -179,7 +185,7 @@ def ilqr_forward_pass(
         Ks (lqr.Gains): The gains obtained from the LQR controller.
         Xs (np.ndarray): The target state trajectory.
         Us (np.ndarray): The control trajectory.
-        alpha (float, optional): The linesearch parameter (TODO: implement linesearch). Defaults to 1.0.
+        alpha (float, optional): The linesearch parameter. Defaults to 1.0.
 
     Returns:
         Tuple[[np.ndarray, np.ndarray], float]: A tuple containing the updated state trajectory and control trajectory,
@@ -249,7 +255,7 @@ def ilQR_solver(
 
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
     initial_carry = (X_inits, U_inits, c_init, 0, True)
-    
+
     rollout = partial(ilqr_forward_pass, model, params)
 
     # define body_fun(carry_tuple)
@@ -260,16 +266,18 @@ def ilQR_solver(
         # approximate dyn and loss to LQR with initial {u} and {x}
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dold_cost
-        exp_cost_red, gains = lqr.lqr_backward_pass(
+        (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # no line search: α = 1.0
         if not use_linesearch:
-            (new_Xs, new_Us), new_total_cost = rollout(gains, old_Xs, old_Us, alpha=alpha0)
-        # dynamics line search:
+            (new_Xs, new_Us), new_total_cost = rollout(
+                gains, old_Xs, old_Us, alpha=alpha0
+            )
+        # dynamic line search:
         else:
-            (new_Xs, new_Us), new_total_cost, cost_iterations = linesearch(
+            (new_Xs, new_Us), a_, new_total_cost, cost_iterations = linesearch(
                 rollout,
                 gains,
                 old_Xs,
@@ -279,7 +287,7 @@ def ilQR_solver(
                 expected_dJ=exp_cost_red,
                 beta=0.8,
                 max_iter=16,
-                tol=1e-1,
+                tol=1e0,
                 alpha_min=0.0001,
                 verbose=verbose,
             )
@@ -301,9 +309,9 @@ def ilQR_solver(
     (Xs_stars, Us_stars, total_cost, n_iters, _), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
-    if verbose:
-        print(f"Converged in {n_iters}/{max_iter} iterations")
-        print(f"old_cost: {total_cost}")
+    # if verbose:
+        # jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
+        # jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_stars, Us_stars, params)
     Lambs_stars = lqr.lqr_adjoint_pass(
         Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
@@ -321,39 +329,54 @@ def linesearch(
     expected_dJ: lqr.CostToGo,
     beta: float,
     max_iter: int = 20,
-    tol: float = 1e-1,
+    tol: float = 0.99999,
     alpha_min=0.0001,
     verbose: bool = False,
 ):
-    
     # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
-    initial_carry = (Xs_init, Us_init, cost_init, alpha_0, 0, True)
+    initial_carry = (Xs_init, Us_init, 0.0, cost_init, alpha_0, 0, 10.0, 0.0, True)
+    # jax.debug.print(f"\nLinesearch: J0={cost_init:.03f} α={alpha_0:.03f} β={beta:.03f}")
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
-        Xs, Us, prev_cost, alpha, n_iter, carry_on = carry
+        Xs, Us, new_cost, old_cost, alpha, n_iter, _, _, carry_on = carry
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
         # calc expected cost reduction
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         # calc z-value
-        z = (prev_cost - new_cost) / expected_delta_j
+        z = (old_cost - new_cost) / expected_delta_j
+
+        # if verbose:
+            # jax.debug.print(
+                # f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f} nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
+            # )
 
         # ensure to keep Xs and Us that reduce z-value
-        new_cost = jnp.where(jnp.isnan(new_cost), prev_cost, new_cost)
+        new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         # add control flow to carry on or not
         above_threshold = z > tol
-        carry_on = jnp.logical_and(alpha > alpha_min, above_threshold)
+        carry_on = lax.bitwise_not(jnp.logical_and(alpha > alpha_min, above_threshold))
         # Only return new trajs if leads to a strict cost decrease
         new_Xs = jnp.where(above_threshold, new_Xs, Xs)
         new_Us = jnp.where(above_threshold, new_Us, Us)
-        prev_cost = jnp.where(above_threshold, new_cost, prev_cost)
+        new_cost = jnp.where(above_threshold, new_cost, old_cost)
         # update alpha
         alpha *= beta
 
-        return (new_Xs, new_Us, prev_cost, alpha, n_iter + 1, carry_on)
+        return (
+            new_Xs,
+            new_Us,
+            new_cost,
+            old_cost,
+            alpha,
+            n_iter + 1,
+            z,
+            expected_delta_j,
+            carry_on,
+        )
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
@@ -364,14 +387,14 @@ def linesearch(
         return updated_carry, (updated_carry[2], updated_carry[3])
 
     # scan through with max iterations
-    (Xs_opt, Us_opt, cost_opt, alpha, its, *_), costs = lax.scan(
+    (Xs_opt, Us_opt, cost_opt, old_cost, alpha, its, z, exp_dj, *_), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
-    
     # if verbose:
-    #     print(f"{its} backtrack-iterations; alpha={alpha:.03f}; Jold={cost_init:.03f}; J={cost_opt:.03f}; alpha_0={alpha_0:.03f}")
-
-    return (Xs_opt, Us_opt), cost_opt, costs
+        # jax.debug.print(
+            # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f} ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
+        # )
+    return (Xs_opt, Us_opt), alpha, cost_opt, costs
 
 
 def define_model():
@@ -396,7 +419,6 @@ if __name__ == "__main__":
     # test data
     dt = 0.1
     Uh = initialise_stable_dynamics(next(skeys), 8, 100, 0.6)[0]
-    # Uh, _ = jnp.linalg.qr(Uh)
     Wh = jr.normal(next(skeys), (8, 2))
 
     # initialise params
@@ -405,7 +427,13 @@ if __name__ == "__main__":
     model = define_model()
 
     # generate input
-    Us_init = 0.0 * jr.normal(next(skeys), (model.dims.horizon, model.dims.m,))
+    Us_init = 0.0 * jr.normal(
+        next(skeys),
+        (
+            model.dims.horizon,
+            model.dims.m,
+        ),
+    )
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
@@ -413,7 +441,15 @@ if __name__ == "__main__":
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
     # test ilqr solver
     (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
-        model, params, Xs, Us, max_iter=70, tol=1e-3, alpha0=0.3, verbose=True, use_linesearch=True
+        model,
+        params,
+        Xs,
+        Us,
+        max_iter=70,
+        tol=1e-6,
+        alpha0=1.0,
+        verbose=True,
+        use_linesearch=True,
     )
 
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
@@ -460,10 +496,6 @@ if __name__ == "__main__":
 #         theta (Theta): parameters
 #     """
 #     dt=0.1
-#     # sin_theta = x[0].squeeze()
-#     # cos_theta = x[1].squeeze()
-#     # theta_dot = x[2].squeeze()
-#     # torque = u.squeeze()
 #     sin_theta = x[0]
 #     cos_theta = x[1]
 #     theta_dot = x[2]
@@ -479,4 +511,4 @@ if __name__ == "__main__":
 #     next_theta = theta_state + theta_dot * dt
 
 #     next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
-#     return next_state#[...,None]
+#     return next_state
