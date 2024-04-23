@@ -20,6 +20,8 @@ jax.config.update('jax_disable_jit', True) # uncomment for debugging purposes
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
 
+plt.style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
+
 
 class System(NamedTuple):
     """iLQR System
@@ -289,6 +291,14 @@ def ilQR_solver(
 
         # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / old_cost
+        
+        fig, ax = plt.subplots(1,2, figsize=(6,2), sharey=True)
+        ax[0].plot(new_Xs)
+        ax[0].set(ylim=[-1.5,1.5])
+        ax[1].plot(new_Us)
+        ax[1].set(ylim=[-1.5,1.5])
+        fig.savefig(f"/Users/thomasmullen/VSCodeProjects/ilqr_vae_jax/fig_dump/linesearch_debug/{n_iter:02}_{z:.03f}.png")
+        plt.close(fig)
 
         # determine cond: Δold_cost > threshold
         carry_on = jnp.abs(z) > tol
