@@ -14,6 +14,7 @@ import jaxopt
 import lqr
 from utils import keygen, initialise_stable_dynamics
 import matplotlib.pyplot as plt
+
 # from jax.debug import breakpoint
 
 jax.config.update("jax_enable_x64", True)  # double precision
@@ -227,7 +228,7 @@ def ilQR_solver(
     verbose: bool = False,
     use_linesearch: bool = False,
     **linesearch_kwargs,
-):
+) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """Solves the iterative Linear Quadratic Regulator (iLQR) problem.
 
     This function iteratively solves the LQR problem by approximating the dynamics and cost-to-go functions
@@ -248,8 +249,9 @@ def ilQR_solver(
         use_linesearch (bool, optional): Whether to use line search for the forward pass. Defaults to False.
 
     Returns:
-        Tuple[Array, Array, Array]: A tuple containing the final state trajectory, control trajectory, and
-        the adjoint variables.
+        Tuple[Tuple[Array, Array, Array], float, Array]: A tuple containing the final state trajectory,
+        control trajectory, and the adjoint variables. Also returns the total cost of the trajectory and the
+        cost history.
     """
     # simulate initial cost
     _, c_init = ilqr_simulate(model, U_inits, params)
@@ -270,18 +272,34 @@ def ilQR_solver(
         (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
-        
+
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):
             Ks, Xs_init, Us_init, alpha_init = args
-            return linesearch(rollout, Ks, Xs_init, Us_init, alpha_init, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
+            return linesearch(
+                rollout,
+                Ks,
+                Xs_init,
+                Us_init,
+                alpha_init,
+                cost_init=old_cost,
+                expected_dJ=exp_cost_red,
+                **linesearch_kwargs,
+            )
+
         # linesearch_wrapped = partial(linesearch, update=rollout, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
-            
+
         # if no line search: α = 1.0; else use dynamic line search
         (new_Xs, new_Us), new_total_cost = lax.cond(
-                use_linesearch, linesearch_wrapped, rollout, gains, old_Xs, old_Us, alpha_init
-            )
+            use_linesearch,
+            linesearch_wrapped,
+            rollout,
+            gains,
+            old_Xs,
+            old_Us,
+            alpha_init,
+        )
 
         # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / old_cost
@@ -322,12 +340,12 @@ def linesearch(
     max_iter_linesearch: int = 20,
     tol: float = 0.99999,
     alpha_min=0.0001,
-    )->Tuple[Tuple[Array, Array], float, float, Array]:
+) -> Tuple[Tuple[Array, Array], float, float, Array]:
     """Implementation of the line search backtracking algorithm for ilqr algorithm.
-    Each iteration of the line search algorithm performs a forward pass with the new control inputs 
+    Each iteration of the line search algorithm performs a forward pass with the new control inputs
     defined by the gains and an alpha value. The change in cost is compared to the expected change in cost
     and the alpha is selected based on the ratio of the two values above a given tolerance. Otherwise, the
-    alpha value is reduced by a factor of beta. 
+    alpha value is reduced by a factor of beta.
 
     Args:
         update (Callable): rollout function which returns new Xs, Us and cost
@@ -339,7 +357,7 @@ def linesearch(
         expected_dJ (lqr.CostToGo): expected change in cost from LQR controller
         beta (float): reduction factor for alpha
         max_iter_linesearch (int, optional): Maximum iterations of linesearch. Defaults to 20.
-        tol (float, optional): Tolerance of ratio of actual to expected cost change to accept alpha value. 
+        tol (float, optional): Tolerance of ratio of actual to expected cost change to accept alpha value.
             Defaults to 0.99999.
         alpha_min (float, optional): Minimum alpha value. Defaults to 0.0001.
 
@@ -363,9 +381,9 @@ def linesearch(
         z = (old_cost - new_cost) / expected_delta_j
 
         # if verbose:
-            # jax.debug.print(
-                # f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f} nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
-            # )
+        # jax.debug.print(
+        # f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f} nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
+        # )
 
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
@@ -404,9 +422,9 @@ def linesearch(
         loop_fun, initial_carry, None, length=max_iter_linesearch
     )
     # if verbose:
-        # jax.debug.print(
-            # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f} ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
-        # )
+    # jax.debug.print(
+    # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f} ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
+    # )
     return (Xs_opt, Us_opt), cost_opt
 
 
@@ -449,15 +467,15 @@ if __name__ == "__main__":
     )
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
-    
+
     # linesearch hyper-parameters
     ls_kwargs = {
-        "beta":0.8,
-        "max_iter_linesearch":16,
-        "tol":1e0,
-        "alpha_min":0.0001,
-        }
-    
+        "beta": 0.8,
+        "max_iter_linesearch": 16,
+        "tol": 1e0,
+        "alpha_min": 0.0001,
+    }
+
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
     # test approx lqr with U and X trajectorys
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
