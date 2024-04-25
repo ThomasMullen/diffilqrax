@@ -213,6 +213,9 @@ class TestiLQRExactSolution(unittest.TestCase):
     """Test iLQR solver with exact solution"""
 
     def setUp(self):
+        # set fig directory
+        self.fig_dir = Path(Path(getcwd()), "fig_dump")
+        self.fig_dir.mkdir(exist_ok=True)
         # load fixtures
         self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")
 
@@ -273,11 +276,84 @@ class TestiLQRExactSolution(unittest.TestCase):
         print(f"iLQR solver cost:\t{total_cost:.6f}\nOther solver cost:\t{self.fixtures['obj']:.6f}")
         assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
 
-    def test_2(self):
-        pass
+    def test_ilqr_linesearch(self):
+        # exercise rollout
+        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(
+            self.model, self.Us, self.params
+        )
+        # verify
+        chex.assert_trees_all_equal(self.fixtures["X_orig"], Xs_init[1:])
+        # exercise ilqr solver
+        (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
+            self.model,
+            self.params,
+            Xs_init,
+            Us_init,
+            max_iter=40,
+            tol=1e-8,
+            alpha0=1.,
+            verbose=True,
+            use_linesearch=True,
+        )
+        # verify
+        chex.assert_trees_all_close(Xs_stars, self.fixtures["X"], rtol=1e-06, atol=1e-04)
+        chex.assert_trees_all_close(Us_stars, self.fixtures["U"], rtol=1e-06, atol=1e-04)
+        print(f"iLQR solver cost:\t{total_cost:.6f}\nOther solver cost:\t{self.fixtures['obj']:.6f}")
+        assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
 
-    def test_3(self):
-        pass
+    def test_ilqr_kkt_solution(self):
+        # exercise rollout
+        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(
+            self.model, self.Us, self.params
+        )
+        # verify
+        chex.assert_trees_all_equal(self.fixtures["X_orig"], Xs_init[1:])
+        # exercise ilqr solver
+        (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
+            self.model,
+            self.params,
+            Xs_init,
+            Us_init,
+            max_iter=80,
+            tol=1e-13,
+            alpha0=1.,
+            verbose=True,
+            use_linesearch=True,
+        )
+        lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
+        lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
+        # verify
+        dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
+        print(jnp.mean(jnp.abs(dLdXs)), jnp.mean(jnp.abs(dLdUs)), jnp.mean(jnp.abs(dLdLambs)))
+        # plot kkt
+        fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
+        ax[0, 0].plot(Xs_stars)
+        ax[0, 0].set(title="X")
+        ax[0, 1].plot(Us_stars)
+        ax[0, 1].set(title="U")
+        ax[0, 2].plot(Lambs_stars)
+        ax[0, 2].set(title="λ")
+        ax[1, 0].plot(dLdXs)
+        ax[1, 0].set(title="dLdX")
+        ax[1, 1].plot(dLdUs)
+        ax[1, 1].set(title="dLdUs")
+        ax[1, 2].plot(dLdLambs)
+        ax[1, 2].set(title="dLdλ")
+        fig.tight_layout()
+        fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt.png")
+        
+        # Verify that the average KKT conditions are satisfied
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-04, atol=1e-05)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-04, atol=1e-05)
+        # assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-02, atol=1e-02)
+        
+        # Verify that the terminal state KKT conditions is satisfied
+        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-04, atol=1e-05), "Terminal X state not satisfied"
+        
+        # Verify that all KKT conditions are satisfied
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-04, atol=1e-05)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-04, atol=1e-05)
+        # assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
 
 
 

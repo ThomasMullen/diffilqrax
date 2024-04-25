@@ -9,10 +9,10 @@ import jax.numpy as jnp
 import jax.random as jr
 import jaxopt
 
-# import src.lqr as lqr
-# from src.utils import keygen, initialise_stable_dynamics
-import lqr
-from utils import keygen, initialise_stable_dynamics
+import src.lqr as lqr
+from src.utils import keygen, initialise_stable_dynamics
+# import lqr
+# from utils import keygen, initialise_stable_dynamics
 import matplotlib.pyplot as plt
 # from jax.debug import breakpoint
 
@@ -221,7 +221,7 @@ def ilQR_solver(
     params: Params,
     X_inits: Array,
     U_inits: Array,
-    max_iter: int = 10,
+    max_iter: int = 40,
     tol: float = 1e-6,
     alpha0: float = 1.0,
     verbose: bool = False,
@@ -309,9 +309,9 @@ def ilQR_solver(
     (Xs_stars, Us_stars, total_cost, n_iters, _), costs = lax.scan(
         loop_fun, initial_carry, None, length=max_iter
     )
-    # if verbose:
-        # jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
-        # jax.debug.print(f"old_cost: {total_cost}")
+    if verbose:
+        jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
+        jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_stars, Us_stars, params)
     Lambs_stars = lqr.lqr_adjoint_pass(
         Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
