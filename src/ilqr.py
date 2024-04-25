@@ -9,10 +9,10 @@ import jax.numpy as jnp
 import jax.random as jr
 import jaxopt
 
-import src.lqr as lqr
-from src.utils import keygen, initialise_stable_dynamics
-# import lqr
-# from utils import keygen, initialise_stable_dynamics
+# import src.lqr as lqr
+# from src.utils import keygen, initialise_stable_dynamics
+import lqr
+from utils import keygen, initialise_stable_dynamics
 import matplotlib.pyplot as plt
 # from jax.debug import breakpoint
 
@@ -222,10 +222,11 @@ def ilQR_solver(
     X_inits: Array,
     U_inits: Array,
     max_iter: int = 40,
-    tol: float = 1e-6,
-    alpha0: float = 1.0,
+    convergence_thresh: float = 1e-6,
+    alpha_init: float = 1.0,
     verbose: bool = False,
     use_linesearch: bool = False,
+    **linesearch_kwargs,
 ):
     """Solves the iterative Linear Quadratic Regulator (iLQR) problem.
 
@@ -233,7 +234,7 @@ def ilQR_solver(
     using linearizations around the current state and control trajectories. It performs a backward pass to
     calculate the control gains and expected cost reduction, and then performs a forward pass to update the
     state and control trajectories. This process is repeated until the change in the cost-to-go function
-    falls below a specified tolerance or the maximum number of iterations is reached.
+    falls below a specified convergence or the maximum number of iterations is reached.
 
     Args:
         model (System): The system model.
@@ -241,8 +242,8 @@ def ilQR_solver(
         X_inits (Array): The initial state trajectory.
         U_inits (Array): The initial control trajectory.
         max_iter (int, optional): The maximum number of iterations. Defaults to 10.
-        tol (float, optional): The tolerance for convergence. Defaults to 1e-6.
-        alpha0 (float, optional): The initial step size for the forward pass. Defaults to 1.0.
+        convergence_thresh (float, optional): The convergence for convergence. Defaults to 1e-6.
+        alpha_init (float, optional): The initial step size for the forward pass. Defaults to 1.0.
         verbose (bool, optional): Whether to print debug information. Defaults to False.
         use_linesearch (bool, optional): Whether to use line search for the forward pass. Defaults to False.
 
@@ -271,32 +272,35 @@ def ilQR_solver(
         )
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # no line search: α = 1.0
-        if not use_linesearch:
-            (new_Xs, new_Us), new_total_cost = rollout(
-                gains, old_Xs, old_Us, alpha=alpha0
-            )
-        # dynamic line search:
-        else:
-            (new_Xs, new_Us), a_, new_total_cost, cost_iterations = linesearch(
+        # if not use_linesearch:
+        #     (new_Xs, new_Us), new_total_cost = rollout(
+        #         gains, old_Xs, old_Us, alpha=alpha_init
+        #     )
+        # # dynamic line search:
+        # else:
+        #     (new_Xs, new_Us), a_, new_total_cost, cost_iterations = linesearch(
+        #         rollout,
+        #         gains,
+        #         old_Xs,
+        #         old_Us,
+        #         old_cost,
+        #         alpha_init,
+        #         expected_dJ=exp_cost_red,
+        #         **linesearch_kwargs
+        #     )
+            
+        (new_Xs, new_Us), a_, new_total_cost, cost_iterations = lax.cond(
+                use_linesearch,
+                lambda args: linesearch(*args, expected_dJ=exp_cost_red, **linesearch_kwargs),
                 rollout,
-                gains,
-                old_Xs,
-                old_Us,
-                old_cost,
-                alpha0,
-                expected_dJ=exp_cost_red,
-                beta=0.8,
-                max_iter=16,
-                tol=1e0,
-                alpha_min=0.0001,
-                verbose=verbose,
+                (gains, old_Xs, old_Us, alpha_init, exp_cost_red, linesearch_kwargs)
             )
 
         # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / old_cost
 
         # determine cond: Δold_cost > threshold
-        carry_on = jnp.abs(z) > tol
+        carry_on = jnp.abs(z) > convergence_thresh
 
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
@@ -325,17 +329,39 @@ def linesearch(
     Xs_init: Array,
     Us_init: Array,
     cost_init: float,
-    alpha_0: float,
+    alpha_init: float,
     expected_dJ: lqr.CostToGo,
     beta: float,
-    max_iter: int = 20,
+    max_iter_linesearch: int = 20,
     tol: float = 0.99999,
     alpha_min=0.0001,
-    verbose: bool = False,
-):
+    )->Tuple[Tuple[Array, Array], float, float, Array]:
+    """Implementation of the line search backtracking algorithm for ilqr algorithm.
+    Each iteration of the line search algorithm performs a forward pass with the new control inputs 
+    defined by the gains and an alpha value. The change in cost is compared to the expected change in cost
+    and the alpha is selected based on the ratio of the two values above a given tolerance. Otherwise, the
+    alpha value is reduced by a factor of beta. 
+
+    Args:
+        update (Callable): rollout function which returns new Xs, Us and cost
+        Ks (lqr.Gains): Gains obtained from the LQR controller.
+        Xs_init (Array): state trajectory
+        Us_init (Array): input trajectory
+        cost_init (float): cost of initial trajectory
+        alpha_init (float): initialised alpha value
+        expected_dJ (lqr.CostToGo): expected change in cost from LQR controller
+        beta (float): reduction factor for alpha
+        max_iter_linesearch (int, optional): Maximum iterations of linesearch. Defaults to 20.
+        tol (float, optional): Tolerance of ratio of actual to expected cost change to accept alpha value. 
+            Defaults to 0.99999.
+        alpha_min (float, optional): Minimum alpha value. Defaults to 0.0001.
+
+    Returns:
+        Tuple: Returns the updated state and control trajectories, the alpha value, the total cost, and the cost history.
+    """
     # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
-    initial_carry = (Xs_init, Us_init, 0.0, cost_init, alpha_0, 0, 10.0, 0.0, True)
-    # jax.debug.print(f"\nLinesearch: J0={cost_init:.03f} α={alpha_0:.03f} β={beta:.03f}")
+    initial_carry = (Xs_init, Us_init, 0.0, cost_init, alpha_init, 0, 10.0, 0.0, True)
+    # jax.debug.print(f"\nLinesearch: J0={cost_init:.03f} α={alpha_init:.03f} β={beta:.03f}")
 
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
@@ -388,7 +414,7 @@ def linesearch(
 
     # scan through with max iterations
     (Xs_opt, Us_opt, cost_opt, old_cost, alpha, its, z, exp_dj, *_), costs = lax.scan(
-        loop_fun, initial_carry, None, length=max_iter
+        loop_fun, initial_carry, None, length=max_iter_linesearch
     )
     # if verbose:
         # jax.debug.print(
@@ -436,6 +462,15 @@ if __name__ == "__main__":
     )
     # rollout model non-linear dynamics
     Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
+    
+    # linesearch hyper-parameters
+    ls_kwargs = {
+        "beta":0.8,
+        "max_iter_linesearch":16,
+        "tol":1e0,
+        "alpha_min":0.0001,
+        }
+    
     (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
     # test approx lqr with U and X trajectorys
     lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
@@ -446,10 +481,11 @@ if __name__ == "__main__":
         Xs,
         Us,
         max_iter=70,
-        tol=1e-6,
-        alpha0=1.0,
+        convergence_thresh=1e-6,
+        alpha_init=1.0,
         verbose=True,
         use_linesearch=True,
+        **ls_kwargs,
     )
 
     print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")

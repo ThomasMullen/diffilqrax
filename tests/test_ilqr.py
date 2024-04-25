@@ -235,6 +235,14 @@ class TestiLQRExactSolution(unittest.TestCase):
         )
         self.Us = jnp.zeros(self.dims["TM"])
         assert jnp.allclose(self.fixtures["x0"], self.params.x0)
+        
+        # define linesearch hyper parameters
+        self.ls_kwargs = {
+            "beta":0.8,
+            "max_iter_linesearch":16,
+            "tol":1e0,
+            "alpha_min":0.0001,
+            }
 
         def cost(t: int, x: Array, u: Array, theta: Any):
             return jnp.sum(x**2) + jnp.sum(u**2)
@@ -290,10 +298,11 @@ class TestiLQRExactSolution(unittest.TestCase):
             Xs_init,
             Us_init,
             max_iter=40,
-            tol=1e-8,
-            alpha0=1.,
+            convergence_thresh=1e-8,
+            alpha_init=1.,
             verbose=True,
             use_linesearch=True,
+            **self.ls_kwargs,
         )
         # verify
         chex.assert_trees_all_close(Xs_stars, self.fixtures["X"], rtol=1e-06, atol=1e-04)
@@ -315,10 +324,11 @@ class TestiLQRExactSolution(unittest.TestCase):
             Xs_init,
             Us_init,
             max_iter=80,
-            tol=1e-13,
-            alpha0=1.,
+            convergence_thresh=1e-13,
+            alpha_init=1.,
             verbose=True,
             use_linesearch=True,
+            **self.ls_kwargs,
         )
         lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
