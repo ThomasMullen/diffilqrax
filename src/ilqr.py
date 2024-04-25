@@ -270,31 +270,15 @@ def ilQR_solver(
         (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, dims=model.dims, expected_change=False, verbose=False
         )
+        
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
-        # no line search: α = 1.0
-        # if not use_linesearch:
-        #     (new_Xs, new_Us), new_total_cost = rollout(
-        #         gains, old_Xs, old_Us, alpha=alpha_init
-        #     )
-        # # dynamic line search:
-        # else:
-        #     (new_Xs, new_Us), new_total_cost = linesearch(
-        #         rollout,
-        #         gains,
-        #         old_Xs,
-        #         old_Us,
-        #         old_cost,
-        #         alpha_init,
-        #         expected_dJ=exp_cost_red,
-        #         **linesearch_kwargs
-        #     )
-
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):
             Ks, Xs_init, Us_init, alpha_init = args
             return linesearch(rollout, Ks, Xs_init, Us_init, alpha_init, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
         # linesearch_wrapped = partial(linesearch, update=rollout, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
             
+        # if no line search: α = 1.0; else use dynamic line search
         (new_Xs, new_Us), new_total_cost = lax.cond(
                 use_linesearch, linesearch_wrapped, rollout, gains, old_Xs, old_Us, alpha_init
             )
@@ -423,7 +407,6 @@ def linesearch(
         # jax.debug.print(
             # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f} ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
         # )
-    # return (Xs_opt, Us_opt), alpha, cost_opt, costs
     return (Xs_opt, Us_opt), cost_opt
 
 
