@@ -278,7 +278,7 @@ def ilQR_solver(
         #     )
         # # dynamic line search:
         # else:
-        #     (new_Xs, new_Us), a_, new_total_cost, cost_iterations = linesearch(
+        #     (new_Xs, new_Us), new_total_cost = linesearch(
         #         rollout,
         #         gains,
         #         old_Xs,
@@ -288,12 +288,15 @@ def ilQR_solver(
         #         expected_dJ=exp_cost_red,
         #         **linesearch_kwargs
         #     )
+
+        # wrap linesearch with rollout
+        def linesearch_wrapped(*args):
+            Ks, Xs_init, Us_init, alpha_init = args
+            return linesearch(rollout, Ks, Xs_init, Us_init, alpha_init, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
+        # linesearch_wrapped = partial(linesearch, update=rollout, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
             
-        (new_Xs, new_Us), a_, new_total_cost, cost_iterations = lax.cond(
-                use_linesearch,
-                lambda args: linesearch(*args, expected_dJ=exp_cost_red, **linesearch_kwargs),
-                rollout,
-                (gains, old_Xs, old_Us, alpha_init, exp_cost_red, linesearch_kwargs)
+        (new_Xs, new_Us), new_total_cost = lax.cond(
+                use_linesearch, linesearch_wrapped, rollout, gains, old_Xs, old_Us, alpha_init
             )
 
         # calc change in dold_cost w.r.t old dold_cost
@@ -328,8 +331,8 @@ def linesearch(
     Ks: lqr.Gains,
     Xs_init: Array,
     Us_init: Array,
-    cost_init: float,
     alpha_init: float,
+    cost_init: float,
     expected_dJ: lqr.CostToGo,
     beta: float,
     max_iter_linesearch: int = 20,
@@ -420,7 +423,8 @@ def linesearch(
         # jax.debug.print(
             # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f} ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
         # )
-    return (Xs_opt, Us_opt), alpha, cost_opt, costs
+    # return (Xs_opt, Us_opt), alpha, cost_opt, costs
+    return (Xs_opt, Us_opt), cost_opt
 
 
 def define_model():
