@@ -220,13 +220,12 @@ def ilqr_forward_pass(
 def ilQR_solver(
     model: System,
     params: Params,
-    X_inits: Array,
     U_inits: Array,
     max_iter: int = 40,
     convergence_thresh: float = 1e-6,
     alpha_init: float = 1.0,
     verbose: bool = False,
-    use_linesearch: bool = False,
+    use_linesearch: bool = True,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """Solves the iterative Linear Quadratic Regulator (iLQR) problem.
@@ -254,7 +253,7 @@ def ilQR_solver(
         cost history.
     """
     # simulate initial cost
-    _, c_init = ilqr_simulate(model, U_inits, params)
+    (X_inits, _), c_init = ilqr_simulate(model, U_inits, params)
 
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
     initial_carry = (X_inits, U_inits, c_init, 0, True)
@@ -389,7 +388,7 @@ def linesearch(
         new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         # add control flow to carry on or not
         above_threshold = z > tol
-        carry_on = lax.bitwise_not(jnp.logical_and(alpha > alpha_min, above_threshold))
+        carry_on = lax.bitwise_not(jnp.logical_or(alpha < alpha_min, above_threshold))
         # Only return new trajs if leads to a strict cost decrease
         new_Xs = jnp.where(above_threshold, new_Xs, Xs)
         new_Us = jnp.where(above_threshold, new_Us, Us)
@@ -483,7 +482,6 @@ if __name__ == "__main__":
     (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
         model,
         params,
-        Xs,
         Us,
         max_iter=70,
         convergence_thresh=1e-6,

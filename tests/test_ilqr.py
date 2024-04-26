@@ -52,6 +52,13 @@ class TestiLQRStructs(unittest.TestCase):
         self.Us_init = 0.1 * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )
+        # define linesearch parameters
+        self.ls_kwargs = {
+        "beta": 0.8,
+        "max_iter_linesearch": 16,
+        "tol": 1e0,
+        "alpha_min": 0.0001,
+        }
 
     def test_vectorise_fun_in_time(self):
         # setup
@@ -157,14 +164,16 @@ class TestiLQRStructs(unittest.TestCase):
             self.model, self.Us_init, self.params
         )
         # exercise
-        (Xs_stars, Us_stars, Lambs_stars), converged_cost, _ = ilqr.ilQR_solver(
+        (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = ilqr.ilQR_solver(
             self.model,
             self.params,
-            Xs_init,
             self.Us_init,
-            max_iter=20,
-            tol=1e-2,
+            max_iter=70,
+            convergence_thresh=1e-8,
+            alpha_init=1.0,
             verbose=True,
+            use_linesearch=True,
+            **self.ls_kwargs,
         )
         fig, ax = subplots(2, 2, sharey=True)
         ax[0, 0].plot(Xs_init)
@@ -196,6 +205,11 @@ class TestiLQRStructs(unittest.TestCase):
         ax[1, 2].set(title="dLdλ")
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/ilqr_kkt.png")
+        close()
+        fig, ax = subplots()
+        ax.scatter(jnp.arange(cost_log.size), cost_log)
+        ax.set(xlabel="Iteration", ylabel="Total cost")
+        fig.savefig(f"{fig_dir}/ilqr_cost_log.png")
         close()
 
         # verify
@@ -269,8 +283,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
             self.model,
             self.params,
-            Xs_init,
-            Us_init,
+            self.Us,
             max_iter=70,
             tol=1e-8,
             alpha0=0.8, #NOTE: When this is set to 1.0, the solver diverges?!
@@ -285,18 +298,11 @@ class TestiLQRExactSolution(unittest.TestCase):
         assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
 
     def test_ilqr_linesearch(self):
-        # exercise rollout
-        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(
-            self.model, self.Us, self.params
-        )
-        # verify
-        chex.assert_trees_all_equal(self.fixtures["X_orig"], Xs_init[1:])
         # exercise ilqr solver
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
             self.model,
             self.params,
-            Xs_init,
-            Us_init,
+            self.Us,
             max_iter=40,
             convergence_thresh=1e-8,
             alpha_init=1.,
@@ -311,18 +317,11 @@ class TestiLQRExactSolution(unittest.TestCase):
         assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
 
     def test_ilqr_kkt_solution(self):
-        # exercise rollout
-        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(
-            self.model, self.Us, self.params
-        )
-        # verify
-        chex.assert_trees_all_equal(self.fixtures["X_orig"], Xs_init[1:])
         # exercise ilqr solver
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
             self.model,
             self.params,
-            Xs_init,
-            Us_init,
+            self.Us,
             max_iter=80,
             convergence_thresh=1e-13,
             alpha_init=1.,
@@ -433,11 +432,10 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
             self.model,
             self.ilqr_params,
-            Xs_init,
-            Us_init,
+            self.Us,
             max_iter=70,
             tol=1e-8,
-            alpha0=1., #NOTE: When this is set to 1.0, the solver diverges?!
+            alpha0=1.,
             verbose=True,
             use_linesearch=False,
         )
