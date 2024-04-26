@@ -1,5 +1,5 @@
 """Non-linear pendulum example"""
-from typing import Any, Callable
+from typing import Any
 import jax.numpy as jnp
 import jax.random as jr
 
@@ -19,13 +19,11 @@ def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
         theta (Theta): parameters
     """
     dt=0.1
-    sin_theta = x[0]
-    cos_theta = x[1]
-    theta_dot = x[2]
-    torque = u
+    sin_theta, cos_theta, theta_dot = x
+    torque = u[0]
 
     # Deal with angle wrap-around.
-    theta_state = jnp.arctan2(sin_theta, cos_theta)[None]
+    theta_state = jnp.arctan2(sin_theta, cos_theta)
 
     # Define acceleration.
     theta_dot_dot = -3.0 * theta.g / (2 * theta.l) * jnp.sin(theta_state + jnp.pi)
@@ -33,7 +31,7 @@ def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
 
     next_theta = theta_state + theta_dot * dt
 
-    next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
+    next_state = jnp.array([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
     return next_state
 
 
@@ -62,7 +60,7 @@ if __name__ == "__main__":
     params = iLQRParams(x0=jr.normal(next(skeys), (3,)), theta=theta)
     model = pendulum_model()
     
-    Us_init = jnp.zeros((model.dims.horizon, model.dims.m,))
+    Us_init = jnp.zeros((model.dims.horizon,1))
     
     # test ilqr solver
     (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = ilQR_solver(
@@ -77,4 +75,6 @@ if __name__ == "__main__":
             **ls_kwargs,
         )
     
-    pass
+    print(f"Converged cost: {converged_cost}")
+    print(Xs_stars.shape, Us_stars.shape, Lambs_stars.shape)
+    
