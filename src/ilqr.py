@@ -9,10 +9,10 @@ import jax.numpy as jnp
 import jax.random as jr
 import jaxopt
 
-# import src.lqr as lqr
-# from src.utils import keygen, initialise_stable_dynamics
-import lqr
-from utils import keygen, initialise_stable_dynamics
+import src.lqr as lqr
+from src.utils import keygen, initialise_stable_dynamics
+# import lqr
+# from utils import keygen, initialise_stable_dynamics
 import matplotlib.pyplot as plt
 
 # from jax.debug import breakpoint
@@ -335,7 +335,7 @@ def linesearch(
     alpha_init: float,
     cost_init: float,
     expected_dJ: lqr.CostToGo,
-    beta: float,
+    beta: float = 0.8,
     max_iter_linesearch: int = 20,
     tol: float = 0.99999,
     alpha_min=0.0001,
@@ -441,87 +441,6 @@ def define_model():
 
     # return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=3, m=1, dt=0.1))
     return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
-
-
-if __name__ == "__main__":
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 5)
-    # test data
-    dt = 0.1
-    Uh = initialise_stable_dynamics(next(skeys), 8, 100, 0.6)[0]
-    Wh = jr.normal(next(skeys), (8, 2))
-
-    # initialise params
-    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((8,)))
-    params = Params(x0=jr.normal(next(skeys), (8,)), theta=theta)
-    model = define_model()
-
-    # generate input
-    Us_init = 0.0 * jr.normal(
-        next(skeys),
-        (
-            model.dims.horizon,
-            model.dims.m,
-        ),
-    )
-    # rollout model non-linear dynamics
-    Xs = lqr.simulate_trajectory(model.dynamics, Us_init, params, dims=model.dims)
-
-    # linesearch hyper-parameters
-    ls_kwargs = {
-        "beta": 0.8,
-        "max_iter_linesearch": 16,
-        "tol": 1e0,
-        "alpha_min": 0.0001,
-    }
-
-    (Xs, Us), cost_init = ilqr_simulate(model, Us_init, params)
-    # test approx lqr with U and X trajectorys
-    lqr_tilde = approx_lqr(model=model, Xs=Xs, Us=Us, params=params)
-    # test ilqr solver
-    (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilQR_solver(
-        model,
-        params,
-        Us,
-        max_iter=70,
-        convergence_thresh=1e-6,
-        alpha_init=1.0,
-        verbose=True,
-        use_linesearch=True,
-        **ls_kwargs,
-    )
-
-    print(f"Initial old_cost: {cost_init:.03f}, Final old_cost: {total_cost:.03f}")
-    fig, ax = plt.subplots(2, 2, sharey=True)
-    ax[0, 0].plot(Xs)
-    ax[0, 0].set(title="X")
-    ax[0, 1].plot(Us)
-    ax[0, 1].set(title="U")
-    ax[1, 0].plot(Xs_stars)
-    ax[1, 1].plot(Us_stars)
-    # find kkt conditions
-    lqr_tilde = approx_lqr(model=model, Xs=Xs_stars, Us=Us_stars, params=params)
-    lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
-    dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
-    # plot kkt
-    fig, ax = plt.subplots(2, 3, figsize=(10, 3), sharey=False)
-    ax[0, 0].plot(Xs_stars)
-    ax[0, 0].set(title="X")
-    ax[0, 1].plot(Us_stars)
-    ax[0, 1].set(title="U")
-    ax[0, 2].plot(Lambs_stars)
-    ax[0, 2].set(title="λ")
-    ax[1, 0].plot(dLdXs)
-    ax[1, 0].set(title="dLdX")
-    ax[1, 1].plot(dLdUs)
-    ax[1, 1].set(title="dLdUs")
-    ax[1, 2].plot(dLdLambs)
-    ax[1, 2].set(title="dLdλ")
-    fig.tight_layout()
-
-    fig, ax = plt.subplots()
-    ax.scatter(jnp.arange(cost_log.size), cost_log)
-    ax.set(xlabel="Iteration", ylabel="Total cost")
 
 
 # def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
