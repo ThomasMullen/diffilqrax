@@ -8,16 +8,18 @@ import jax.numpy as jnp
 import numpy as onp
 from os import getcwd
 from pathlib import Path
-from matplotlib.pyplot import subplots, close
+from matplotlib.pyplot import subplots, close, style
 from typing import Union, Any
 
 from src.utils import keygen, initialise_stable_dynamics
 import src.ilqr as ilqr
 import src.lqr as lqr
+from src.typs import *
 
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
+style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
 
 class TestiLQRStructs(unittest.TestCase):
     """Test LQR dimensions and data structures"""
@@ -31,22 +33,22 @@ class TestiLQRStructs(unittest.TestCase):
         Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
         Wh = jnp.array([[0, 0], [1, 0]]) * dt
         # initialise params
-        self.theta = ilqr.Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)))
-        self.params = ilqr.Params(x0=jnp.array([0.3, 0.0]), theta=self.theta)
+        self.theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)))
+        self.params = iLQRParams(x0=jnp.array([0.3, 0.0]), theta=self.theta)
 
         # define model
-        def cost(t: int, x: Array, u: Array, theta: ilqr.Theta):
+        def cost(t: int, x: Array, u: Array, theta: Theta):
             return jnp.sum(x**2) + jnp.sum(u**2)
 
-        def costf(x: Array, theta: ilqr.Theta):
+        def costf(x: Array, theta: Theta):
             # return jnp.sum(jnp.abs(x))
             return jnp.sum(x**2)
 
-        def dynamics(t: int, x: Array, u: Array, theta: ilqr.Theta):
+        def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
-        self.model = ilqr.System(
-            cost, costf, dynamics, lqr.ModelDims(horizon=100, n=2, m=2, dt=dt)
+        self.model = System(
+            cost, costf, dynamics, ModelDims(horizon=100, n=2, m=2, dt=dt)
         )
         self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
         self.Us_init = 0.1 * jr.normal(
@@ -112,7 +114,7 @@ class TestiLQRStructs(unittest.TestCase):
             model=self.model, Xs=Xs, Us=self.Us_init, params=self.params
         )
         # verify
-        assert isinstance(lqr_tilde, lqr.LQR)
+        assert isinstance(lqr_tilde, LQR)
         # check shape
         chex.assert_shape(lqr_tilde.A, self.dims["TNN"])
         chex.assert_shape(lqr_tilde.B, self.dims["TNM"])
@@ -186,7 +188,7 @@ class TestiLQRStructs(unittest.TestCase):
         fig.savefig(f"{fig_dir}/ilqr_solver.png")
         close()
         lqr_params_stars = ilqr.approx_lqr(self.model, Xs_stars, Us_stars, self.params)
-        lqr_tilde_params = lqr.Params(Xs_stars[0], lqr_params_stars)
+        lqr_tilde_params = LQRParams(Xs_stars[0], lqr_params_stars)
         dLdXs, dLdUs, dLdLambs = lqr.kkt(
             lqr_tilde_params, Xs_stars, Us_stars, Lambs_stars
         )
@@ -243,8 +245,8 @@ class TestiLQRExactSolution(unittest.TestCase):
         Wh = jr.normal(next(skeys), self.dims["NM"])
         chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
         chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
-        theta = ilqr.Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["N"]))
-        self.params = ilqr.Params(
+        theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["N"]))
+        self.params = iLQRParams(
             x0=jr.normal(next(skeys), self.dims["N"]), theta=theta
         )
         self.Us = jnp.zeros(self.dims["TM"])
@@ -261,14 +263,14 @@ class TestiLQRExactSolution(unittest.TestCase):
         def cost(t: int, x: Array, u: Array, theta: Any):
             return jnp.sum(x**2) + jnp.sum(u**2)
 
-        def costf(x: Array, theta: ilqr.Theta):
+        def costf(x: Array, theta: Theta):
             return jnp.sum(x**2)
 
-        def dynamics(t: int, x: Array, u: Array, theta: ilqr.Theta):
+        def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
         self.model = ilqr.System(
-            cost, costf, dynamics, lqr.ModelDims(*self.dims["NMT"], dt=0.1)
+            cost, costf, dynamics, ModelDims(*self.dims["NMT"], dt=0.1)
         )
 
     def test_ilqr_nolinesearch(self):
@@ -290,6 +292,17 @@ class TestiLQRExactSolution(unittest.TestCase):
             verbose=True,
             use_linesearch=False,
         )
+        
+        fig, ax = subplots(2, 2, sharey=True)
+        ax[0, 0].plot(Xs_init)
+        ax[0, 0].set(title="X")
+        ax[0, 1].plot(self.Us)
+        ax[0, 1].set(title="U")
+        ax[1, 0].plot(Xs_stars)
+        ax[1, 1].plot(Us_stars)
+        fig.tight_layout()
+        fig.savefig(f"{self.fig_dir}/ilqr_ls_solver.png")
+        close()
         
         # verify
         chex.assert_trees_all_close(Xs_stars, self.fixtures["X"], rtol=1e-03, atol=1e-03)
@@ -318,7 +331,7 @@ class TestiLQRExactSolution(unittest.TestCase):
 
     def test_ilqr_kkt_solution(self):
         # exercise ilqr solver
-        (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilQR_solver(
+        (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilqr.ilQR_solver(
             self.model,
             self.params,
             self.Us,
@@ -330,7 +343,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             **self.ls_kwargs,
         )
         lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
-        lqr_approx_params = lqr.Params(Xs_stars[0], lqr_tilde)
+        lqr_approx_params = LQRParams(Xs_stars[0], lqr_tilde)
         # verify
         dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
         print(jnp.mean(jnp.abs(dLdXs)), jnp.mean(jnp.abs(dLdUs)), jnp.mean(jnp.abs(dLdLambs)))
@@ -350,6 +363,12 @@ class TestiLQRExactSolution(unittest.TestCase):
         ax[1, 2].set(title="dLdλ")
         fig.tight_layout()
         fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt.png")
+        
+        fig, ax = subplots()
+        ax.scatter(jnp.arange(cost_log.size), cost_log)
+        ax.set(xlabel="Iteration", ylabel="Total cost")
+        fig.savefig(f"{self.fig_dir}/ilqr_ls_cost_log.png")
+        close()
         
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-04, atol=1e-05)
@@ -372,7 +391,7 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
     def setUp(self):
         # dimensions
         self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
-        self.sys_dims = lqr.ModelDims(*self.dims["NMT"], dt=0.1)
+        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         dt = self.sys_dims.dt
         self.Us = jnp.zeros(self.dims["TM"])
         self.x0 = jnp.array([0.3, 0.])
@@ -390,27 +409,27 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         R = 1. * jnp.tile(jnp.eye(self.dims["M"][0]), span_time_m)
         r = 0. * jnp.tile(jnp.ones(self.dims["M"]), span_time_v)
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), span_time_m)
-        self.lqr_struct = lqr.LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
-        self.lqr_params = lqr.Params(self.x0, self.lqr_struct)
+        self.lqr_struct = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+        self.lqr_params = LQRParams(self.x0, self.lqr_struct)
 
 
         # set-up lqr in the model
         Uh = self.lqr_struct.A[0]
         Wh = self.lqr_struct.B[0]
-        theta = ilqr.Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["N"]))
-        self.ilqr_params = ilqr.Params(x0=self.x0, theta=theta)
+        theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["N"]))
+        self.ilqr_params = iLQRParams(x0=self.x0, theta=theta)
 
         def cost(t: int, x: Array, u: Array, theta: Any):
             return 0.5*jnp.sum(x**2) + 0.5*jnp.sum(u**2)
 
-        def costf(x: Array, theta: ilqr.Theta):
+        def costf(x: Array, theta: Theta):
             return 0.5*jnp.sum(x**2)
 
-        def dynamics(t: int, x: Array, u: Array, theta: ilqr.Theta):
+        def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return theta.Uh @ x + theta.Wh @ u
 
-        self.model = ilqr.System(
-            cost, costf, dynamics, lqr.ModelDims(*self.dims["NMT"], dt=0.1)
+        self.model = System(
+            cost, costf, dynamics, ModelDims(*self.dims["NMT"], dt=0.1)
         )
 
     def test_lqr_solution(self):

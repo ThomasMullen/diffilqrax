@@ -6,61 +6,16 @@ from jax.typing import ArrayLike
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-import jax.random as jr
-import jaxopt
 
 import src.lqr as lqr
 from src.utils import keygen, initialise_stable_dynamics
-# import lqr
-# from utils import keygen, initialise_stable_dynamics
-import matplotlib.pyplot as plt
+from src.typs import *
 
-# from jax.debug import breakpoint
 
 jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 sum_cost_to_go_struct = lambda x: x.V + x.v
-
-# plt.style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
-
-
-class System(NamedTuple):
-    """iLQR System
-
-    cost : Callable
-        running cost l(t, x, u, params)
-    costf : Callable
-        final state cost lf(xf, params)
-    dynamics : Callable
-        dynamical update f(t, x, u, params)
-    dims : ModelDims
-        ilQR evaluate time horizon, dt, state and input dimension
-    """
-
-    cost: Callable[[int, Array, Array, Optional[Any]], Array]
-    costf: Callable[[Array, Optional[Any]], Array]
-    dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
-    dims: lqr.ModelDims
-
-
-class Theta(NamedTuple):
-    Uh: Array
-    Wh: Array
-    sigma: ArrayLike
-
-
-class PendulumParams(NamedTuple):
-    m: float
-    l: float
-    g: float
-
-
-class Params(NamedTuple):
-    """Non-linear parameter struct"""
-
-    x0: ArrayLike
-    theta: Any
 
 
 def linearise(fun: Callable) -> Callable:
@@ -75,7 +30,6 @@ def linearise(fun: Callable) -> Callable:
     return jax.jacrev(fun, argnums=(1, 2))
 
 
-# funct that quadratises
 def quadratise(fun: Callable) -> Callable:
     """Function that finds Hessian w.r.t to x and u inputs.
 
@@ -102,7 +56,7 @@ def vectorise_fun_in_time(fun: Callable) -> Callable:
     # return jax.vmap(fun, in_axes=(None, 0, 0, None))
 
 
-def approx_lqr(model: System, Xs: Array, Us: Array, params: Params) -> lqr.LQR:
+def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """Calls linearisation and quadratisation function
 
     Returns:
@@ -121,7 +75,7 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: Params) -> lqr.LQR:
     fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
 
     # set-up LQR
-    lqr_params = lqr.LQR(
+    lqr_params = LQR(
         A=Fx,
         B=Fu,
         a=jnp.zeros((model.dims.horizon, model.dims.n)),
@@ -138,14 +92,14 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: Params) -> lqr.LQR:
 
 
 def ilqr_simulate(
-    model: System, Us: Array, params: Params
+    model: System, Us: Array, params: iLQRParams
 ) -> Tuple[Tuple[Array, Array], float]:
     """Simulate forward trajectory and cost with nonlinear params
 
     Args:
         dynamics (Callable): function of dynamics with args t, x, u, params
         Us (ArrayLike): Input timeseries shape [Txm]
-        params (Params): Parameters containing x_init, horizon and theta
+        params (iLQRParams): Parameters containing x_init, horizon and theta
 
     Returns:
         Tuple[[Array, Array], float]: A tuple containing the updated state trajectory and control trajectory,
@@ -170,7 +124,7 @@ def ilqr_simulate(
 
 def ilqr_forward_pass(
     model: System,
-    params: Params,
+    params: iLQRParams,
     Ks: lqr.Gains,
     Xs: Array,
     Us: Array,
@@ -182,7 +136,7 @@ def ilqr_forward_pass(
 
     Args:
         model (System): The nonlinear system model.
-        params (Params): The parameters of the system.
+        params (iLQRParams): The parameters of the system.
         Ks (lqr.Gains): The gains obtained from the LQR controller.
         Xs (np.ndarray): The target state trajectory.
         Us (np.ndarray): The control trajectory.
@@ -219,7 +173,7 @@ def ilqr_forward_pass(
 
 def ilQR_solver(
     model: System,
-    params: Params,
+    params: iLQRParams,
     U_inits: Array,
     max_iter: int = 40,
     convergence_thresh: float = 1e-6,
@@ -238,7 +192,7 @@ def ilQR_solver(
 
     Args:
         model (System): The system model.
-        params (Params): The parameters of the system.
+        params (iLQRParams): The parameters of the system.
         X_inits (Array): The initial state trajectory.
         U_inits (Array): The initial control trajectory.
         max_iter (int, optional): The maximum number of iterations. Defaults to 10.
@@ -287,8 +241,6 @@ def ilQR_solver(
                 **linesearch_kwargs,
             )
 
-        # linesearch_wrapped = partial(linesearch, update=rollout, cost_init=old_cost, expected_dJ=exp_cost_red, **linesearch_kwargs)
-
         # if no line search: α = 1.0; else use dynamic line search
         (new_Xs, new_Us), new_total_cost = lax.cond(
             use_linesearch,
@@ -322,7 +274,7 @@ def ilQR_solver(
         jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_stars, Us_stars, params)
     Lambs_stars = lqr.lqr_adjoint_pass(
-        Xs_stars, Us_stars, lqr.Params(Xs_stars[0], lqr_params_stars)
+        Xs_stars, Us_stars, LQRParams(Xs_stars[0], lqr_params_stars)
     )
     return (Xs_stars, Us_stars, Lambs_stars), total_cost, costs
 
@@ -334,7 +286,7 @@ def linesearch(
     Us_init: Array,
     alpha_init: float,
     cost_init: float,
-    expected_dJ: lqr.CostToGo,
+    expected_dJ: CostToGo,
     beta: float = 0.8,
     max_iter_linesearch: int = 20,
     tol: float = 0.99999,
@@ -440,7 +392,7 @@ def define_model():
         return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
     # return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=3, m=1, dt=0.1))
-    return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=8, m=2, dt=0.1))
+    return System(cost, costf, dynamics, ModelDims(horizon=100, n=8, m=2, dt=0.1))
 
 
 # def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):

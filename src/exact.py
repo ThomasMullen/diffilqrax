@@ -7,7 +7,7 @@ import jaxopt
 from jax.scipy.linalg import block_diag
 from jax.numpy.linalg import matrix_power
 
-from src.lqr import ModelDims, Params
+from src.typs import ModelDims, LQRParams
 
 jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 
@@ -20,7 +20,7 @@ is an upper diagonal matrix with blocks F0_{ij} = A^{j - i} if i>=j and 0 otherw
 We can build the matrices F0 and F as follows:  
 F0 = np.block([[np.linalg.matrix_power(A, j - i) for j in range(T)] for i in range(T)]) -> Follows Toeplitz structure!"""
 
-def quad_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
+def quad_solve(params:LQRParams, dims:ModelDims, x0:jnp.ndarray):
     t_span_mpartial = lambda arr: jnp.tile(arr, (dims.horizon,1,1))
     t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,))
 
@@ -59,7 +59,7 @@ def quad_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
     x = np.reshape(xs_star, (dims.horizon, dims.n,))
     return x, u
      
-def exact_solve(params:Params, dims:ModelDims, x0:jnp.ndarray):
+def exact_solve(params:LQRParams, dims:ModelDims, x0:jnp.ndarray):
     t_span_mpartial = lambda arr: jnp.tile(arr, (dims.horizon,1,1))
     t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,))
 
