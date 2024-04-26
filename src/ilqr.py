@@ -125,7 +125,7 @@ def ilqr_simulate(
 def ilqr_forward_pass(
     model: System,
     params: iLQRParams,
-    Ks: lqr.Gains,
+    Ks: Gains,
     Xs: Array,
     Us: Array,
     alpha: float = 1.0,
@@ -137,7 +137,7 @@ def ilqr_forward_pass(
     Args:
         model (System): The nonlinear system model.
         params (iLQRParams): The parameters of the system.
-        Ks (lqr.Gains): The gains obtained from the LQR controller.
+        Ks (Gains): The gains obtained from the LQR controller.
         Xs (np.ndarray): The target state trajectory.
         Us (np.ndarray): The control trajectory.
         alpha (float, optional): The linesearch parameter. Defaults to 1.0.
@@ -281,7 +281,7 @@ def ilQR_solver(
 
 def linesearch(
     update: Callable,
-    Ks: lqr.Gains,
+    Ks: Gains,
     Xs_init: Array,
     Us_init: Array,
     alpha_init: float,
@@ -300,12 +300,12 @@ def linesearch(
 
     Args:
         update (Callable): rollout function which returns new Xs, Us and cost
-        Ks (lqr.Gains): Gains obtained from the LQR controller.
+        Ks (Gains): Gains obtained from the LQR controller.
         Xs_init (Array): state trajectory
         Us_init (Array): input trajectory
         cost_init (float): cost of initial trajectory
         alpha_init (float): initialised alpha value
-        expected_dJ (lqr.CostToGo): expected change in cost from LQR controller
+        expected_dJ (CostToGo): expected change in cost from LQR controller
         beta (float): reduction factor for alpha
         max_iter_linesearch (int, optional): Maximum iterations of linesearch. Defaults to 20.
         tol (float, optional): Tolerance of ratio of actual to expected cost change to accept alpha value.
@@ -393,32 +393,3 @@ def define_model():
 
     # return System(cost, costf, dynamics, lqr.ModelDims(horizon=100, n=3, m=1, dt=0.1))
     return System(cost, costf, dynamics, ModelDims(horizon=100, n=8, m=2, dt=0.1))
-
-
-# def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):
-#     """simulate the dynamics of a pendulum. x0 is sin(theta), x1 is cos(theta), x2 is theta_dot.
-#     u is the torque applied to the pendulum.
-
-#     Args:
-#         t (int): _description_
-#         x (Array): state params
-#         u (Array): external input
-#         theta (Theta): parameters
-#     """
-#     dt=0.1
-#     sin_theta = x[0]
-#     cos_theta = x[1]
-#     theta_dot = x[2]
-#     torque = u
-
-#     # Deal with angle wrap-around.
-#     theta_state = jnp.arctan2(sin_theta, cos_theta)[None]
-
-#     # Define acceleration.
-#     theta_dot_dot = -3.0 * theta.g / (2 * theta.l) * jnp.sin(theta_state + jnp.pi)
-#     theta_dot_dot += 3.0 / (theta.m * theta.l**2) * torque
-
-#     next_theta = theta_state + theta_dot * dt
-
-#     next_state = jnp.vstack([jnp.sin(next_theta), jnp.cos(next_theta), theta_dot + theta_dot_dot * dt])
-#     return next_state
