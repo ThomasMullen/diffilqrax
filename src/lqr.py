@@ -1,18 +1,15 @@
 """LQR solver via dynamic programming"""
-from typing import Callable, NamedTuple, Tuple, Union
+from typing import Callable, Tuple
 from jax.typing import ArrayLike
 from jax import Array
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
 # from jax.lax import batch_matmul as bmm
-import jax.random as jr
-from functools import partial
 
 from src.typs import *
 
 jax.config.update("jax_enable_x64", True)  # double precision
-
 # symmetrise
 symmetrise_tensor = lambda x: (x + x.transpose(0, 2, 1)) / 2
 symmetrise_matrix = lambda x: (x + x.T) / 2
@@ -22,19 +19,13 @@ bmm = jax.vmap(jnp.matmul)
 
 # LQR struct
 LQRBackParams = Tuple[
-    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike
-]
-
-LQRTrackParams = Tuple[
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
+    ArrayLike, 
+    ArrayLike, 
+    ArrayLike, 
+    ArrayLike, 
+    ArrayLike, 
+    ArrayLike, 
+    ArrayLike
 ]
 
 
@@ -170,7 +161,8 @@ def lqr_backward_pass(
     Args:
         lqr (LQR): LQR parameters
         T (int): parameter time horizon
-        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020]. Defaults to False.
+        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020]. 
+        Defaults to False.
         verbose (bool, optional): Print out matrix shapes for debugging. Defaults to False.
 
     Returns:
@@ -289,4 +281,3 @@ def solve_lqr_swap_x0(params: LQRParams, sys_dims: ModelDims):
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, new_params)
     return gains, Xs, Us, Lambs
-

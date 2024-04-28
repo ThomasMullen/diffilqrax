@@ -1,23 +1,17 @@
+"""
+Unit test for the LQR module
+"""
+from pathlib import Path
 import unittest
-import pytest
-import chex, jax 
-from jax import Array, grad
-from typing import Tuple
+from os import getcwd
+import chex
+import jax 
 import jax.random as jr
 import jax.numpy as jnp
-from jaxopt import linear_solve, implicit_diff
-from matplotlib.pyplot import subplots, close, style
-from os import getcwd
-from pathlib import Path
-
 import numpy as onp
-from src.exact import quad_solve, exact_solve
+from matplotlib.pyplot import subplots, close, style
 
-jax.config.update('jax_default_device', jax.devices('cpu')[0])
-jax.config.update("jax_enable_x64", True)  # double precision
-
-style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
-
+from src.typs import *
 from src.lqr import (
     simulate_trajectory,
     lqr_adjoint_pass,
@@ -27,11 +21,18 @@ from src.lqr import (
     solve_lqr,
     kkt,
 )
-from src.typs import *
-
+from src.exact import quad_solve, exact_solve
 from src.utils import keygen, initialise_stable_dynamics
 
-is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
+jax.config.update('jax_default_device', jax.devices('cpu')[0])
+jax.config.update("jax_enable_x64", True)  # double precision
+
+style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
+
+
+is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(
+    arr, onp.ndarray
+)
 
 def setup_lqr(dims: chex.Dimensions,
               pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}) -> LQR:
@@ -41,7 +42,7 @@ def setup_lqr(dims: chex.Dimensions,
     # initialise dynamics
     span_time_m=dims["TXX"]
     span_time_v=dims["TX"]
-    A = initialise_stable_dynamics(next(skeys), dims['N'][0], dims['T'][0],radii=0.6)
+    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.6)
     B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
     a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     # define cost matrices
@@ -64,7 +65,7 @@ class TestLQR(unittest.TestCase):
         """Instantiate dummy LQR"""
         print("\nRunning setUp method...")
         self.dims = chex.Dimensions(T=60, N=3, M=2, X=1)
-        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         print("Model dimensionality", self.dims["TNMX"])
         print("\nMake LQR struct")
         self.lqr = setup_lqr(self.dims)
@@ -219,7 +220,8 @@ class TestLQR(unittest.TestCase):
         assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
         
         # Verify that the terminal state KKT conditions is satisfied
-        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        assert jnp.allclose(dLdXs[-1], 0.0, 
+                            rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
         
         # Verify that all KKT conditions are satisfied
         assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
@@ -232,16 +234,19 @@ class TestLQR(unittest.TestCase):
 
 
 class TestLQRSolutionExact(unittest.TestCase):
-    """Test LQR solution comparing to the exact solution using a CG solve (in a case in which the dynamics are constant)"""
+    """
+    Test LQR solution comparing to the exact solution using a CG solve (in a case in which the 
+    dynamics are constant)
+    """
 
     def setUp(self):
         """Instantiate LQR example using the pendulum example to compare against Ocaml"""
         print("\nRunning setUp method...")
         self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
-        self.sys_dims = ModelDims(self.dims["N"][0], self.dims["M"][0], self.dims["T"][0], dt=0.1)
+        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         dt = self.sys_dims.dt
 
-        A = jnp.float64(jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"]))
+        A = jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"])
         B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
         a = jnp.zeros(self.dims["TN"])
         Qf = 0. *jnp.eye(self.dims["N"][0])
@@ -268,7 +273,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         fig_dir.mkdir(exist_ok=True)
         print("Make tmp dir")
         # Exercise the LQR solver function
-        _, Xs_dir, Us_dir, _ = solve_lqr(params=self.params, sys_dims=self.sys_dims)
+        _, Xs_dir, Us_dir, _ = solve_lqr(self.params, self.sys_dims)
         print("Lqr solve")
         Xs_quad, Us_quad = quad_solve(self.params, self.sys_dims, self.x0) 
         print("CG solve")
@@ -296,7 +301,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         
-        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=self.params, sys_dims=self.sys_dims)
+        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(self.params, self.sys_dims)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
         # Plot the KKT residuals
@@ -322,7 +327,8 @@ class TestLQRSolutionExact(unittest.TestCase):
         assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
         
         # Verify that the terminal state KKT conditions is satisfied
-        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+        assert jnp.allclose(dLdXs[-1], 0.0, 
+                            rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
         
         # Verify that all KKT conditions are satisfied
         assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
@@ -332,3 +338,4 @@ class TestLQRSolutionExact(unittest.TestCase):
         
 if __name__ == "__main__":
     unittest.main()
+    
