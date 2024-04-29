@@ -6,14 +6,14 @@ from typing import Tuple
 from jax.numpy import matmul as mm
 import jax.numpy as jnp
 from jax import Array, custom_vjp
-from src.lqr import (
+from diffilqrax.lqr import (
     # kkt,
     solve_lqr,
     solve_lqr_swap_x0,
     symmetrise_tensor,
     bmm,
 )
-from src.typs import LQRParams, ModelDims, LQR
+from diffilqrax.typs import LQRParams, ModelDims, LQR
 
 # v_outer = jax.vmap(jnp.outer) # vectorized outer product through time i.e. 'ij,ik->ijk'
 

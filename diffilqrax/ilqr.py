@@ -7,9 +7,9 @@ import jax
 import jax.lax as lax
 import jax.numpy as jnp
 
-import src.lqr as lqr
-from src.utils import keygen, initialise_stable_dynamics
-from src.typs import *
+import diffilqrax.lqr as lqr
+from diffilqrax.utils import keygen, initialise_stable_dynamics
+from diffilqrax.typs import *
 
 
 jax.config.update("jax_enable_x64", True)  # double precision

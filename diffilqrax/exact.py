@@ -13,7 +13,7 @@ from jax.numpy.linalg import matrix_power
 from jax.scipy.linalg import block_diag
 import jaxopt
 
-from src.typs import ModelDims, LQRParams
+from diffilqrax.typs import ModelDims, LQRParams
 
 jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 

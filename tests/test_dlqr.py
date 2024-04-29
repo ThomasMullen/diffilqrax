@@ -11,13 +11,13 @@ import jax.numpy as jnp
 import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
-from src.typs import LQRParams, ModelDims, LQR
-from src.diff_lqr import dlqr
-from src.lqr import (
+from diffilqrax.typs import LQRParams, ModelDims, LQR
+from diffilqrax.diff_lqr import dlqr
+from diffilqrax.lqr import (
     solve_lqr,
     kkt,
 )
-from src.utils import keygen, initialise_stable_dynamics
+from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
 jax.config.update("jax_enable_x64", True)  # double precision

@@ -6,16 +6,16 @@ from typing import Tuple
 from jax.numpy import matmul as mm
 import jax.numpy as jnp
 from jax import Array, custom_vjp
-from src.lqr import (
+from diffilqrax.lqr import (
     # kkt,
     solve_lqr,
     solve_lqr_swap_x0,
     symmetrise_tensor,
     bmm,
 )
-from src.ilqr import solve_ilqr
-import src.diff_lqr as dlqr
-from src.typs import iLQRParams, ModelDims, System, LQR
+from diffilqrax.ilqr import solve_ilqr
+import diffilqrax.diff_lqr as dlqr
+from diffilqrax.typs import iLQRParams, ModelDims, System, LQR
 
 
 @partial(custom_vjp, nondiff_argnums=(0,))

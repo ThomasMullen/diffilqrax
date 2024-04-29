@@ -7,7 +7,7 @@ import jax.lax as lax
 import jax.numpy as jnp
 # from jax.lax import batch_matmul as bmm
 
-from src.typs import *
+from diffilqrax.typs import *
 
 jax.config.update("jax_enable_x64", True)  # double precision
 # symmetrise

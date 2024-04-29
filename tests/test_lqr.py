@@ -11,8 +11,8 @@ import jax.numpy as jnp
 import numpy as onp
 from matplotlib.pyplot import subplots, close, style
 
-from src.typs import *
-from src.lqr import (
+from diffilqrax.typs import *
+from diffilqrax.lqr import (
     simulate_trajectory,
     lqr_adjoint_pass,
     lin_dyn_step,
@@ -21,8 +21,8 @@ from src.lqr import (
     solve_lqr,
     kkt,
 )
-from src.exact import quad_solve, exact_solve
-from src.utils import keygen, initialise_stable_dynamics
+from diffilqrax.exact import quad_solve, exact_solve
+from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
