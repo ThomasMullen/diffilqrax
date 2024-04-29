@@ -112,40 +112,6 @@ def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
     return jnp.vstack([x0[None], Xs]), Us
 
 
-def lqr_tracking_forward_pass(
-    gains: Gains, params: LQRParams, Xs_star: ArrayLike, Us_star: ArrayLike
-) -> Tuple[Array, Array]:
-    """LQR forward pass tracking using gain state feedback on state-input deviations
-
-    Args:
-        gains (Gains): K matrices
-        params (Params): LQR state and cost matrices
-        Xs_star (ArrayLike): target trajectory [(T+1)xn]
-        Us_star (ArrayLike): initial input [Txm]
-
-    Returns:
-        Tuple[Array, Array]: updated state [(T+1)xn] and inputs [Txm]
-    """
-    x0, lqr = params.x0, params.lqr
-    dx0 = x0 - Xs_star[0]
-
-    def dynamics(x: ArrayLike, params: LQRTrackParams):
-        A, B, a, K, k, x_star, u_star = params
-        delta_x = x - x_star
-        delta_u = K @ delta_x + k
-        u_hat = u_star + delta_u
-        nx = A @ x + B @ u_hat + a
-        return nx, (nx, u_hat)
-
-    xf, (Xs, Us) = lax.scan(
-        dynamics,
-        init=dx0,
-        xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k, Xs_star[1:], Us_star),
-    )
-
-    return jnp.vstack([x0[None], Xs]), Us
-
-
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
     return - (dJ.V * alpha**2 + dJ.v * alpha)
 
