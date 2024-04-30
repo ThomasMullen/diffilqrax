@@ -6,7 +6,7 @@ from typing import Tuple
 import jax.random as jr
 import jax.numpy as jnp
 from jaxopt import linear_solve, implicit_diff
-from matplotlib.pyplot import subplots, close
+from matplotlib.pyplot import subplots, close, style
 from os import getcwd
 from pathlib import Path
 
@@ -16,21 +16,18 @@ from src.exact import quad_solve, exact_solve
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
+style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
+
 from src.lqr import (
-    Gains,
-    CostToGo,
-    LQR,
-    Params,
-    ModelDims,
     simulate_trajectory,
     lqr_adjoint_pass,
     lin_dyn_step,
     lqr_forward_pass,
-    lqr_tracking_forward_pass,
     lqr_backward_pass,
     solve_lqr,
     kkt,
 )
+from src.typs import *
 
 from src.utils import keygen, initialise_stable_dynamics
 
@@ -80,14 +77,14 @@ class TestLQR(unittest.TestCase):
 
     def test_lqr_params_struct(self):
         print("Construct params")
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         chex.assert_trees_all_close(params[0], self.x0)
         chex.assert_trees_all_close(params.x0, self.x0)
         chex.assert_type(params.x0, float)
         assert isinstance(params.lqr, LQR)
         assert isinstance(params[1], LQR)
         assert isinstance(params[-1], LQR)
-        print("Params struct passed.")
+        print("LQRParams struct passed.")
 
     def test_lqr_struct(self):
         """Test test shape of LQR"""
@@ -121,21 +118,21 @@ class TestLQR(unittest.TestCase):
 
     def test_simulate_trajectory(self):
         print("Running test_simulate_trajectory")
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         Xs = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
         chex.assert_type(Xs, float)
         chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["N"])
 
     def test_lqr_adjoint_pass(self):
         print("Running test_lqr_adjoint_pass")
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         Xs_sim = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
         Lambs = lqr_adjoint_pass(Xs_sim, self.Us, params)
         chex.assert_type(Lambs, float)
         chex.assert_shape(Lambs, (self.dims["T"][0] + 1,) + self.dims["N"])
 
     def test_lqr_backward_pass(self):
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         (dJ, Ks), exp_dJ = lqr_backward_pass(
             lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
         )
@@ -147,7 +144,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(exp_dJ, float)
 
     def test_lqr_forward_pass(self):
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         (dJ, Ks), exp_dJ = lqr_backward_pass(
             lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
         )
@@ -158,7 +155,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_shape(Us_lqr, self.dims["TM"])
 
     def test_solve_lqr(self):
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
         chex.assert_type(gains_lqr.K, float)
         chex.assert_shape(gains_lqr.K, self.dims["TMN"])
@@ -178,7 +175,7 @@ class TestLQR(unittest.TestCase):
         assert is_jax_Array(Lambs_lqr)
         
     def test_solution_output(self):
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
@@ -195,7 +192,7 @@ class TestLQR(unittest.TestCase):
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=params, sys_dims=self.sys_dims)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(params, Xs_dir, Us_dir, Lambs_dir)
@@ -261,12 +258,12 @@ class TestLQRSolutionExact(unittest.TestCase):
         Us = jnp.zeros(self.dims["TM"]) * 1.0
         Us = Us.at[2].set(1.0)
         self.Us = Us
-        self.params = Params(self.x0, self.lqr)
+        self.params = LQRParams(self.x0, self.lqr)
         
     def test_lqr_solution(self):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # setup
-        params = Params(self.x0, self.lqr)
+        params = LQRParams(self.x0, self.lqr)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         print("Make tmp dir")
