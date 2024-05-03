@@ -1,8 +1,8 @@
 """Includes utility functions for the project. Generic functions to generate data, seeds, etc."""
 from typing import Tuple
+from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
-from jax import Array
 
 
 def keygen(key, nkeys):
@@ -15,11 +15,13 @@ def keygen(key, nkeys):
     Returns:
     2-tuple (new key for further generators, key generator)
     """
-    keys = jr.split(key, nkeys+1)
+    keys = jr.split(key, nkeys + 1)
     return keys[0], (k for k in keys[1:])
 
 
-def initialise_stable_dynamics(key:Tuple[int,int], n_dim:int, T:int, radii:float=0.6)->Array:
+def initialise_stable_dynamics(
+    key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
+) -> Array:
     """Generate a state matrix with stable dynamics (eigenvalues < 1)
 
     Args:
@@ -30,13 +32,15 @@ def initialise_stable_dynamics(key:Tuple[int,int], n_dim:int, T:int, radii:float
     Returns:
         Array: matrix A with stable dynamics.
     """
-    mat = jr.normal(key,(n_dim,n_dim))*radii
+    mat = jr.normal(key, (n_dim, n_dim)) * radii
     mat /= jnp.sqrt(n_dim)
     mat -= jnp.eye(n_dim)
-    return jnp.tile(mat,(T,1,1))
+    return jnp.tile(mat, (T, 1, 1))
 
 
-def initialise_stable_time_varying_dynamics(key:Tuple[int,int], n_dim:int, T:int, radii:float=0.6)->Array:
+def initialise_stable_time_varying_dynamics(
+    key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
+) -> Array:
     """Generate a state matrix with stable dynamics (eigenvalues < 1)
 
     Args:
@@ -47,9 +51,7 @@ def initialise_stable_time_varying_dynamics(key:Tuple[int,int], n_dim:int, T:int
     Returns:
         Array: matrix A with stable dynamics.
     """
-    mat = jr.normal(key,(T,n_dim,n_dim))*radii
+    mat = jr.normal(key, (T, n_dim, n_dim)) * radii
     mat /= jnp.sqrt(n_dim)
     mat -= jnp.eye(n_dim)
     return mat
-
-

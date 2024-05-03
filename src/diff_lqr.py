@@ -1,16 +1,16 @@
 """
-This module contains functions for solving the differential linear quadratic regulator (DLQR) problem.
+Module contains functions for solving the differential linear quadratic regulator (DLQR) problem.
 """
 from functools import partial
+from typing import Tuple
 from jax.numpy import matmul as mm
 import jax.numpy as jnp
-from typing import Tuple
 from jax import Array, custom_vjp
 from src.lqr import (
     LQR,
     LQRParams,
     ModelDims,
-    kkt,
+    # kkt,
     solve_lqr,
     solve_lqr_swap_x0,
     symmetrise_tensor,
@@ -107,7 +107,7 @@ def fwd_dlqr(
     )
     new_params = LQRParams(params.x0, new_lqr)
     _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params, dims)
-    new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
+    # new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
     return tau_star, (new_params, sol)  # check whether params or new_params
 
 
