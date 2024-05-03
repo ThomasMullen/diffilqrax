@@ -14,11 +14,13 @@ from jaxopt import linear_solve, implicit_diff
 from src.diff_lqr import dlqr
 from src.lqr import (
     LQR,
-    Params,
+    LQRParams,
     ModelDims,
     solve_lqr,
     kkt,
 )
+import numpy as onp
+from src.exact import quad_solve, exact_solve
 from src.utils import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
@@ -94,7 +96,7 @@ class TestLQR(unittest.TestCase):
         Us = jnp.zeros(self.dims["TM"], dtype=float)
         Us = Us.at[2].set(1.0)
         self.Us = Us
-        self.params = Params(self.x0, self.lqr)
+        self.params = LQRParams(self.x0, self.lqr)
         # Verify that the average KKT conditions are satisfied
 
     def test_dlqr(self):
@@ -130,7 +132,7 @@ class Prms(NamedTuple):
     a: Array
 
 
-def state_kkt(Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray, params: Params):
+def state_kkt(Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray, params: LQRParams):
     Xs, Us, Lambs = Xs
     dLdXs, dLdUs, dLdLambs = kkt(params, Xs, Us, Lambs)
     return dLdXs, dLdUs, dLdLambs  # State(Xs=dLdXs, Us=dLdUs, Lambs=dLdLambs)
@@ -148,7 +150,7 @@ class TestDLQR(unittest.TestCase):
         Us = jnp.zeros(self.dims["TM"], dtype=float)
         Us = Us.at[2].set(1.0)
         self.Us = Us
-        self.params = Params(self.x0, self.lqr)
+        self.params = LQRParams(self.x0, self.lqr)
         # Verify that the average KKT conditions are satisfied
 
     def test_dlqr(self):
@@ -165,7 +167,7 @@ class TestDLQR(unittest.TestCase):
                 r=p.r,
                 S=p.S,
             )
-            return Params(p.x0, lqr)
+            return LQRParams(p.x0, lqr)
 
         @jax.jit
         def loss(prms):
