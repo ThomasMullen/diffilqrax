@@ -64,7 +64,7 @@ class TestDILQR(unittest.TestCase):
             return jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return jnp.tanh(theta.Uh @ x) + theta.Wh @ u
+            return jax.nn.sigmoid(theta.Uh @ x + theta.Wh @ u)
 
         self.model = System(
             cost, costf, dynamics, ModelDims(horizon=200, n=n, m=m, dt=dt)

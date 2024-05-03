@@ -44,5 +44,5 @@ def dilqr(model: System, params: iLQRParams, U_inits: Array, **kwargs) -> Array:
     local_lqr = make_local_lqr(model, Xs_star, Us_star, params) ##equiv of g1
     params = LQRParams(lqr = local_lqr, x0 = params.x0)
     tau_star =  dllqr(model.dims, params, tau_star)
-    return tau_star 
+    return tau_star #might make sense to return the full solution instead of tau_star
 
