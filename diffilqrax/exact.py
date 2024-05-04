@@ -1,9 +1,10 @@
 """
-This module contains the exact solution to the LQR problem by converting sequential time evolution into
-closed matrix form then inverting the matrix to get the optimal control sequence. The function quad_solve
-Uses the conjugate gradient method to solve the linear system Ax = b where A = big_G, b = -big_g. The function
-exact_solve uses numpy's linear solver to solve the same linear system.
+This module contains the exact solution to the LQR problem by converting sequential time evolution
+into closed matrix form then inverting the matrix to get the optimal control sequence. The function
+quad_solve uses the conjugate gradient method to solve the linear system Ax = b where A = big_G, 
+b = -big_g. The function exact_solve uses numpy's linear solver to solve the same linear system.
 """
+
 from typing import Tuple
 import numpy as np
 import jax
@@ -17,25 +18,16 @@ from diffilqrax.typs import ModelDims, LQRParams
 
 jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 
-"""The original problem is \sum_t x_t^T Q x_t + u_t^T R u_t + 2 x_t^T S u_t + c^T x_t subject 
-to x_{t+1} = A x_t + B u_t + a, for all t, and x_0 = x0.
-This translates into a dynamics constraint of the form x = F_0 x_0 + F u where F0 is an upper 
-diagonal matrix with blocks F0_{ij} = A^{j - i} if i>=j and 0 otherwise, and F is a block matrix 
-with blocks F_{ij} = A^{j - i} B if i>j and 0 otherwise.
 
-We can build the matrices F0 and F as follows:  
-F0 = np.block([[np.linalg.matrix_power(A, j - i) for j in range(T)] for i in range(T)]) -> Follows 
-Toeplitz structure!"""
-
-def t_span_mpartial(arr: Array, dims:ModelDims) -> Array:
+def t_span_mpartial(arr: Array, dims: ModelDims) -> Array:
     """Span matrix along time dimension."""
     return jnp.tile(arr, (dims.horizon, 1, 1))
 
 
-def t_span_vpartial(arr: Array, dims:ModelDims) -> Array:
+def t_span_vpartial(arr: Array, dims: ModelDims) -> Array:
     """Span vector along time dimension."""
     return jnp.tile(arr, (dims.horizon,))
-    
+
 
 def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Array]:
     """Solves a quadratic optimization problem.
@@ -49,7 +41,6 @@ def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Ar
         Tuple[Array, Array]: A tuple containing the optimal state trajectory and control inputs.
     """
 
-
     A = params.lqr.A[0]
     B = params.lqr.B[0]
     Q = params.lqr.Q[0]
@@ -61,9 +52,11 @@ def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Ar
     F = np.block(
         [
             [
-                np.linalg.matrix_power(A, i - j - 1) @ B
-                if j < i
-                else np.zeros((dims.n, dims.m))
+                (
+                    np.linalg.matrix_power(A, i - j - 1) @ B
+                    if j < i
+                    else np.zeros((dims.n, dims.m))
+                )
                 for j in range(dims.horizon)
             ]
             for i in range(dims.horizon)
@@ -121,9 +114,11 @@ def exact_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, A
     F = np.block(
         [
             [
-                np.linalg.matrix_power(A, i - j - 1) @ B
-                if j < i
-                else np.zeros((dims.n, dims.m))
+                (
+                    np.linalg.matrix_power(A, i - j - 1) @ B
+                    if j < i
+                    else np.zeros((dims.n, dims.m))
+                )
                 for j in range(dims.horizon)
             ]
             for i in range(dims.horizon)

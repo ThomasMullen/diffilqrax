@@ -1,17 +1,23 @@
 """
 Unit test for the LQR module
 """
+
 from pathlib import Path
 import unittest
 from os import getcwd
 import chex
-import jax 
+import jax
+from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
 import numpy as onp
 from matplotlib.pyplot import subplots, close, style
 
-from diffilqrax.typs import *
+from diffilqrax.typs import (
+    LQR,
+    LQRParams,
+    ModelDims,
+)
 from diffilqrax.lqr import (
     simulate_trajectory,
     lqr_adjoint_pass,
@@ -27,12 +33,17 @@ from diffilqrax.utils import keygen, initialise_stable_dynamics
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
-style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
+PLOT_URL = ("https://gist.githubusercontent.com/"
+       "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
+       "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
+       "figure_style.mplstyle")
+style.use(PLOT_URL)
 
 
-is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(
-    arr, onp.ndarray
-)
+def is_jax_array(arr: Array)->bool:
+    """validate jax array type"""
+    return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
+
 
 def setup_lqr(dims: chex.Dimensions,
               pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}) -> LQR:
@@ -77,6 +88,7 @@ class TestLQR(unittest.TestCase):
         self.Us = Us
 
     def test_lqr_params_struct(self):
+        """test LQRParams struct instances"""
         print("Construct params")
         params = LQRParams(self.x0, self.lqr)
         chex.assert_trees_all_close(params[0], self.x0)
@@ -109,15 +121,16 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(self.lqr.S.dtype, float)
         chex.assert_type(self.lqr.Qf.dtype, float)
         # test jax arrays
-        assert is_jax_Array(self.lqr.Q)
-        assert is_jax_Array(self.lqr.R)
-        assert is_jax_Array(self.lqr.S)
-        assert is_jax_Array(self.lqr.Qf)
-        assert is_jax_Array(self.lqr.A)
-        assert is_jax_Array(self.lqr.B)
+        assert is_jax_array(self.lqr.Q)
+        assert is_jax_array(self.lqr.R)
+        assert is_jax_array(self.lqr.S)
+        assert is_jax_array(self.lqr.Qf)
+        assert is_jax_array(self.lqr.A)
+        assert is_jax_array(self.lqr.B)
         print("LQR struct passed.")
 
     def test_simulate_trajectory(self):
+        """test simulate trajectory shape and dtype"""
         print("Running test_simulate_trajectory")
         params = LQRParams(self.x0, self.lqr)
         Xs = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
@@ -125,6 +138,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["N"])
 
     def test_lqr_adjoint_pass(self):
+        """test adjoint pass shape and dtype"""
         print("Running test_lqr_adjoint_pass")
         params = LQRParams(self.x0, self.lqr)
         Xs_sim = simulate_trajectory(lin_dyn_step, self.Us, params, self.sys_dims)
@@ -133,6 +147,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_shape(Lambs, (self.dims["T"][0] + 1,) + self.dims["N"])
 
     def test_lqr_backward_pass(self):
+        """test backward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
         (dJ, Ks), exp_dJ = lqr_backward_pass(
             lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
@@ -145,6 +160,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(exp_dJ, float)
 
     def test_lqr_forward_pass(self):
+        """test forward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
         (dJ, Ks), exp_dJ = lqr_backward_pass(
             lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
@@ -156,6 +172,7 @@ class TestLQR(unittest.TestCase):
         chex.assert_shape(Us_lqr, self.dims["TM"])
 
     def test_solve_lqr(self):
+        """test LQR solution shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
         chex.assert_type(gains_lqr.K, float)
@@ -169,13 +186,14 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(Lambs_lqr, float)
         chex.assert_shape(Lambs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         # verify output jax arrays
-        assert is_jax_Array(gains_lqr.K)
-        assert is_jax_Array(gains_lqr.k)
-        assert is_jax_Array(Xs_lqr)
-        assert is_jax_Array(Us_lqr)
-        assert is_jax_Array(Lambs_lqr)
-        
+        assert is_jax_array(gains_lqr.K)
+        assert is_jax_array(gains_lqr.k)
+        assert is_jax_array(Xs_lqr)
+        assert is_jax_array(Us_lqr)
+        assert is_jax_array(Lambs_lqr)
+
     def test_solution_output(self):
+        """test LQR solution output"""
         params = LQRParams(self.x0, self.lqr)
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
         fig_dir = Path(Path(getcwd()), "fig_dump")
@@ -187,12 +205,13 @@ class TestLQR(unittest.TestCase):
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/lqr_solution_TestLQR.png")
         close()
-        
+
     def test_kkt_optimal(self):
+        """test KKT conditions for LQR optimality"""
         # Setup the LQR problem
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
-        
+
         params = LQRParams(self.x0, self.lqr)
         _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=params, sys_dims=self.sys_dims)
         # Exercise the KKT function
@@ -218,16 +237,16 @@ class TestLQR(unittest.TestCase):
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
-        
+
         # Verify that the terminal state KKT conditions is satisfied
-        assert jnp.allclose(dLdXs[-1], 0.0, 
+        assert jnp.allclose(dLdXs[-1], 0.0,
                             rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
-        
+
         # Verify that all KKT conditions are satisfied
         assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
-        
+
     def tearDown(self):
         """Destruct test class"""
         print("Running tearDown method...")
@@ -264,7 +283,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         Us = Us.at[2].set(1.0)
         self.Us = Us
         self.params = LQRParams(self.x0, self.lqr)
-        
+
     def test_lqr_solution(self):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # setup
@@ -275,9 +294,9 @@ class TestLQRSolutionExact(unittest.TestCase):
         # Exercise the LQR solver function
         _, Xs_dir, Us_dir, _ = solve_lqr(self.params, self.sys_dims)
         print("Lqr solve")
-        Xs_quad, Us_quad = quad_solve(self.params, self.sys_dims, self.x0) 
+        Xs_quad, Us_quad = quad_solve(self.params, self.sys_dims, self.x0)
         print("CG solve")
-        Xs_exact, Us_exact = exact_solve(self.params, self.sys_dims, self.x0)   
+        Xs_exact, Us_exact = exact_solve(self.params, self.sys_dims, self.x0)
         print("Mat inversion solve")
         fig, ax = subplots(1,3, figsize=(10,3), sharey=True)
         ax[0].plot(Us_dir.squeeze())
@@ -295,12 +314,13 @@ class TestLQRSolutionExact(unittest.TestCase):
         assert jnp.allclose(Xs_dir[:-1], Xs_exact, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(Xs_dir[:-1], Xs_quad, rtol=1e-04, atol=1e-05)
         assert jnp.allclose(Us_dir[:-1], Us_quad, rtol=1e-04, atol=1e-05)
-        
+
     def test_kkt_optimal(self):
+        """test KKT conditions for LQR optimality"""
         # Setup the LQR problem
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
-        
+
         _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(self.params, self.sys_dims)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
@@ -325,17 +345,16 @@ class TestLQRSolutionExact(unittest.TestCase):
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
-        
+
         # Verify that the terminal state KKT conditions is satisfied
-        assert jnp.allclose(dLdXs[-1], 0.0, 
+        assert jnp.allclose(dLdXs[-1], 0.0,
                             rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
-        
+
         # Verify that all KKT conditions are satisfied
         assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
-        
-        
+
+
 if __name__ == "__main__":
     unittest.main()
-    

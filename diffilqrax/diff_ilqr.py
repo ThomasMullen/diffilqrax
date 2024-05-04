@@ -1,19 +1,19 @@
 """
-Module contains functions for solving the differential iterative linear quadratic regulator (DiLQR) problem.
+Module solves the differential iterative linear quadratic regulator (DiLQR) problem.
 """
-from functools import partial
-from typing import Tuple
-from jax.numpy import matmul as mm
-import jax.numpy as jnp
-from jax import Array, custom_vjp, lax
 
-from diffilqrax.typs import iLQRParams, ModelDims, System, LQR, LQRParams
-from diffilqrax.ilqr import ilQR_solver, approx_lqr, approx_lqr_dyn
-import diffilqrax.diff_lqr as get_qra_bar, dlqr, dllqr
+from jax import Array, lax
+import jax.numpy as jnp
+from jax.numpy import matmul as mm
+
+from diffilqrax.typs import iLQRParams, System, LQR, LQRParams
+from diffilqrax.ilqr import ilqr_solver, approx_lqr_dyn
+from diffilqrax.diff_lqr import dllqr
 from diffilqrax.lqr import bmm
 
 
 def make_local_lqr(model, Xs_star, Us_star, params):
+    """Approximate the local LQR around the given trajectory"""
     lqr = approx_lqr_dyn(model, Xs_star, Us_star, params)
     new_lqr = LQR(
         A=lqr.A,
@@ -27,15 +27,31 @@ def make_local_lqr(model, Xs_star, Us_star, params):
         r=lqr.r - bmm(lqr.R, Us_star) - bmm(lqr.S.transpose(0, 2, 1), Xs_star[:-1]),
         S=lqr.S,
     )
-    return new_lqr ##get the local LQR like that, and then gradients wrt to that from the function, but still outputting the right Us_star
-#so do need the custom iqlr
-    
-    
-def dilqr(model: System, params: iLQRParams, U_inits: Array, **kwargs) -> Array:
-    sol = ilQR_solver(model, lax.stop_gradient(params), U_inits, **kwargs)  #  tau_guess)
-    (Xs_star, Us_star, Lambs_stars), total_cost, costs = sol
-    tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, model.dims.m))]]
-    local_lqr = make_local_lqr(model, Xs_star, Us_star, params) ##equiv of g1
-    params = LQRParams(lqr = local_lqr, x0 = params.x0)
-    tau_star =  dllqr(model.dims, params, tau_star)
-    return tau_star #might make sense to return the full solution instead of tau_star
+    #get the local LQR like that, and then gradients wrt to that from the function,
+    # but still outputting the right Us_star
+    return new_lqr
+
+
+# so do need the custom ilqr
+def dilqr(model: System, params: iLQRParams, Us_init: Array, **kwargs) -> Array:
+    """Solves the differential iLQR problem.
+
+    Args:
+        model (System): The system model.
+        params (iLQRParams): The iLQR parameters.
+        Us_init (Array): The initial control sequence.
+
+    Returns:
+        Array: The optimized control sequence.
+    """
+    sol = ilqr_solver(
+        model, lax.stop_gradient(params), Us_init, **kwargs
+    )  #  tau_guess)
+    (Xs_star, Us_star, Lambs_star), *_ = sol
+    tau_star = jnp.c_[
+        Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, model.dims.m))]
+    ]
+    local_lqr = make_local_lqr(model, Xs_star, Us_star, params)  ##equiv of g1
+    params = LQRParams(lqr=local_lqr, x0=params.x0)
+    tau_star = dllqr(model.dims, params, tau_star)
+    return tau_star  # might make sense to return the full solution instead of tau_star

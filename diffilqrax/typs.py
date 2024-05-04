@@ -1,12 +1,19 @@
 """Define data structures and types"""
+
 from typing import NamedTuple, Callable, Any, Union, Tuple, Optional
 from jax import Array
 from jax.typing import ArrayLike
 
+def symmetrise_tensor(x: Array) -> Array:
+    """Symmetrise tensor"""
+    assert x.ndim == 3
+    return (x + x.transpose(0, 2, 1)) / 2
 
-# symmetrise
-symmetrise_tensor = lambda x: (x + x.transpose(0, 2, 1)) / 2
-symmetrise_matrix = lambda x: (x + x.T) / 2
+
+def symmetrise_matrix(x: Array) -> Array:
+    """Symmetrise matrix"""
+    assert x.ndim == 2
+    return (x + x.T) / 2
 
 
 class ModelDims(NamedTuple):
@@ -100,19 +107,27 @@ class iLQRParams(NamedTuple):
 
 
 class Theta(NamedTuple):
+    """RNN parameters"""
+
     Uh: Array
     Wh: Array
     sigma: ArrayLike
     Q: Array
 
+
 class Thetax0(NamedTuple):
+    """RNN parameters and initial state"""
+
     Uh: Array
     Wh: Array
     sigma: ArrayLike
     Q: Array
     x0: Array
-    
+
+
 class PendulumParams(NamedTuple):
+    """Pendulum parameters"""
+
     m: float
     l: float
     g: float
