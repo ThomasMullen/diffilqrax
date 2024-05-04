@@ -49,6 +49,7 @@ def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Ar
         Tuple[Array, Array]: A tuple containing the optimal state trajectory and control inputs.
     """
 
+
     A = params.lqr.A[0]
     B = params.lqr.B[0]
     Q = params.lqr.Q[0]

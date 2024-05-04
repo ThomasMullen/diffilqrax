@@ -7,8 +7,7 @@ import jax
 import jax.lax as lax
 import jax.numpy as jnp
 
-import diffilqrax.lqr as lqr
-from diffilqrax.utils import keygen, initialise_stable_dynamics
+import diffilqrax.lqr as lqr, bmm
 from diffilqrax.typs import *
 
 
@@ -65,7 +64,7 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """
     theta = params.theta
     tps = jnp.arange(model.dims.horizon)
-
+    
     (Fx, Fu) = vectorise_fun_in_time(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
     (Cx, Cu) = vectorise_fun_in_time(linearise(model.cost))(tps, Xs[:-1], Us, theta)
     (Cxx, Cxu), (Cux, Cuu) = vectorise_fun_in_time(quadratise(model.cost))(
@@ -90,6 +89,44 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
 
     return lqr_params
 
+
+def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
+    """Calls linearisation and quadratisation function
+
+    Returns:
+        LQR: return the LQR structure
+        ModelDims: return the dimensionality of model
+    """
+    theta = params.theta
+    tps = jnp.arange(model.dims.horizon)
+    def get_diff_dyn(t,x,u, theta):
+        (Fx, Fu) = linearise(model.dynamics)(t,x,u, theta)
+        return model.dynamics(t,x,u,theta) - Fx@x - Fu@u
+    
+    (Fx, Fu) = vectorise_fun_in_time(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
+    f = jax.vmap(get_diff_dyn, in_axes = (0,0,0,None))(tps, Xs[:-1], Us, theta)
+    (Cx, Cu) = vectorise_fun_in_time(linearise(model.cost))(tps, Xs[:-1], Us, theta)
+    (Cxx, Cxu), (Cux, Cuu) = vectorise_fun_in_time(quadratise(model.cost))(
+        tps, Xs[:-1], Us, theta
+    )
+    fCx = jax.jacrev(model.costf)(Xs[-1], theta)
+    fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
+
+    # set-up LQR
+    lqr_params = LQR(
+        A=Fx,
+        B=Fu,
+        a=f, #jnp.zeros((model.dims.horizon, model.dims.n)),
+        q=Cx, #- bmm(Cxx,Xs[:-1]) - bmm(Cxu, Us),
+        qf=fCx, #- mm(fCxx, Xs[-1]),
+        r=Cu, #- bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
+        Qf=fCxx,
+        Q=Cxx,
+        R=Cuu,
+        S=Cxu,
+    )()
+
+    return lqr_params
 
 def ilqr_simulate(
     model: System, Us: Array, params: iLQRParams
@@ -256,8 +293,7 @@ def ilQR_solver(
         z = (old_cost - new_total_cost) / old_cost
 
         # determine cond: Δold_cost > threshold
-        carry_on = jnp.abs(z) > convergence_thresh
-
+        carry_on = jnp.abs(z) > convergence_thresh  #n_iter < 70 #
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
@@ -287,10 +323,10 @@ def linesearch(
     alpha_init: float,
     cost_init: float,
     expected_dJ: CostToGo,
-    beta: float = 0.8,
+    beta: float = 0.5,
     max_iter_linesearch: int = 20,
-    tol: float = 0.99999,
-    alpha_min=0.0001,
+    tol: float = 0.1,
+    alpha_min=1e-8,
 ) -> Tuple[Tuple[Array, Array], float, float, Array]:
     """Implementation of the line search backtracking algorithm for ilqr algorithm.
     Each iteration of the line search algorithm performs a forward pass with the new control inputs

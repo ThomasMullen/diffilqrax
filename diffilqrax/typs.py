@@ -103,8 +103,15 @@ class Theta(NamedTuple):
     Uh: Array
     Wh: Array
     sigma: ArrayLike
+    Q: Array
 
-
+class Thetax0(NamedTuple):
+    Uh: Array
+    Wh: Array
+    sigma: ArrayLike
+    Q: Array
+    x0: Array
+    
 class PendulumParams(NamedTuple):
     m: float
     l: float

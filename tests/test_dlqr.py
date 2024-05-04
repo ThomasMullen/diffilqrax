@@ -13,10 +13,7 @@ from jaxopt import linear_solve, implicit_diff
 
 from diffilqrax.typs import LQRParams, ModelDims, LQR
 from diffilqrax.diff_lqr import dlqr
-from diffilqrax.lqr import (
-    solve_lqr,
-    kkt,
-)
+from diffilqrax.lqr import solve_lqr, kkt
 from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])

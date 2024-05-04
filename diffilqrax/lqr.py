@@ -113,6 +113,7 @@ def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
+    """expected change in cost [Tassa, 2020]"""
     return - (dJ.V * alpha**2 + dJ.v * alpha)
 
 
