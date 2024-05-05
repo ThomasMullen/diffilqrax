@@ -1,9 +1,10 @@
 """
-This module contains the exact solution to the LQR problem by converting sequential time evolution into
-closed matrix form then inverting the matrix to get the optimal control sequence. The function quad_solve
-Uses the conjugate gradient method to solve the linear system Ax = b where A = big_G, b = -big_g. The function
-exact_solve uses numpy's linear solver to solve the same linear system.
+This module contains the exact solution to the LQR problem by converting sequential time evolution
+into closed matrix form then inverting the matrix to get the optimal control sequence. The function
+quad_solve uses the conjugate gradient method to solve the linear system Ax = b where A = big_G, 
+b = -big_g. The function exact_solve uses numpy's linear solver to solve the same linear system.
 """
+
 from typing import Tuple
 import numpy as np
 import jax
@@ -13,33 +14,32 @@ from jax.numpy.linalg import matrix_power
 from jax.scipy.linalg import block_diag
 import jaxopt
 
-from src.typs import ModelDims, LQRParams
+from diffilqrax.typs import ModelDims, LQRParams
 
 jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 
-"""The original problem is \sum_t x_t^T Q x_t + u_t^T R u_t + 2 x_t^T S u_t + c^T x_t subject 
-to x_{t+1} = A x_t + B u_t + a, for all t, and x_0 = x0.
-This translates into a dynamics constraint of the form x = F_0 x_0 + F u where F0 is an upper 
-diagonal matrix with blocks F0_{ij} = A^{j - i} if i>=j and 0 otherwise, and F is a block matrix 
-with blocks F_{ij} = A^{j - i} B if i>j and 0 otherwise.
 
-We can build the matrices F0 and F as follows:  
-F0 = np.block([[np.linalg.matrix_power(A, j - i) for j in range(T)] for i in range(T)]) -> Follows 
-Toeplitz structure!"""
-
-def t_span_mpartial(arr: Array, dims:ModelDims) -> Array:
+def t_span_mpartial(arr: Array, dims: ModelDims) -> Array:
     """Span matrix along time dimension."""
     return jnp.tile(arr, (dims.horizon, 1, 1))
 
 
-def t_span_vpartial(arr: Array, dims:ModelDims) -> Array:
+def t_span_vpartial(arr: Array, dims: ModelDims) -> Array:
     """Span vector along time dimension."""
     return jnp.tile(arr, (dims.horizon,))
-    
 
-def quad_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Array]:
+
+def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Array]:
     """Solves a quadratic optimization problem.
 
+    Args:
+        params (Params): The parameters for the optimization problem.
+        dims (ModelDims): The dimensions of the model.
+        x0 (Array): The initial state.
+
+    Returns:
+        Tuple[Array, Array]: A tuple containing the optimal state trajectory and control inputs.
+    """
 
     A = params.lqr.A[0]
     B = params.lqr.B[0]
@@ -52,9 +52,11 @@ def quad_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Array
     F = np.block(
         [
             [
-                np.linalg.matrix_power(A, i - j - 1) @ B
-                if j < i
-                else np.zeros((dims.n, dims.m))
+                (
+                    np.linalg.matrix_power(A, i - j - 1) @ B
+                    if j < i
+                    else np.zeros((dims.n, dims.m))
+                )
                 for j in range(dims.horizon)
             ]
             for i in range(dims.horizon)
@@ -67,7 +69,7 @@ def quad_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Array
     # where big_G = @*(F^T@big_Q@F + big_R) and big_g = 2*F^T@big_Q@F0 + big_r
     # and cg = x0^T@F0^T@big_Q@F0@x0 + big_q^T@F0@x0
 
-    # this is minimized by solving Ax = b where A = big_G, b = -big_g"""
+    # this is minimized by solving Ax = b where A = big_G, b = -big_g
     big_Q = block_diag(*t_span_mpartial(Q, dims))
     big_q = t_span_vpartial(q, dims)
     big_R = block_diag(*t_span_mpartial(R, dims))
@@ -87,19 +89,10 @@ def quad_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Array
 
     us_star = jaxopt.linear_solve.solve_cg(matvec, -big_g)
     xs_star = F0 @ big_x0 + F @ us_star
-    #c = 0.5*us_star[...,None]^T@big_R@us_star[...,None] + big_r[...,None]^T@us_star[...,None] + 0.5*xs_star[...,None]^T@big_Q@xs_star[...,None] + big_q[...,None]^T@xs_star[...,None]
-    u = np.reshape(us_star, (dims.horizon, dims.m,))[:-1]
-    x = np.reshape(xs_star, (dims.horizon, dims.n,))
-    return x, u
-     
-def exact_solve(params:LQRParams, dims:ModelDims, x0:jnp.ndarray):
-    t_span_mpartial = lambda arr: jnp.tile(arr, (dims.horizon,1,1))
-    t_span_vpartial = lambda arr: jnp.tile(arr, (dims.horizon,))
-=======
     return xs_star.reshape((dims.horizon,dims.n,)), us_star.reshape((dims.horizon, dims.m,))[:-1]
 
 
-def exact_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Array]:
+def exact_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Array]:
     """Solves the optimal control problem using the linear solver method.
 
     Args:
@@ -121,9 +114,11 @@ def exact_solve(params: Params, dims: ModelDims, x0: Array) -> Tuple[Array, Arra
     F = np.block(
         [
             [
-                np.linalg.matrix_power(A, i - j - 1) @ B
-                if j < i
-                else np.zeros((dims.n, dims.m))
+                (
+                    np.linalg.matrix_power(A, i - j - 1) @ B
+                    if j < i
+                    else np.zeros((dims.n, dims.m))
+                )
                 for j in range(dims.horizon)
             ]
             for i in range(dims.horizon)

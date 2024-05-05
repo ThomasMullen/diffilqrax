@@ -1,45 +1,26 @@
 """LQR solver via dynamic programming"""
-from typing import Callable, NamedTuple, Tuple, Union
-from functools import partial
+
+from typing import Callable, Tuple
 from jax.typing import ArrayLike
 from jax import Array
 import jax
-import jax.lax as lax
+from jax import lax
 import jax.numpy as jnp
-import jax.random as jr
-from functools import partial
 
-from src.typs import *
+from diffilqrax.typs import *
 
 jax.config.update("jax_enable_x64", True)  # double precision
 # symmetrise
 symmetrise_tensor = lambda x: (x + x.transpose(0, 2, 1)) / 2
 symmetrise_matrix = lambda x: (x + x.T) / 2
 
-# matrix multiplication through time
-bmm = jax.vmap(jnp.matmul)
+def bmm(arr1: Array, arr2: Array) -> Array:
+    """Batch matrix multiplication"""
+    return jax.vmap(jnp.matmul)(arr1, arr2)
 
 # LQR struct
 LQRBackParams = Tuple[
-    ArrayLike, 
-    ArrayLike, 
-    ArrayLike, 
-    ArrayLike, 
-    ArrayLike, 
-    ArrayLike, 
-    ArrayLike
-]
-
-LQRTrackParams = Tuple[
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
-    ArrayLike,
+    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike
 ]
 
 
@@ -87,7 +68,7 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
     Returns:
         np.ndarray: adjoint λs [(T+1)xn]
     """
-    x0, lqr = params.x0, params[1]
+    lqr = params[1]
     AT = lqr.A.transpose(0, 2, 1)
     lambf = lqr.Qf @ Xs[-1] + lqr.qf
 
@@ -96,10 +77,11 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
         nlamb = aT @ lamb + Q @ x + q + S @ u
         return nlamb, nlamb
 
-    _, lambs = lax.scan(
+    lambs = lax.scan(
         adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
-    )
-    return jnp.vstack([lambs,lambf[None]])
+    )[1]
+    return jnp.vstack([lambs, lambf[None]])
+
 
 def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
     """LQR forward pass using gain state feedback
@@ -119,49 +101,16 @@ def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
         nx = A @ x + B @ u + a
         return nx, (nx, u)
 
-    xf, (Xs, Us) = lax.scan(
+    Xs, Us = lax.scan(
         dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k)
-    )
-
-    return jnp.vstack([x0[None], Xs]), Us
-
-
-def lqr_tracking_forward_pass(
-    gains: Gains, params: LQRParams, Xs_star: ArrayLike, Us_star: ArrayLike
-) -> Tuple[Array, Array]:
-    """LQR forward pass tracking using gain state feedback on state-input deviations
-
-    Args:
-        gains (Gains): K matrices
-        params (Params): LQR state and cost matrices
-        Xs_star (ArrayLike): target trajectory [(T+1)xn]
-        Us_star (ArrayLike): initial input [Txm]
-
-    Returns:
-        Tuple[Array, Array]: updated state [(T+1)xn] and inputs [Txm]
-    """
-    x0, lqr = params.x0, params.lqr
-    dx0 = x0 - Xs_star[0]
-
-    def dynamics(x: ArrayLike, params: LQRTrackParams):
-        A, B, a, K, k, x_star, u_star = params
-        delta_x = x - x_star
-        delta_u = K @ delta_x + k
-        u_hat = u_star + delta_u
-        nx = A @ x + B @ u_hat + a
-        return nx, (nx, u_hat)
-
-    xf, (Xs, Us) = lax.scan(
-        dynamics,
-        init=dx0,
-        xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k, Xs_star[1:], Us_star),
-    )
+    )[1]
 
     return jnp.vstack([x0[None], Xs]), Us
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
-    return - (dJ.V * alpha**2 + dJ.v * alpha)
+    """expected change in cost [Tassa, 2020]"""
+    return -(dJ.V * alpha**2 + dJ.v * alpha)
 
 
 def lqr_backward_pass(
@@ -175,7 +124,7 @@ def lqr_backward_pass(
     Args:
         lqr (LQR): LQR parameters
         T (int): parameter time horizon
-        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020]. 
+        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020].
         Defaults to False.
         verbose (bool, optional): Print out matrix shapes for debugging. Defaults to False.
 
@@ -231,11 +180,11 @@ def lqr_backward_pass(
         xs=jnp.arange(dims.horizon),
         reverse=True,
     )
-    
+
     if verbose:
         assert lax.bitwise_not(jnp.any(jnp.isnan(Ks.K)))
         assert lax.bitwise_not(jnp.any(jnp.isnan(Ks.k)))
-    
+
     if not expected_change:
         return dJ, Ks
 
@@ -257,16 +206,10 @@ def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
     dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
     dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
     dLdUs = (
-        bmm(ST, Xs[:-1])
-        + bmm(params.lqr.R, Us[:])
-        + params.lqr.r
-        + bmm(BT, Lambs[1:])
+        bmm(ST, Xs[:-1]) + bmm(params.lqr.R, Us[:]) + params.lqr.r + bmm(BT, Lambs[1:])
     )
     dLdLambs = (
-        bmm(params.lqr.A, Xs[:-1])
-        + bmm(params.lqr.B, Us[:])
-        + params.lqr.a
-        - Xs[1:]
+        bmm(params.lqr.A, Xs[:-1]) + bmm(params.lqr.B, Us[:]) + params.lqr.a - Xs[1:]
     )
     dLdLamb0 = params.x0 - Xs[0]
     dLdLambs = jnp.concatenate([dLdLamb0[None], dLdLambs])
@@ -285,11 +228,11 @@ def solve_lqr(params: LQRParams, sys_dims: ModelDims):
 
 
 def solve_lqr_swap_x0(params: LQRParams, sys_dims: ModelDims):
-    "run backward forward sweep to find optimal control"
+    "run backward forward sweep to find optimal control freeze x0 to zero"
     # backward
-    #print("r", new_params.lqr.r[-10:])
+    # print("r", new_params.lqr.r[-10:])
     _, gains = lqr_backward_pass(params.lqr, sys_dims)
-    #print("k", gains.k[-10:])
+    # print("k", gains.k[-10:])
     new_params = LQRParams(jnp.zeros_like(params.x0), params.lqr)
     Xs, Us = lqr_forward_pass(gains, new_params)
     # adjoint

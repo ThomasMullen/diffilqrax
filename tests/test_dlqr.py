@@ -1,6 +1,7 @@
 """
 Unit tests for the differentiable LQR solver
 """
+
 from typing import NamedTuple
 import unittest
 import chex
@@ -11,26 +12,20 @@ import jax.numpy as jnp
 import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
-from src.diff_lqr import dlqr
-from src.lqr import (
-    LQR,
-    LQRParams,
-    ModelDims,
-    solve_lqr,
-    kkt,
-)
-import numpy as onp
-from src.exact import quad_solve, exact_solve
-from src.utils import keygen, initialise_stable_dynamics
+from diffilqrax.typs import LQRParams, ModelDims, LQR
+from diffilqrax.diff_lqr import dlqr
+from diffilqrax.lqr import solve_lqr, kkt
+from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
+PRINTING_ON = True
 
-is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(
-    arr, onp.ndarray
-)
-printing_on = True
+
+def is_jax_array(arr: Array) -> bool:
+    """validate jax array type"""
+    return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
 
 
 def setup_lqr_time_varying(
@@ -63,18 +58,14 @@ def setup_lqr(
     dims: chex.Dimensions,
     pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3},
 ) -> LQR:
-    dt = 0.1
+    """set up time invariant LQR problem"""
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 3)
     span_time_m = dims["TXX"]
     span_time_v = dims["TX"]
-    A = initialise_stable_dynamics(
-        next(skeys), *dims["NT"], radii=0.6
-    )  # jnp.float64(jnp.tile(jnp.array([[1-0.5*dt,0],[0.2*dt,1-0.5*dt]]), dims["TXX"]))
+    A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
     B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
     a = jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
-    # B = jnp.tile(jnp.array([[1.,0],[0,1.]]), dims["TXX"])#*dt
-    # a = jnp.zeros(dims["TNX"])
     Qf = 1.0 * jnp.eye(dims["N"][0])
     qf = 1.0 * jnp.ones(dims["N"])
     Q = 1.0 * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
@@ -89,6 +80,7 @@ class TestLQR(unittest.TestCase):
     """Test LQR dimensions and dtypes"""
 
     def setUp(self):
+        """set up LQR problem"""
         self.dims = chex.Dimensions(T=60, N=2, M=2, X=1)
         self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         self.lqr = setup_lqr(self.dims)
@@ -100,6 +92,7 @@ class TestLQR(unittest.TestCase):
         # Verify that the average KKT conditions are satisfied
 
     def test_dlqr(self):
+        """test dlqr struct and shapes"""
         @jax.jit
         def loss(p):
             Us_lqr = dlqr(
@@ -107,7 +100,7 @@ class TestLQR(unittest.TestCase):
             )
             return jnp.linalg.norm(p.lqr.A) + jnp.linalg.norm(Us_lqr)
 
-        val, g = jax.value_and_grad(loss)(self.params)
+        _, g = jax.value_and_grad(loss)(self.params)
         chex.assert_trees_all_equal_shapes_and_dtypes(g, self.params)
 
     def tearDown(self):
@@ -116,12 +109,14 @@ class TestLQR(unittest.TestCase):
 
 
 class State(NamedTuple):
+    """helper class for state"""
     Xs: Array
     Us: Array
     Lambs: Array
 
 
 class Prms(NamedTuple):
+    """helper class for params"""
     q: Array
     r: Array
     Q: Array
@@ -133,6 +128,7 @@ class Prms(NamedTuple):
 
 
 def state_kkt(Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray, params: LQRParams):
+    """calculate KKT conditions for LQR problem"""
     Xs, Us, Lambs = Xs
     dLdXs, dLdUs, dLdLambs = kkt(params, Xs, Us, Lambs)
     return dLdXs, dLdUs, dLdLambs  # State(Xs=dLdXs, Us=dLdUs, Lambs=dLdLambs)
@@ -154,6 +150,10 @@ class TestDLQR(unittest.TestCase):
         # Verify that the average KKT conditions are satisfied
 
     def test_dlqr(self):
+        """
+        test dlqr struct, shapes and solutions compared to direct gradients,
+        and implicit gradients
+        """
         def replace_params(p):
             lqr = LQR(
                 A=p.A,
@@ -172,8 +172,8 @@ class TestDLQR(unittest.TestCase):
         @jax.jit
         def loss(prms):
             tau_lqr = dlqr(self.sys_dims, replace_params(prms), self.x0)
-            Us_lqr = tau_lqr[:, self.dims.N :]
-            Xs_lqr = tau_lqr[:, : self.dims.N]
+            Us_lqr = tau_lqr[:, self.sys_dims.n :]
+            Xs_lqr = tau_lqr[:, : self.sys_dims.n]
             return jnp.linalg.norm(Us_lqr) ** 2
 
         @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
@@ -204,7 +204,7 @@ class TestDLQR(unittest.TestCase):
         lqr_val, lqr_g = jax.value_and_grad(loss)(prms)
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
-        if printing_on:
+        if PRINTING_ON:
             print("\n || Printing grads || \n ")
             print("\n || Printing  q || \n ")
             print(implicit_g.q[:4])
