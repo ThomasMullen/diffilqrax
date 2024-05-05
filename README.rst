@@ -35,51 +35,42 @@ Structure
 Examples
 ========
 
+.. code-block:: python
 
-..code-block:: python
-   
-      import jax.numpy as jnp
-      import jax.random as jr
-      from diffilqrax import iLQR
-      from diffilqrax.typs import iLQRParams, Theta, ModelDims
-      from diffilqrax.utils import initialise_stable_dynamics, keygen
+   import jax.numpy as jnp
+   import jax.random as jr
+   from diffilqrax import ilqr
+   from diffilqrax.typs import iLQRParams, Theta, ModelDims, System
+   from diffilqrax.utils import initialise_stable_dynamics, keygen
 
-      dims = ModelDims(8, 2, 100, dt=0.1)
+   dims = ModelDims(8, 2, 100, dt=0.1)
 
-      key = jr.PRNGKey(seed=234)
-      key, skeys = keygen(key, 5)
+   key = jr.PRNGKey(seed=234)
+   key, skeys = keygen(key, 5)
 
-      Uh = initialise_stable_dynamics(next(skeys), dims.n, dims.horizon, 0.6)[0]
-      Wh = jr.normal(next(skeys), (dims.n, dims.m))
-      theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n))
-      params = iLQRParams(
-         x0=jr.normal(next(skeys), dims.n), theta=theta
-      )
+   Uh = initialise_stable_dynamics(next(skeys), dims.n, dims.horizon, 0.6)[0]
+   Wh = jr.normal(next(skeys), (dims.n, dims.m))
+   theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n))
+   params = iLQRParams(x0=jr.normal(next(skeys), dims.n), theta=theta)
+   Us = jnp.zeros((dims.horizon, dims.m))   
+   # define linesearch hyper parameters
+   ls_kwargs = {
+      "beta":0.8,
+      "max_iter_linesearch":16,
+      "tol":1e0,
+      "alpha_min":0.0001,
+      }
+   def cost(t, x, u, theta):
+      return jnp.sum(x**2) + jnp.sum(u**2)
 
-      Us = jnp.zeros((dims.horizon, dims.m))
-      
-      # define linesearch hyper parameters
-      ls_kwargs = {
-         "beta":0.8,
-         "max_iter_linesearch":16,
-         "tol":1e0,
-         "alpha_min":0.0001,
-         }
+   def costf(x, theta):
+      return jnp.sum(x**2)
 
-      def cost(t, x, u, theta):
-         return jnp.sum(x**2) + jnp.sum(u**2)
+   def dynamics(t, x, u, theta):
+      return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
 
-      def costf(x, theta):
-         return jnp.sum(x**2)
-
-      def dynamics(t, x, u, theta):
-         return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
-
-      model = System(
-         cost, costf, dynamics, dims
-      )
-
-      ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
+   model = System(cost, costf, dynamics, dims)
+   ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
 
 
 License
