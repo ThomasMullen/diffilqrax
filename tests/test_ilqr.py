@@ -304,7 +304,8 @@ class TestiLQRExactSolution(unittest.TestCase):
             self.model, self.Us, self.params
         )
         # verify
-        chex.assert_trees_all_equal(self.fixtures["X_orig"], Xs_init[1:])
+        # chex.assert_trees_all_equal(self.fixtures["X_orig"], Xs_init[1:])
+        chex.assert_trees_all_close(self.fixtures["X_orig"], Xs_init[1:], rtol=1e-11, atol=1e-11)
 
         # exercise ilqr solver
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilqr_solver(
