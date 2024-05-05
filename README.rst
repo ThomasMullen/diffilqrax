@@ -22,10 +22,14 @@ To get started with this code, clone the repository and install the required dep
 
    git clone git@github.com:ThomasMullen/diffilqrax.git
    cd diffilqrax
-   pip install -r requirements.txt
    python -m build
-   python setup.py sdist bdist_wheel
    pip install -e .
+
+or, you can import from pip install
+
+.. code-block:: bash
+
+   pip install diffilqrax
 
 
 Structure
@@ -50,7 +54,7 @@ Examples
 
    Uh = initialise_stable_dynamics(next(skeys), dims.n, dims.horizon, 0.6)[0]
    Wh = jr.normal(next(skeys), (dims.n, dims.m))
-   theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n))
+   theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n), Q=jnp.eye(dims.n))
    params = iLQRParams(x0=jr.normal(next(skeys), dims.n), theta=theta)
    Us = jnp.zeros((dims.horizon, dims.m))   
    # define linesearch hyper parameters

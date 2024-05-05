@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -12,27 +12,17 @@ description = "Differentiable iLQR algorithm for dynamical systems"
 readme = "README.rst"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
-
 dynamic = ["dependencies", "optional-dependencies", "version"]
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
-version = {attr = "diffilqrax.VERSION"}
-
-
 classifiers = [
   "Development Status :: 3 - Alpha",
-
   # Indicate who your project is intended for
   "Intended Audience :: Science/Research",
   "Intended Audience :: Education",
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Scientific/Engineering :: Physics",
-  
   # Pick your license as you wish
   "License :: OSI Approved :: Apache Software License",
-
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
@@ -41,6 +31,19 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3 :: Only",
 ]
+
+[tool.setuptools]
+#packages = ["diffilqrax", "tests", "examples"]
+#package-dir = {"" = "diffilqrax"}
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.setuptools.dynamic]
+version = {file = "diffilqrax/VERSION"}
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = {dev = { file = ["requirements_dev.txt"] }}
+
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
