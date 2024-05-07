@@ -11,10 +11,10 @@ from pathlib import Path
 from matplotlib.pyplot import subplots, close, style
 from typing import Union, Any
 
-from src.utils import keygen, initialise_stable_dynamics
-import src.ilqr as ilqr
-import src.lqr as lqr
-from src.typs import *
+from diffilqrax.utils import keygen, initialise_stable_dynamics
+import diffilqrax.ilqr as ilqr
+import diffilqrax.lqr as lqr
+from diffilqrax.typs import *
 
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision

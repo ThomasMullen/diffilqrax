@@ -8,26 +8,26 @@ import jax.numpy as jnp
 import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
-from src.diff_ilqr import dilqr
+from diffilqrax.diff_ilqr import dilqr
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", False)  # double precision
 
-from src.lqr import (
+from diffilqrax.lqr import (
     LQR,
     LQRParams,
     ModelDims,
     solve_lqr,
     kkt,
 )
-from src.ilqr import iLQRParams, System, ilQR_solver
+from diffilqrax.ilqr import iLQRParams, System, ilQR_solver
 
 import numpy as onp
-from src.exact import quad_solve, exact_solve
-from src.utils import keygen, initialise_stable_dynamics
+from diffilqrax.exact import quad_solve, exact_solve
+from diffilqrax.utils import keygen, initialise_stable_dynamics
 
-from src.typs import *
+from diffilqrax.typs import *
 
 is_jax_Array = lambda arr: isinstance(arr, jnp.ndarray) and not isinstance(
     arr, onp.ndarray

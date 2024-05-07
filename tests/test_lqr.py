@@ -21,11 +21,11 @@ import jax.numpy as jnp
 
 style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
 
-from src.lqr import (
+from diffilqrax.lqr import (
 
-from src.utils import keygen, initialise_stable_dynamics
-from src.exact import quad_solve, exact_solve
-from src.lqr import (
+from diffilqrax.utils import keygen, initialise_stable_dynamics
+from diffilqrax.exact import quad_solve, exact_solve
+from diffilqrax.lqr import (
     LQR,
     Params,
     ModelDims,
@@ -37,7 +37,7 @@ from src.lqr import (
     solve_lqr,
     kkt,
 )
-from src.typs import *
+from diffilqrax.typs import *
 
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision

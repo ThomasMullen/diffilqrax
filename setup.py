@@ -44,4 +44,5 @@ setup(
         "Topic :: Software Development",
         "Topic :: Utilities",
     ],
+    py_modules=['diffilqrax']
 )
