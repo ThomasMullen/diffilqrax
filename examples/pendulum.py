@@ -3,9 +3,9 @@ from typing import Any
 import jax.numpy as jnp
 import jax.random as jr
 
-from src.typs import *
-from src.utils import keygen
-from src.ilqr import ilQR_solver
+from diffilqrax.typs import *
+from diffilqrax.utils import keygen
+from diffilqrax.ilqr import ilQR_solver
 
 
 def pendulum_dynamics(t: int, x: Array, u: Array, theta: PendulumParams):

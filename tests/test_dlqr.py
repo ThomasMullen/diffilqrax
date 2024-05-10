@@ -11,8 +11,8 @@ import jax.numpy as jnp
 import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
-from src.diff_lqr import dlqr
-from src.lqr import (
+from diffilqrax.diff_lqr import dlqr
+from diffilqrax.lqr import (
     LQR,
     LQRParams,
     ModelDims,
@@ -20,8 +20,8 @@ from src.lqr import (
     kkt,
 )
 import numpy as onp
-from src.exact import quad_solve, exact_solve
-from src.utils import keygen, initialise_stable_dynamics
+from diffilqrax.exact import quad_solve, exact_solve
+from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
 jax.config.update("jax_enable_x64", True)  # double precision
