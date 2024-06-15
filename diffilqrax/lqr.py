@@ -6,13 +6,20 @@ from jax import Array
 import jax
 from jax import lax
 import jax.numpy as jnp
+from jax.scipy.linalg import solve
 
-from diffilqrax.typs import *
+from diffilqrax.typs import (
+    symmetrise_matrix,
+    symmetrise_tensor,
+    ModelDims,
+    LQRParams,
+    Gains,
+    CostToGo,
+    LQR,
+    RiccatiStepParams,
+)
 
 jax.config.update("jax_enable_x64", True)  # double precision
-# symmetrise
-symmetrise_tensor = lambda x: (x + x.transpose(0, 2, 1)) / 2
-symmetrise_matrix = lambda x: (x + x.T) / 2
 
 def bmm(arr1: Array, arr2: Array) -> Array:
     """Batch matrix multiplication"""
@@ -117,7 +124,6 @@ def lqr_backward_pass(
     lqr: LQR,
     dims: ModelDims,
     expected_change: bool = False,
-    verbose: bool = False,
 ) -> Gains:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
@@ -126,43 +132,38 @@ def lqr_backward_pass(
         T (int): parameter time horizon
         expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020].
         Defaults to False.
-        verbose (bool, optional): Print out matrix shapes for debugging. Defaults to False.
 
     Returns:
         Gains: Optimal feedback gains.
     """
-    AT, BT = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
 
     def riccati_step(
-        carry: Tuple[CostToGo, CostToGo], t: int
+        carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
     ) -> Tuple[CostToGo, Gains]:
+        AT, BT, (A, B, a, Q, q, R, r, S) = inps
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        Hxx = symmetrise_matrix(lqr.Q[t] + AT[t] @ V @ lqr.A[t])
-        Huu = symmetrise_matrix(lqr.R[t] + BT[t] @ V @ lqr.B[t])
-        Hxu = lqr.S[t] + AT[t] @ V @ lqr.B[t]
-        hx = lqr.q[t] + AT[t] @ (v + V @ lqr.a[t])
-        hu = lqr.r[t] + BT[t] @ (v + V @ lqr.a[t])
+        # Hxx = Q + AT @ V @ A
+        # Huu = R + BT @ V @ B
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)
+        Huu = symmetrise_matrix(R + BT @ V @ B)
+        Hxu = S + AT @ V @ B
+        hx = q + AT @ (v + V @ a)
+        hu = r + BT @ (v + V @ a)
 
         # With Levenberg-Marquardt regulisation
-        min_eval = jnp.linalg.eigh(Huu)[0][0]
-        I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
+        # min_eval = jnp.linalg.eigh(Huu)[0][0]
+        # I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
+        I_mu = 1e-7 * jnp.eye(dims.m)
 
         # solve gains
-        K = -jnp.linalg.solve(Huu + I_mu, Hxu.T)
-        k = -jnp.linalg.solve(Huu + I_mu, hu)
-
-        if verbose:
-            assert I_mu.shape == (dims.m, dims.m)
-            assert v.shape == (dims.n,)
-            assert V.shape == (dims.n, dims.n)
-            assert Hxx.shape == (dims.n, dims.n)
-            assert Huu.shape == (dims.m, dims.m)
-            assert Hxu.shape == (dims.n, dims.m)
-            assert hx.shape == (dims.n,)
-            assert hu.shape == (dims.m,)
-            assert k.shape == (dims.m,)
-            assert K.shape == (dims.m, dims.n)
+        # k = -solve(Huu + I_mu, hu, assume_a="her")
+        # K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
+        K, k = jnp.hsplit(
+            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [dims.n]
+        )
+        k = k.squeeze()
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
@@ -177,13 +178,9 @@ def lqr_backward_pass(
     (V_0, dJ), Ks = lax.scan(
         riccati_step,
         init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
-        xs=jnp.arange(dims.horizon),
+        xs=(a_transp, b_transp, lqr[:-2]),
         reverse=True,
     )
-
-    if verbose:
-        assert lax.bitwise_not(jnp.any(jnp.isnan(Ks.K)))
-        assert lax.bitwise_not(jnp.any(jnp.isnan(Ks.k)))
 
     if not expected_change:
         return dJ, Ks

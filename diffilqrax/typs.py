@@ -70,11 +70,11 @@ class LQR(NamedTuple):
     a: Array
     Q: Array
     q: Array
-    Qf: Array
-    qf: Array
     R: Array
     r: Array
     S: Array
+    Qf: Array
+    qf: Array
 
     def __call__(self):
         """Symmetrise quadratic costs"""
@@ -84,12 +84,18 @@ class LQR(NamedTuple):
             a=self.a,
             Q=symmetrise_tensor(self.Q),
             q=self.q,
-            Qf=(self.Qf + self.Qf.T) / 2,
-            qf=self.qf,
             R=symmetrise_tensor(self.R),
             r=self.r,
             S=self.S,
+            Qf=(self.Qf + self.Qf.T) / 2,
+            qf=self.qf,
         )
+
+
+RiccatiStepParams = Tuple[
+    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike,
+    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike,
+]
 
 
 class LQRParams(NamedTuple):

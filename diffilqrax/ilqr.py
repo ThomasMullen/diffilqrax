@@ -276,7 +276,7 @@ def ilqr_solver(
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dold_cost
         (exp_cost_red, gains) = lqr.lqr_backward_pass(
-            lqr_params, dims=model.dims, expected_change=False, verbose=False
+            lqr_params, dims=model.dims, expected_change=False
         )
 
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
