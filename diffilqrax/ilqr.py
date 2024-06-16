@@ -95,11 +95,11 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
         a=jnp.zeros((model.dims.horizon, model.dims.n)),
         Q=Cxx,
         q=Cx,
-        Qf=fCxx,
-        qf=fCx,
         R=Cuu,
         r=Cu,
         S=Cxu,
+        Qf=fCxx,
+        qf=fCx,
     )()
 
     return lqr_params
@@ -130,13 +130,13 @@ def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> L
         A=Fx,
         B=Fu,
         a=f,  # jnp.zeros((model.dims.horizon, model.dims.n)),
-        q=Cx,  # - bmm(Cxx,Xs[:-1]) - bmm(Cxu, Us),
-        qf=fCx,  # - mm(fCxx, Xs[-1]),
-        r=Cu,  # - bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
-        Qf=fCxx,
         Q=Cxx,
+        q=Cx,  # - bmm(Cxx,Xs[:-1]) - bmm(Cxu, Us),
+        r=Cu,  # - bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
         R=Cuu,
         S=Cxu,
+        Qf=fCxx,
+        qf=fCx,  # - mm(fCxx, Xs[-1]),
     )()
 
     return lqr_params

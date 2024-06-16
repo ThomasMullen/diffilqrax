@@ -65,7 +65,7 @@ def setup_lqr(dims: chex.Dimensions,
     Qf = pen_weight["Q"] * jnp.eye(dims['N'][0])
     qf = 2*1e-1 * jnp.ones(dims['N'])
     # construct LQR
-    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
     return lqr()
 
 

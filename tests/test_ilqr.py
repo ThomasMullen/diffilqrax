@@ -439,7 +439,7 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         R = 1. * jnp.tile(jnp.eye(self.dims["M"][0]), span_time_m)
         r = 0. * jnp.tile(jnp.ones(self.dims["M"]), span_time_v)
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), span_time_m)
-        self.lqr_struct = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+        self.lqr_struct = LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
         self.lqr_params = LQRParams(self.x0, self.lqr_struct)
 
 

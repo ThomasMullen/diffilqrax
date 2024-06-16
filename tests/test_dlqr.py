@@ -50,7 +50,7 @@ def setup_lqr_time_varying(
     Qf = pen_weight["Q"] * jnp.eye(dims["N"][0])
     qf = 2 * 1e-1 * jnp.ones(dims["N"])
     # construct LQR
-    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
     return lqr()
 
 
@@ -73,7 +73,7 @@ def setup_lqr(
     R = 1.0 * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
     r = 0.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
     S = 0.0 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
-    return LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+    return LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
 
 class TestLQR(unittest.TestCase):
@@ -161,11 +161,11 @@ class TestDLQR(unittest.TestCase):
                 a=p.a,
                 Q=p.Q,
                 q=p.q,
-                Qf=self.params.lqr.Qf,
-                qf=self.params.lqr.qf,
                 R=p.R,
                 r=p.r,
                 S=p.S,
+                Qf=self.params.lqr.Qf,
+                qf=self.params.lqr.qf,
             )
             return LQRParams(p.x0, lqr)
 
