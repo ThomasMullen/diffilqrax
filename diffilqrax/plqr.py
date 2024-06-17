@@ -52,7 +52,7 @@ def last_riccati_element(model: LQRParams):
     b = jnp.zeros((n_dims,), dtype=float)
     C = jnp.zeros((n_dims,n_dims), dtype=float)
     # here: set readout C=I, reference r_T=0
-    η = model.lqr.q[-1] #jnp.eye(n_dims).T @ jnp.zeros((n_dims), dtype=float)
+    η = -model.lqr.q[-1] #jnp.eye(n_dims).T @ jnp.zeros((n_dims), dtype=float)
     # here: set readout C=I
     J = model.lqr.Q[-1] #jnp.eye(n_dims).T @ model.lqr.Q[-1] @ jnp.eye(n_dims, dtype=float)
     return A, b, C, η, J
@@ -77,8 +77,8 @@ def generic_riccati_element(model: LQRParams):
     C = jnp.einsum('ijk,ikl,iml->ijm', model.lqr.B, R_invs, model.lqr.B)
     # lqr of form : 0.5 x^T Q x + q^t x + u^T R u + r^T u
     # if we expand 0.5 * (Hx - r)^TX(Hx - r) = 0.5 x^T H^T X H x - r^T X H x - 0.5 r^T X r
-    #  H^T X H = Q, r^TXH = q => if H = np.eye(n) then Q = X and r = q@Q^{-1} so eta = q and J = Q I think 
-    η = model.lqr.q #jnp.einsum('ji,kjl,l->ki', jnp.eye(n_dims, dtype=float), model.lqr.Q, jnp.zeros((n_dims), dtype=float))
+    #  H^T X H = Q, r^TXH = q => if H = np.eye(n) then Q = X and r = -q@Q^{-1} so eta = -q and J = Q I think 
+    η = -model.lqr.q #jnp.einsum('ji,kjl,l->ki', jnp.eye(n_dims, dtype=float), model.lqr.Q, jnp.zeros((n_dims), dtype=float))
     # here: set readout C=I
     J = model.lqr.Q #jnp.einsum('ij,kjl,lm->kim', jnp.eye(n_dims, dtype=float), model.lqr.Q, jnp.eye(n_dims, dtype=float))
     return A, b, C, η, J
