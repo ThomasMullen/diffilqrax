@@ -188,6 +188,81 @@ def lqr_backward_pass(
     return (dJ, Ks), calc_expected_change(dJ=dJ)
 
 
+# NOTE: wrap lqr_solver with custom backward and forward
+# - backward returns as well set of Vs and Ks
+# - forward scans through Vs, Ks, and dyns, calc state precisions, then calc inpute cov
+
+
+
+def lqr_backward_pass_with_covariance(
+    lqr: LQR,
+    dims: ModelDims,
+    expected_change: bool = False,
+) -> Gains:
+    """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
+
+    Args:
+        lqr (LQR): LQR parameters
+        T (int): parameter time horizon
+        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020].
+        Defaults to False.
+
+    Returns:
+        Gains: Optimal feedback gains.
+    """
+    
+    a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+
+    def riccati_step(
+        carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
+    ) -> Tuple[CostToGo, Gains]:
+        AT, BT, (A, B, a, Q, q, R, r, S) = inps
+        curr_val, cost_step = carry
+        V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
+        # Hxx = Q + AT @ V @ A
+        # Huu = R + BT @ V @ B
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)
+        Huu = symmetrise_matrix(R + BT @ V @ B)
+        Hxu = S + AT @ V @ B
+        hx = q + AT @ (v + V @ a)
+        hu = r + BT @ (v + V @ a)
+
+        # With Levenberg-Marquardt regulisation
+        # min_eval = jnp.linalg.eigh(Huu)[0][0]
+        # I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
+        I_mu = 1e-7 * jnp.eye(dims.m)
+
+        # solve gains
+        # k = -solve(Huu + I_mu, hu, assume_a="her")
+        # K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
+        K, k = jnp.hsplit(
+            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [dims.n]
+        )
+        k = k.squeeze()
+
+        # Find value iteration at current time
+        V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
+        v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
+
+        # expected change in cost
+        dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
+        dj = dj + (k.T @ hu).squeeze()
+
+        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), Gains(K, k)
+
+    (V_0, dJ), Ks = lax.scan(
+        riccati_step,
+        init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
+        xs=(a_transp, b_transp, lqr[:-2]),
+        reverse=True,
+    )
+
+    if not expected_change:
+        return dJ, Ks
+
+    return (dJ, Ks), calc_expected_change(dJ=dJ)
+
+
 def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
     """Define KKT conditions for LQR problem"""
     AT = params.lqr.A.transpose(0, 2, 1)
