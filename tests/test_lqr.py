@@ -275,7 +275,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
         r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
-        self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+        self.lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
         print("\nMake initial state x0 and input U")
         self.x0 = jnp.array([0.3, 0.])
