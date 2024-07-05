@@ -2,7 +2,7 @@ from typing import Callable, Tuple, Any
 import jax
 from jax import lax, Array
 import jax.numpy as jnp
-from jax.scipy.linalg import solve, cho_factor, cho_solve
+from jax.scipy.linalg import solve, cho_factor, cho_solve, inv
 
 from diffilqrax.lqr import lqr_forward_pass, lqr_adjoint_pass
 from diffilqrax.typs import (
@@ -39,7 +39,9 @@ def gen_lqr_problem():
     return lqr, dims
 
 
-def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims) -> Tuple[Array, Array, Array, Array]:
+def lqr_cov_backward_pass(
+    lqr: LQR, sys_dims: ModelDims
+) -> Tuple[Array, Array, Array, Array]:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
     Args:
@@ -89,7 +91,8 @@ def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims) -> Tuple[Array, Array, 
 
         return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), (
             Gains(K, k),
-            CostToGo(V_curr, v_curr), Huu_inv
+            CostToGo(V_curr, v_curr),
+            Huu_inv,
         )
 
     (V_0, dJ), (Ks, Vs, Huu_invs) = lax.scan(
@@ -102,22 +105,48 @@ def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims) -> Tuple[Array, Array, 
     return dJ, Ks, Vs, Huu_invs
 
 
-def lqr_covariance(gains: Gains, params: LQRParams):
+def lqr_covariance(
+    sys_dims: ModelDims,
+    gains: Gains,
+    val_funs: CostToGo,
+    Huu_invs: Array,
+    params: LQRParams,
+):
+    # TODO: add the linear term
+    # TODO: add the cross-term covariance
+
     x0, lqr = params.x0, params.lqr
+    a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    k_transp = gains.K.transpose(0, 2, 1)
+    Vs = val_funs.V
     # initialise P0, V0
-    def precision_step():
+    p_init = jnp.zeros((sys_dims.n, sys_dims.n), dtype=float)
+
+    # x_cov = inv(Vs[0])
+    # carry_init = (p_init, x_cov)
+    def precision_step(carry, inps):
+        K, KT, v, Huu_inv, AT, BT, A, B, Q, R = inps
+        p = carry
         # calc state cov
-        
+        x_cov = inv(p + v)
         # calc input cov
-        
+        u_cov = K @ x_cov @ KT + Huu_inv
         # calc nx state precision
-        
+        p_x = inv(AT) @ (p + Q) @ A
         # calc nx input precision
-        
+        p_u = R + BT @ p_x @ B
         # calc nx precision
-        pass
-    
-    pass
+        nx_p = p_x - p_x @ B @ inv(p_u) @ BT @ p_x.T
+
+        return (nx_p), (x_cov, u_cov, p)
+
+    x_covs, u_covs, ps = lax.scan(
+        precision_step,
+        init=p_init,
+        xs=(gains.K, k_transp, Vs, Huu_invs, a_transp, b_transp, lqr.A, lqr.B, lqr.Q, lqr.R),
+    )[1]
+    # NOTE: check to append first x_cov, p, u_cov
+    return x_covs, u_covs, ps
 
 
 def solve_lqr(params: LQRParams, sys_dims: ModelDims):
