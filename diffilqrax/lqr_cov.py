@@ -3,6 +3,7 @@ import jax
 from jax import lax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve, cho_factor, cho_solve
+
 # from diffilqrax import lqr
 from diffilqrax.typs import (
     LQRParams,
@@ -14,7 +15,8 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-jax.config.update("jax_disable_jit", True) # Disable JIT for debugging
+jax.config.update("jax_disable_jit", True)  # Disable JIT for debugging
+
 
 def gen_lqr_problem():
     dims = ModelDims(2, 2, 20, dt=0.1)
@@ -32,7 +34,7 @@ def gen_lqr_problem():
         r=jnp.zeros((dims.horizon, dims.n), dtype=float),
         S=jnp.zeros((dims.horizon, dims.m, dims.m), dtype=float),
         Qf=0.1 * Q,
-        qf=jnp.ones(dims.n, dtype=float)*0.01,
+        qf=jnp.ones(dims.n, dtype=float) * 0.01,
     )()
     return lqr, dims
 
@@ -69,9 +71,11 @@ def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims):
         # With Levenberg-Marquardt regulisation
         I_mu = 1e-7 * jnp.eye(sys_dims.m)
 
-        # solve gains
-        K, k = jnp.hsplit(
-            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [sys_dims.n]
+        # solve gains with cholesky
+        c, lower = cho_factor(Huu + I_mu)
+        K, k, Huu_inv = jnp.hsplit(
+            cho_solve((c, lower), jnp.c_[-Hxu.T, -hu, jnp.eye(sys_dims.m)]),
+            [sys_dims.n, sys_dims.n + 1],
         )
         k = k.squeeze()
 
@@ -85,16 +89,17 @@ def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims):
 
         return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), (
             Gains(K, k),
-            CostToGo(V_curr, v_curr),
+            CostToGo(V_curr, v_curr), Huu_inv
         )
 
-    (V_0, dJ), (Ks, Vs) = lax.scan(
+    (V_0, dJ), (Ks, Vs, Huu_invs) = lax.scan(
         riccati_step,
         init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
         xs=(a_transp, b_transp, lqr[:-2]),
         reverse=True,
     )
-    return dJ, Ks, Vs
+    # NOTE: Check about appending last V (Q^{-1}) and Huu_inv (R^{-1})
+    return dJ, Ks, Vs, Huu_invs
 
 
 def lqr_cov_forward_pass(lqr: LQR, sys_dims: ModelDims):
@@ -117,13 +122,15 @@ def solve_lqr(params: LQRParams, sys_dims: ModelDims):
 
 
 lqr, dims = gen_lqr_problem()
-dJ, Ks, Vs = lqr_cov_backward_pass(lqr, dims)
+dJ, Ks, Vs, Huu_invs = lqr_cov_backward_pass(lqr, dims)
 
 # troubleshoot backpass step
 sys_dims = dims
 a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
-inps_all=zip(a_transp,b_transp,lqr.A,lqr.B,lqr.a,lqr.Q,lqr.q,lqr.R,lqr.r,lqr.S)
-carry0=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0)))
+inps_all = zip(
+    a_transp, b_transp, lqr.A, lqr.B, lqr.a, lqr.Q, lqr.q, lqr.R, lqr.r, lqr.S
+)
+carry0 = (CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0)))
 
 AT, BT, A, B, a, Q, q, R, r, S = next(inps_all)
 curr_val, cost_step = carry0
@@ -139,14 +146,9 @@ I_mu = 1e-7 * jnp.eye(sys_dims.m)
 
 # solve with cholesky
 c, lower = cho_factor(Huu + I_mu)
-
-Huu_inv = cho_solve((c, lower), jnp.eye(sys_dims.m))
-
-K_c = -cho_solve((c, lower), Hxu.T)
-K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
-
-K, k = jnp.hsplit(
-    -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [sys_dims.n]
+K, k, Huu_inv = jnp.hsplit(
+    cho_solve((c, lower), jnp.c_[-Hxu.T, -hu, jnp.eye(sys_dims.m)]),
+    [sys_dims.n, sys_dims.n + 1],
 )
 k = k.squeeze()
 
@@ -156,5 +158,5 @@ v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
 dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
 dj = dj + (k.T @ hu).squeeze()
 
-carry1=(CostToGo(V_curr, v_curr), CostToGo(dJ, dj))
-st1=(Gains(K, k), CostToGo(V_curr, v_curr))
+carry1 = (CostToGo(V_curr, v_curr), CostToGo(dJ, dj))
+st1 = (Gains(K, k), CostToGo(V_curr, v_curr))
