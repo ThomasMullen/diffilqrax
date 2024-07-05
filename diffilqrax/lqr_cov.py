@@ -1,10 +1,10 @@
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 import jax
-from jax import lax
+from jax import lax, Array
 import jax.numpy as jnp
 from jax.scipy.linalg import solve, cho_factor, cho_solve
 
-# from diffilqrax import lqr
+from diffilqrax.lqr import lqr_forward_pass, lqr_adjoint_pass
 from diffilqrax.typs import (
     LQRParams,
     LQR,
@@ -39,7 +39,7 @@ def gen_lqr_problem():
     return lqr, dims
 
 
-def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims):
+def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims) -> Tuple[Array, Array, Array, Array]:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
     Args:
@@ -102,20 +102,30 @@ def lqr_cov_backward_pass(lqr: LQR, sys_dims: ModelDims):
     return dJ, Ks, Vs, Huu_invs
 
 
-def lqr_cov_forward_pass(lqr: LQR, sys_dims: ModelDims):
-    pass
-
-
-def lqr_covariance():
+def lqr_covariance(gains: Gains, params: LQRParams):
+    x0, lqr = params.x0, params.lqr
+    # initialise P0, V0
+    def precision_step():
+        # calc state cov
+        
+        # calc input cov
+        
+        # calc nx state precision
+        
+        # calc nx input precision
+        
+        # calc nx precision
+        pass
+    
     pass
 
 
 def solve_lqr(params: LQRParams, sys_dims: ModelDims):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains, val_fns = lqr_cov_backward_pass(params.lqr, sys_dims)
+    _, gains, val_fns, q_invs = lqr_cov_backward_pass(params.lqr, sys_dims)
     # forward
-    Xs, Us = lqr_cov_forward_pass(gains, params)
+    Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, params)
     return gains, Xs, Us, Lambs
