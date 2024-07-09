@@ -75,7 +75,8 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     )
     fCx = jax.jacrev(model.costf)(Xs[-1], theta)
     fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
-
+    #dyn_x = jax.vmap(model.dynamics)(tps, Xs[:-1], Us, theta)
+    #a = dyn_x - bmm(Fx, Xs[:-1]) - bmm(Fu, Us)
     # set-up LQR
     lqr_params = LQR(
         A=Fx,

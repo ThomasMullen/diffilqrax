@@ -196,7 +196,7 @@ def lqr_backward_pass(
 
         # With Levenberg-Marquardt regulisation
         min_eval = jnp.linalg.eigh(Huu)[0][0]
-        I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
+        I_mu = jnp.maximum(0.0, 1e-6 - min_eval) #0 * jnp.eye(dims.m) #
 
         # solve gains
         K = -jnp.linalg.solve(Huu + I_mu, Hxu.T)
