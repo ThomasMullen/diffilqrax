@@ -108,7 +108,7 @@ def parallel_riccati_scan(model: LQRParams):
 
     # riccati operator
     @vmap
-    def asoc_riccati_operator(elem1, elem2):
+    def assoc_riccati_operator(elem1, elem2):
         A1, b1, C1, η1, J1 = elem1
         A2, b2, C2, η2, J2 = elem2
 
@@ -125,12 +125,9 @@ def parallel_riccati_scan(model: LQRParams):
         temp = jsc.linalg.solve(I_J2C1.T, A1).T
         η = temp @ (η2 - J2 @ b1) + η1
         J = temp @ J2 @ A1 + J1
-        print("input1", A1.shape, b1.shape, C1.shape, η1.shape, J1.shape)
-        print("input2", A2.shape, b2.shape, C2.shape, η2.shape, J2.shape)
-        print("output", A.shape, b.shape, C.shape, η.shape, J.shape)
         return A, b, C, η, J
     final_elements = associative_scan(
-        asoc_riccati_operator, initial_elements, reverse=True
+        assoc_riccati_operator, initial_elements, reverse=True
     )
     
     return final_elements[-2], final_elements[-1] #this only returns J, eta, which are the only things we need to compute 
@@ -141,32 +138,32 @@ def parallel_riccati_scan(model: LQRParams):
 
 
 def generic_dynamics_elements(lqr, eta, J):
-    S, v = J, eta #this needs to be at k+1 anyway
+    S, v = J, eta 
     c =  lqr.a
     B = lqr.B
     R = lqr.R
     A = lqr.A
     pinv = jsc.linalg.inv(B.T@S@B + R)
     Kv = pinv@B.T
-    Kx = Kv@S@A
     Kc = Kv@S
-    F = A - B@Kx
-    c = c + B@Kv@v - B@Kc@c
-    return F, c
+    Kx = Kc@A
+    Ft = A - B@Kx
+    ct = c + B@Kv@v - B@Kc@c
+    return Ft, ct
 
 
 
 
 def first_dynamics_element(model, eta0, J0): 
-    S0, v0 = J0, eta0 #this needs to be at k+1 anyway
+    S0, v0 = J0, eta0 #this needs to be at k+1 so T = 1
     c =  model.lqr.a[0]
     B = model.lqr.B[0]
     R = model.lqr.R[0]
     A = model.lqr.A[0]
     pinv = jsc.linalg.inv(B.T@S0@B + R)
     Kv = pinv@B.T
-    Kx = Kv@S0@A
     Kc = Kv@S0
+    Kx = Kc@A
     F0 = A - B@Kx
     c0 = c + B@Kv@v0 - B@Kc@c
     return jnp.zeros_like(J0), F0@model.x0 + c0
@@ -182,10 +179,12 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    print(etas.shape, Js.shape)
-    first_elem = first_dynamics_element(model, etas[0], Js[0])
-    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[1:], Js[1:])
-    return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es]) 
+    first_elem = first_dynamics_element(model, etas[1], Js[1]) #not working right now, might need to double check the indices
+    #seems to start at k+1 
+    etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
+    Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
+    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[1:-1], Js[1:-1])
+    return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es[1:]]) 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
 
@@ -204,7 +203,7 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js):
         return F, c
     
     final_elements = associative_scan(
-        assoc_dynamics_operator, initial_elements, reverse=True
+        assoc_dynamics_operator, initial_elements
     )
 
     return final_elements #have to check shapes of this : hope is that it returns F, c for all k and that the c is the x we want? 
@@ -215,8 +214,8 @@ def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
     etas, Js = parallel_riccati_scan(model)
-    _, xs = parallel_dynamics_scan(model, etas, Js)
-    return xs
+    Fs, cs = parallel_dynamics_scan(model, etas, Js)
+    return jnp.concatenate([model.x0[None], cs])#Fs@model.x0 + cs])
     # _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # # forward
     # Xs, Us = lqr_forward_pass(gains, params)
