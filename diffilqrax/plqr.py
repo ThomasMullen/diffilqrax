@@ -59,7 +59,6 @@ def last_riccati_element(model: LQRParams):
 
 
 # generic riccati element
-@vmap
 def generic_riccati_element(model: LQRParams):
     """Generate generic Riccati element.
     NOTE: This is a special case where reference r_T=0 and readout C=I.
@@ -98,7 +97,7 @@ def build_associative_riccati_elements(
     last_elem = last_riccati_element(model)
     generic_elems = generic_riccati_element(model)
     return tuple(
-        jnp.concatenate(gen_es, jnp.expand_dims(last_e, 0))
+        jnp.concatenate([gen_es, jnp.expand_dims(last_e, 0)])
         for gen_es, last_e in zip(generic_elems, last_elem)
     )
 
@@ -124,27 +123,29 @@ def parallel_riccati_scan(model: LQRParams):
 
         I_J2C1 = I + J2 @ C1
         temp = jsc.linalg.solve(I_J2C1.T, A1).T
-
         η = temp @ (η2 - J2 @ b1) + η1
         J = temp @ J2 @ A1 + J1
-        return A, b, C, J, η
-    
+        print("input1", A1.shape, b1.shape, C1.shape, η1.shape, J1.shape)
+        print("input2", A2.shape, b2.shape, C2.shape, η2.shape, J2.shape)
+        print("output", A.shape, b.shape, C.shape, η.shape, J.shape)
+        return A, b, C, η, J
     final_elements = associative_scan(
         asoc_riccati_operator, initial_elements, reverse=True
     )
+    
     return final_elements[-2], final_elements[-1] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
 ##or is it? how do we have all k and k+1 accessible? 
 
 
 
-@vmap
-def generic_dynamics_elements(model, eta, J):
+
+def generic_dynamics_elements(lqr, eta, J):
     S, v = J, eta #this needs to be at k+1 anyway
-    c =  model.lqr.a
-    B = model.lqr.B
-    R = model.lqr.R
-    A = model.lqr.A
+    c =  lqr.a
+    B = lqr.B
+    R = lqr.R
+    A = lqr.A
     pinv = jsc.linalg.inv(B.T@S@B + R)
     Kv = pinv@B.T
     Kx = Kv@S@A
@@ -158,10 +159,10 @@ def generic_dynamics_elements(model, eta, J):
 
 def first_dynamics_element(model, eta0, J0): 
     S0, v0 = J0, eta0 #this needs to be at k+1 anyway
-    c =  model.lqr.a
-    B = model.lqr.B
-    R = model.lqr.R
-    A = model.lqr.A
+    c =  model.lqr.a[0]
+    B = model.lqr.B[0]
+    R = model.lqr.R[0]
+    A = model.lqr.A[0]
     pinv = jsc.linalg.inv(B.T@S0@B + R)
     Kv = pinv@B.T
     Kx = Kv@S0@A
@@ -181,14 +182,16 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
+    print(etas.shape, Js.shape)
     first_elem = first_dynamics_element(model, etas[0], Js[0])
-    generic_elems = generic_dynamics_elements(model, etas, Js)
+    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[1:], Js[1:])
     return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es]) 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
 
 # parallellised riccati scan
 def parallel_dynamics_scan(model: LQRParams, etas, Js):
+    #need to add vmaps
     initial_elements = build_associative_dynamics_elements(model, etas, Js)
 
     # riccati operator
@@ -203,7 +206,23 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js):
     final_elements = associative_scan(
         assoc_dynamics_operator, initial_elements, reverse=True
     )
+
     return final_elements #have to check shapes of this : hope is that it returns F, c for all k and that the c is the x we want? 
+
+
+
+def solve_plqr(model: LQRParams):
+    "run backward forward sweep to find optimal control"
+    # backward
+    etas, Js = parallel_riccati_scan(model)
+    _, xs = parallel_dynamics_scan(model, etas, Js)
+    return xs
+    # _, gains = lqr_backward_pass(params.lqr, sys_dims)
+    # # forward
+    # Xs, Us = lqr_forward_pass(gains, params)
+    # # adjoint
+    # Lambs = lqr_adjoint_pass(Xs, Us, params)
+    # return gains, Xs, Us, Lambs
 
 
 # def generic_gain_element(model, eta, J):
