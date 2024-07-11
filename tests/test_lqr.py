@@ -150,7 +150,7 @@ class TestLQR(unittest.TestCase):
         """test backward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
         (dJ, Ks), exp_dJ = lqr_backward_pass(
-            lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
+            lqr=params.lqr, dims=self.sys_dims, expected_change=True
         )
         chex.assert_type(Ks.K, float)
         chex.assert_shape(Ks.K, self.dims["TMN"])
@@ -163,7 +163,7 @@ class TestLQR(unittest.TestCase):
         """test forward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
         (dJ, Ks), exp_dJ = lqr_backward_pass(
-            lqr=params.lqr, dims=self.sys_dims, expected_change=True, verbose=False
+            lqr=params.lqr, dims=self.sys_dims, expected_change=True
         )
         Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
         chex.assert_type(Xs_lqr, float)
@@ -233,6 +233,7 @@ class TestLQR(unittest.TestCase):
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/lqr_kkt_TestLQR.png")
         close()
+        print(jnp.mean(jnp.abs(dLdUs)))
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)

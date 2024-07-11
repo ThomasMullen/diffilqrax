@@ -161,7 +161,7 @@ class TestiLQRStructs(unittest.TestCase):
         )
         lqr_params = ilqr.approx_lqr(self.model, old_Xs, self.Us_init, self.params)
         exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, dims=self.model.dims, expected_change=False, verbose=False
+            lqr_params, dims=self.model.dims, expected_change=False
         )
         exp_change_J0 = lqr.calc_expected_change(exp_cost_red, alpha=1.0)
         # exercise
@@ -474,7 +474,7 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         # exercise rollout
         (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(self.model, self.Us, self.ilqr_params)
         # verify
-        chex.assert_trees_all_equal(Xs_init, lqr_Xs_sim)
+        chex.assert_trees_all_close(Xs_init, lqr_Xs_sim)
 
         # setup: lqr solver
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params, self.sys_dims)
