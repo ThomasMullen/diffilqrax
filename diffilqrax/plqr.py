@@ -57,9 +57,10 @@ def last_riccati_element(model: LQRParams):
     b = jnp.zeros((n_dims,), dtype=float)
     C = jnp.zeros((n_dims,n_dims), dtype=float)
     # here: set readout C=I, reference r_T=0
-    η = -model.lqr.q[-1] #jnp.eye(n_dims).T @ jnp.zeros((n_dims), dtype=float) #NOTE: is it not lqr.qf?
+    η = -model.lqr.qf
     # here: set readout C=I
-    J = model.lqr.Q[-1] #jnp.eye(n_dims).T @ model.lqr.Q[-1] @ jnp.eye(n_dims, dtype=float)
+    J = model.lqr.Qf
+    # J = model.lqr.Q[-1] #jnp.eye(n_dims).T @ model.lqr.Q[-1] @ jnp.eye(n_dims, dtype=float)
     return A, b, C, η, J
 
 
@@ -102,7 +103,7 @@ def build_associative_riccati_elements(
     last_elem = last_riccati_element(model)
     generic_elems = generic_riccati_element(model)
     return tuple(
-        jnp.concatenate([gen_es, jnp.expand_dims(last_e, 0)])
+        jnp.concatenate([jnp.expand_dims(last_e, 0), gen_es])
         for gen_es, last_e in zip(generic_elems, last_elem)
     )
 
