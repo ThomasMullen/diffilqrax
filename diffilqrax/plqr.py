@@ -229,6 +229,65 @@ def solve_plqr(model: LQRParams):
     # return gains, Xs, Us, Lambs
 
 
+
+# --------
+# Parallel forward integration
+# --------
+def build_fwd_dyn_elements(
+    lqr_params: LQRParams, Us_init: Array
+) -> Tuple[Array, Array]:
+    """Generate sequence of elements {c} for forward integration
+
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): Input sequence
+
+    Returns:
+        Tuple[Array, Array]: set of elements {c} for associative scan
+    """
+
+    initial_element = (jnp.diag(lqr_params.x0), lqr_params.x0)
+    # print(initial_element[0].shape, initial_element[1].shape)
+
+    def gen_ele(a_mat: Array, b_mat: Array, u: Array) -> Tuple[Array, Array]:
+        """Generate tuple (c_i,a, c_i,b) to parallelise"""
+        return a_mat, b_mat @ u
+
+    generic_elements = vmap(gen_ele, (0, 0, 0))(
+        lqr_params.lqr.A, lqr_params.lqr.B, Us_init
+    )
+    # print(generic_elements[0].shape, generic_elements[1].shape)
+    return tuple(
+        jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es])
+        for first_e, gen_es in zip(initial_element, generic_elements)
+    )
+
+
+def parallel_forward_integration(
+    lqr_params: LQRParams, Us_init: Array
+) -> Array:
+    """Associative scan for forward linear dynamics
+
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): input sequence
+
+    Returns:
+        Array: state trajectory
+    """
+
+    dyn_elements = build_fwd_dyn_elements(lqr_params, Us_init)
+
+    @vmap
+    def associative_dyn_op(elem1, elem2):
+        a1, b1 = elem1
+        a2, b2 = elem2
+        return a1 @ a2, a2 @ b1 + b2
+
+    c_as, c_bs = associative_scan(associative_dyn_op, dyn_elements)
+    return c_bs
+
+
 # def generic_gain_element(model, eta, J):
 #     S, v = J, eta
 #     # S, v = elems #at k+1
