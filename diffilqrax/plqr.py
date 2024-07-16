@@ -1,6 +1,7 @@
 """LQR solver using associative parallel scan"""
 
 from typing import Callable, Tuple
+from functools import partial
 from jax.typing import ArrayLike
 from jax import Array
 import jax
@@ -23,6 +24,10 @@ from diffilqrax.typs import (
 )
 
 jax.config.update("jax_enable_x64", True)  # double precision
+
+# helper functions - pop first and last element from namedtuple
+pop_first = partial(jax.tree_map, lambda x: x[1:])
+pop_last = partial(jax.tree_map, lambda x: x[:-1])
 
 """
 Implementation:
@@ -179,12 +184,12 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    first_elem = first_dynamics_element(model, etas[1], Js[1]) #not working right now, might need to double check the indices
-    #seems to start at k+1 
-    etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
-    Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
-    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[1:-1], Js[1:-1])
-    return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es[1:]]) 
+    first_elem = first_dynamics_element(model, etas[1], Js[1]) #this is at k+1
+    
+    # etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
+    # Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
+    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
+    return tuple(jnp.r_[jnp.expand_dims(first_e, 0), gen_es] 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
 
@@ -206,7 +211,7 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js):
         assoc_dynamics_operator, initial_elements
     )
 
-    return final_elements #have to check shapes of this : hope is that it returns F, c for all k and that the c is the x we want? 
+    return final_elements
 
 
 
