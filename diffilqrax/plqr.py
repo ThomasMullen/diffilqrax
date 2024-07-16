@@ -103,18 +103,18 @@ def build_associative_riccati_elements(
     last_elem = last_riccati_element(model)
     generic_elems = generic_riccati_element(model)
     return tuple(
-        jnp.concatenate([jnp.expand_dims(last_e, 0), gen_es])
+        jnp.concatenate([gen_es, jnp.expand_dims(last_e, 0)])
         for gen_es, last_e in zip(generic_elems, last_elem)
     )
 
 
 # parallellised riccati scan
 def parallel_riccati_scan(model: LQRParams):
-    initial_elements = build_associative_riccati_elements(model)
+    first_elements = build_associative_riccati_elements(model)
 
     # riccati operator
     @vmap
-    def assoc_riccati_operator(elem1, elem2):
+    def assoc_riccati_operator(elem2, elem1):
         A1, b1, C1, η1, J1 = elem1
         A2, b2, C2, η2, J2 = elem2
 
@@ -133,10 +133,10 @@ def parallel_riccati_scan(model: LQRParams):
         J = temp @ J2 @ A1 + J1
         return A, b, C, η, J
     final_elements = associative_scan(
-        assoc_riccati_operator, initial_elements, reverse=True
+        assoc_riccati_operator, first_elements, reverse = True
     )
-    
-    return final_elements[-2], final_elements[-1] #this only returns J, eta, which are the only things we need to compute 
+    return final_elements[-2], final_elements[-1] #jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
+#jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
 ##or is it? how do we have all k and k+1 accessible? 
 
