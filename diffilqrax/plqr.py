@@ -24,6 +24,7 @@ from diffilqrax.typs import (
 )
 
 jax.config.update("jax_enable_x64", True)  # double precision
+from jax.lib import xla_bridge
 
 # helper functions - pop first and last element from namedtuple
 pop_first = partial(jax.tree_map, lambda x: x[1:])

@@ -26,7 +26,8 @@ from diffilqrax.lqr import solve_lqr
 from diffilqrax.exact import quad_solve, exact_solve
 from diffilqrax.utils import keygen, initialise_stable_dynamics
 
-jax.config.update('jax_default_device', jax.devices('cpu')[0])
+# jax.config.update('jax_default_device', jax.devices('cpu')[0])
+jax.config.update('jax_platform_name', 'gpu')
 jax.config.update("jax_enable_x64", True)  # double precision
 
 # PLOT_URL = ("https://gist.githubusercontent.com/"
@@ -104,10 +105,10 @@ class TestPLQR(unittest.TestCase):
         
     def test_time(self):
         from jax.lib import xla_bridge
-        print(xla_bridge.get_backend().platform)
+        print(jax.default_backend())
         start = time.time()
-        ns = [2,5,10,100]
-        Ts = [10,100,200,1000,5000,10000]
+        ns = [2] #,5,10] #,100]
+        Ts = [10,100,200,1000,5000,10000, 50000, 100000, 200000, 500000, 1000000] #10000]
         parallel_lqr_times = []
         normal_lqr_times = []
         for n in ns : 
@@ -116,15 +117,16 @@ class TestPLQR(unittest.TestCase):
             for T in Ts : 
                 m = n
                 dims = chex.Dimensions(T=T, N=n, M=m, X=1)
-                sys_dims = ModelDims(*self.dims["NMT"], dt=0.01)
+                sys_dims = ModelDims(*dims["NMT"], dt=0.01)
+                x0 = jnp.ones(dims["N"])
+                lqr = setup_lqr(dims)
+                params = LQRParams(x0, lqr)
                 start = time.time()
-                lqr = setup_lqr(self.dims)
-                params = LQRParams(self.x0, self.lqr)
                 xs = solve_plqr(params)
                 end = time.time()
                 parallel_time = end-start
                 start = time.time()
-                gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
+                gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, sys_dims)
                 end = time.time()
                 normal_time = end-start
                 ps.append(parallel_time)
