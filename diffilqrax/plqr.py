@@ -161,7 +161,7 @@ def generic_dynamics_elements(lqr, eta, J):
 
 
 
-def first_dynamics_element(model, eta0, J0): 
+def first_dynamics_element(model, eta0, J0, alpha): 
     S0, v0 = J0, eta0 #this needs to be at k+1 so T = 1
     c =  model.lqr.a[0]
     B = model.lqr.B[0]
@@ -172,12 +172,12 @@ def first_dynamics_element(model, eta0, J0):
     Kc = Kv@S0
     Kx = Kc@A
     F0 = A - B@Kx
-    c0 = c + B@Kv@v0 - B@Kc@c
+    c0 = c + alpha*(B@Kv@v0 - B@Kc@c)
     return jnp.zeros_like(J0), F0@model.x0 + c0
 
 
 def build_associative_dynamics_elements(
-    model: LQRParams, etas, Js
+    model: LQRParams, etas, Js, alpha
 )-> Tuple[Tuple[Array, Array, Array, Array, Array]]:
     """Join set of elements for associative scan.
     Args:
@@ -186,7 +186,7 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    first_elem = first_dynamics_element(model, etas[1], Js[1]) #this is at k+1
+    first_elem = first_dynamics_element(model, etas[1], Js[1], alpha) #this is at k+1
     
     # etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
     # Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
@@ -196,9 +196,9 @@ def build_associative_dynamics_elements(
 
 
 # parallellised riccati scan
-def parallel_dynamics_scan(model: LQRParams, etas, Js):
+def parallel_dynamics_scan(model: LQRParams, etas, Js, alpha = 1.0):
     #need to add vmaps
-    initial_elements = build_associative_dynamics_elements(model, etas, Js)
+    initial_elements = build_associative_dynamics_elements(model, etas, Js, alpha)
 
     # riccati operator
     @vmap
