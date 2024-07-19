@@ -19,7 +19,7 @@ from diffilqrax.typs import (
 )
 
 
-jax.config.update("jax_enable_x64", True)  # double precision
+#jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 

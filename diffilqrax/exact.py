@@ -16,7 +16,7 @@ import jaxopt
 
 from diffilqrax.typs import ModelDims, LQRParams
 
-jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
+#jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 
 
 def t_span_mpartial(arr: Array, dims: ModelDims) -> Array:

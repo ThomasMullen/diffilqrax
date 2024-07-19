@@ -13,7 +13,8 @@ import jax.numpy as jnp
 import numpy as onp
 from matplotlib.pyplot import subplots, close, style
 import time
-
+import logging
+logging.getLogger('matplotlib.font_manager').disabled = True
 from diffilqrax.typs import (
     LQR,
     LQRParams,
@@ -28,13 +29,13 @@ from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 # jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update('jax_platform_name', 'gpu')
-jax.config.update("jax_enable_x64", True)  # double precision
+
 
 # PLOT_URL = ("https://gist.githubusercontent.com/"
 #        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
 #        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
 #        "figure_style.mplstyle")
-# style.use(PLOT_URL)
+style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
 
 
 def is_jax_array(arr: Array)->bool:
@@ -107,13 +108,17 @@ class TestPLQR(unittest.TestCase):
         from jax.lib import xla_bridge
         print(jax.default_backend())
         start = time.time()
-        ns = [2] #,5,10] #,100]
-        Ts = [10,100,200,1000,5000,10000, 50000, 100000, 200000, 500000, 1000000] #10000]
+        ns = [32, 33] #2,4,8,32] #,5,10] #,100]
+        Ts = [10,100,200,500,1000, 5000,10000,20000]#,10000]#,100000] #, 50000, 100000, 200000, 500000, 1000000] #10000]
+        parallel_lqr_times_0 = []
+        normal_lqr_times_0 = []
         parallel_lqr_times = []
         normal_lqr_times = []
         for n in ns : 
             ps = []
             ls = []
+            p0s = []
+            l0s = []
             for T in Ts : 
                 m = n
                 dims = chex.Dimensions(T=T, N=n, M=m, X=1)
@@ -121,27 +126,41 @@ class TestPLQR(unittest.TestCase):
                 x0 = jnp.ones(dims["N"])
                 lqr = setup_lqr(dims)
                 params = LQRParams(x0, lqr)
-                start = time.time()
-                xs = solve_plqr(params)
-                end = time.time()
-                parallel_time = end-start
-                start = time.time()
-                gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, sys_dims)
-                end = time.time()
-                normal_time = end-start
-                ps.append(parallel_time)
-                ls.append(normal_time)
+                for seed in [0,1]:
+                    start = time.time()
+                    xs = solve_plqr(params)
+                    end = time.time()
+                    parallel_time = end-start
+                    start = time.time()
+                    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, sys_dims)
+                    end = time.time()
+                    normal_time = end-start
+                    if seed == 0:
+                        p0s.append(parallel_time)
+                        l0s.append(normal_time)
+                    else : 
+                        ps.append(parallel_time)
+                        ls.append(normal_time)
             parallel_lqr_times.append(ps)
             normal_lqr_times.append(ls)
+            parallel_lqr_times_0.append(p0s)
+            normal_lqr_times_0.append(l0s)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
-        fig, ax = subplots(1,1,figsize=(8,3), sharex = True, sharey =True)
+        fig, axes = subplots(2,1,figsize=(5,3), sharex = True)
         colors = ['r','b','g', 'magenta']
         for i, n in enumerate(ns) : 
-            ax.plot(Ts, parallel_lqr_times[i], label = f"Parallel LQR n = {n}", color = colors[i])
-            ax.plot(Ts, normal_lqr_times[i], label = f"Normal LQR n = {n}", color = colors[i], linestyle = "--")
-        ax.legend()
-        fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs_time.png")
+            axes[0].plot(Ts, parallel_lqr_times_0[i], label = f"Parallel LQR n = {n}", color = colors[i])
+            axes[0].plot(Ts, normal_lqr_times_0[i], label = f"Normal LQR n = {n}", color = colors[i], linestyle = "--")
+        axes[0].legend(loc = (1,0.2))
+        axes[0].set_title("First run time")
+        for i, n in enumerate(ns) : 
+            axes[1].plot(Ts, parallel_lqr_times[i], label = f"Parallel LQR n = {n}", color = colors[i])
+            axes[1].plot(Ts, normal_lqr_times[i], label = f"Normal LQR n = {n}", color = colors[i], linestyle = "--")
+        axes[1].set_title("Second run time")
+        axes[1].set_xlabel("Number of timesteps")
+        fig.text(-0.01, 0.5, "Time (s)", va='center', rotation='vertical')
+        fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs_time_comp_jitting2.png")
         close()
         
          

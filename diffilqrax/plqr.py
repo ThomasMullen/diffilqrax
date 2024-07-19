@@ -23,7 +23,7 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-jax.config.update("jax_enable_x64", True)  # double precision
+#jax.config.update("jax_enable_x64", True)  # double precision
 from jax.lib import xla_bridge
 
 # helper functions - pop first and last element from namedtuple
@@ -216,7 +216,7 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js):
     return final_elements
 
 
-
+#@jax.jit
 def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
