@@ -122,14 +122,12 @@ def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
 
 def lqr_backward_pass(
     lqr: LQR,
-    dims: ModelDims,
     expected_change: bool = False,
 ) -> Gains:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
     Args:
         lqr (LQR): LQR parameters
-        T (int): parameter time horizon
         expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020].
         Defaults to False.
 
@@ -137,6 +135,7 @@ def lqr_backward_pass(
         Gains: Optimal feedback gains.
     """
     a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    n_dim, m_dim = lqr.B[0].shape
 
     def riccati_step(
         carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
@@ -155,13 +154,13 @@ def lqr_backward_pass(
         # With Levenberg-Marquardt regulisation
         # min_eval = jnp.linalg.eigh(Huu)[0][0]
         # I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
-        I_mu = 1e-7 * jnp.eye(dims.m)
+        I_mu = 1e-7 * jnp.eye(m_dim)
 
         # solve gains
         # k = -solve(Huu + I_mu, hu, assume_a="her")
         # K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
         K, k = jnp.hsplit(
-            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [dims.n]
+            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim]
         )
         k = k.squeeze()
 
@@ -213,10 +212,10 @@ def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
     return dLdXs, dLdUs, dLdLambs
 
 
-def solve_lqr(params: LQRParams, sys_dims: ModelDims):
+def solve_lqr(params: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains = lqr_backward_pass(params.lqr, sys_dims)
+    _, gains = lqr_backward_pass(params.lqr)
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
@@ -224,11 +223,11 @@ def solve_lqr(params: LQRParams, sys_dims: ModelDims):
     return gains, Xs, Us, Lambs
 
 
-def solve_lqr_swap_x0(params: LQRParams, sys_dims: ModelDims):
+def solve_lqr_swap_x0(params: LQRParams):
     "run backward forward sweep to find optimal control freeze x0 to zero"
     # backward
     # print("r", new_params.lqr.r[-10:])
-    _, gains = lqr_backward_pass(params.lqr, sys_dims)
+    _, gains = lqr_backward_pass(params.lqr)
     # print("k", gains.k[-10:])
     new_params = LQRParams(jnp.zeros_like(params.x0), params.lqr)
     Xs, Us = lqr_forward_pass(gains, new_params)
