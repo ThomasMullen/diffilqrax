@@ -150,7 +150,7 @@ def parallel_riccati_scan(model: LQRParams):
 
 
 
-def generic_dynamics_elements(lqr, eta, J):
+def generic_lin_dyn_elements(lqr, eta, J):
     S, v = J, eta 
     c =  lqr.a
     B = lqr.B
@@ -167,7 +167,7 @@ def generic_dynamics_elements(lqr, eta, J):
 
 
 
-def first_dynamics_element(model, eta0, J0, alpha): 
+def first_lin_dyn_element(model, eta0, J0, alpha): 
     S0, v0 = J0, eta0 #this needs to be at k+1 so T = 1
     c =  model.lqr.a[0]
     B = model.lqr.B[0]
@@ -182,7 +182,7 @@ def first_dynamics_element(model, eta0, J0, alpha):
     return jnp.zeros_like(J0), F0@model.x0 + c0, (Kx, Kv, Kc)
 
 
-def build_associative_dynamics_elements(
+def build_associative_lin_dyn_elements(
     model: LQRParams, etas, Js, alpha
 )-> Tuple[Tuple[Array, Array, Array, Array, Array]]:
     """Join set of elements for associative scan.
@@ -192,19 +192,19 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    first_elem = first_dynamics_element(model, etas[1], Js[1], alpha) #this is at k+1
+    first_elem = first_lin_dyn_element(model, etas[1], Js[1], alpha) #this is at k+1
     
     # etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
     # Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
-    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
+    generic_elems = jax.vmap(generic_lin_dyn_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
     return tuple(jnp.r_[jnp.expand_dims(first_e, 0), gen_es] 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
 
 # parallellised riccati scan
-def parallel_dynamics_scan(model: LQRParams, etas, Js, alpha = 1.0):
+def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
     #need to add vmaps
-    initial_elements = build_associative_dynamics_elements(model, etas, Js, alpha)
+    initial_elements = build_associative_lin_dyn_elements(model, etas, Js, alpha)
 
     # riccati operator
     @vmap
@@ -227,7 +227,7 @@ def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
     etas, Js, _ = parallel_riccati_scan(model)
-    Fs, cs, _ = parallel_dynamics_scan(model, etas, Js)
+    Fs, cs, _ = parallel_lin_dyn_scan(model, etas, Js)
     return jnp.concatenate([model.x0[None], cs])#Fs@model.x0 + cs])
     # _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # # forward
@@ -241,7 +241,7 @@ def solve_plqr(model: LQRParams):
 # --------
 # Parallel forward integration
 # --------
-def build_fwd_dyn_elements(
+def build_fwd_lin_dyn_elements(
     lqr_params: LQRParams, Us_init: Array
 ) -> Tuple[Array, Array]:
     """Generate sequence of elements {c} for forward integration
@@ -271,7 +271,7 @@ def build_fwd_dyn_elements(
     )
 
 
-def parallel_forward_integration(
+def parallel_forward_lin_integration(
     lqr_params: LQRParams, Us_init: Array
 ) -> Array:
     """Associative scan for forward linear dynamics
@@ -284,7 +284,7 @@ def parallel_forward_integration(
         Array: state trajectory
     """
 
-    dyn_elements = build_fwd_dyn_elements(lqr_params, Us_init)
+    dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init)
 
     @vmap
     def associative_dyn_op(elem1, elem2):
