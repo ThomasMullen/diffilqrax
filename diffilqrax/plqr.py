@@ -136,7 +136,13 @@ def parallel_riccati_scan(model: LQRParams):
     final_elements = associative_scan(
         assoc_riccati_operator, first_elements, reverse = True
     )
-    return final_elements[-2], final_elements[-1] #jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
+    etas = final_elements[-2]
+    Js = final_elements[-1] 
+    return etas, Js, etas[0] + Js[0]@model.x0
+
+
+
+#jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
 #jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
 ##or is it? how do we have all k and k+1 accessible? 
@@ -173,7 +179,7 @@ def first_dynamics_element(model, eta0, J0, alpha):
     Kx = Kc@A
     F0 = A - B@Kx
     c0 = c + alpha*(B@Kv@v0 - B@Kc@c)
-    return jnp.zeros_like(J0), F0@model.x0 + c0
+    return jnp.zeros_like(J0), F0@model.x0 + c0, (Kx, Kv, Kc)
 
 
 def build_associative_dynamics_elements(
@@ -220,8 +226,8 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js, alpha = 1.0):
 def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
-    etas, Js = parallel_riccati_scan(model)
-    Fs, cs = parallel_dynamics_scan(model, etas, Js)
+    etas, Js, _ = parallel_riccati_scan(model)
+    Fs, cs, _ = parallel_dynamics_scan(model, etas, Js)
     return jnp.concatenate([model.x0[None], cs])#Fs@model.x0 + cs])
     # _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # # forward
