@@ -50,7 +50,7 @@ def get_qra_bar(
         S=lqr.S,
     )
     swapped_params = LQRParams(params.x0, swapped_lqr)
-    _, q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params, dims)
+    _, q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params)
     return q_bar, jnp.r_[r_bar, jnp.zeros((1,dims.m,))], a_bar
 
 
@@ -69,7 +69,7 @@ def dlqr(dims: ModelDims, params: LQRParams, tau_guess: Array) -> Array:
     Returns:
         Array: Concatenated optimal state and control sequence along axis=1.
     """
-    sol = solve_lqr(params, dims)  #  tau_guess)
+    sol = solve_lqr(params)  #  tau_guess)
     _, Xs_star, Us_star, _ = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     return tau_star
@@ -90,7 +90,7 @@ def fwd_dlqr(
         and solution.
     """
     lqr = params.lqr
-    sol = solve_lqr(params, dims)
+    sol = solve_lqr(params)
     gains, Xs_star, Us_star, Lambs = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     new_lqr = LQR(
@@ -106,7 +106,7 @@ def fwd_dlqr(
         S=lqr.S,
     )
     new_params = LQRParams(params.x0, new_lqr)
-    _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params, dims)
+    _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params)
     # new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
     return tau_star, (new_params, sol)  # check whether params or new_params
 
@@ -204,7 +204,7 @@ def fwd_dllqr(
         and solution.
     """
     lqr = params.lqr
-    sol = solve_lqr(params, dims)
+    sol = solve_lqr(params)
     gains, Xs_star, Us_star, Lambs = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     new_lqr = LQR(
@@ -220,7 +220,7 @@ def fwd_dllqr(
         S=lqr.S,
     )
     new_params = LQRParams(params.x0, new_lqr)
-    _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params, dims)
+    _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params)
     new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
     return tau_star, (new_params, sol)  # check whether params or new_params
 

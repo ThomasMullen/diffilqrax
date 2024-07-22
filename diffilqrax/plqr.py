@@ -1,6 +1,7 @@
 """LQR solver using associative parallel scan"""
 
 from typing import Callable, Tuple
+from functools import partial
 from jax.typing import ArrayLike
 from jax import Array
 import jax
@@ -22,7 +23,12 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-jax.config.update("jax_enable_x64", True)  # double precision
+#jax.config.update("jax_enable_x64", True)  # double precision
+from jax.lib import xla_bridge
+
+# helper functions - pop first and last element from namedtuple
+pop_first = partial(jax.tree_map, lambda x: x[1:])
+pop_last = partial(jax.tree_map, lambda x: x[:-1])
 
 """
 Implementation:
@@ -52,9 +58,10 @@ def last_riccati_element(model: LQRParams):
     b = jnp.zeros((n_dims,), dtype=float)
     C = jnp.zeros((n_dims,n_dims), dtype=float)
     # here: set readout C=I, reference r_T=0
-    η = -model.lqr.q[-1] #jnp.eye(n_dims).T @ jnp.zeros((n_dims), dtype=float)
+    η = -model.lqr.qf
     # here: set readout C=I
-    J = model.lqr.Q[-1] #jnp.eye(n_dims).T @ model.lqr.Q[-1] @ jnp.eye(n_dims, dtype=float)
+    J = model.lqr.Qf
+    # J = model.lqr.Q[-1] #jnp.eye(n_dims).T @ model.lqr.Q[-1] @ jnp.eye(n_dims, dtype=float)
     return A, b, C, η, J
 
 
@@ -104,7 +111,7 @@ def build_associative_riccati_elements(
 
 # parallellised riccati scan
 def parallel_riccati_scan(model: LQRParams):
-    initial_elements = build_associative_riccati_elements(model)
+    first_elements = build_associative_riccati_elements(model)
 
     # riccati operator
     @vmap
@@ -127,17 +134,23 @@ def parallel_riccati_scan(model: LQRParams):
         J = temp @ J2 @ A1 + J1
         return A, b, C, η, J
     final_elements = associative_scan(
-        assoc_riccati_operator, initial_elements, reverse=True
+        assoc_riccati_operator, first_elements, reverse = True
     )
-    
-    return final_elements[-2], final_elements[-1] #this only returns J, eta, which are the only things we need to compute 
+    etas = final_elements[-2]
+    Js = final_elements[-1] 
+    return etas, Js, etas[0] + Js[0]@model.x0
+
+
+
+#jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
+#jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
 ##or is it? how do we have all k and k+1 accessible? 
 
 
 
 
-def generic_dynamics_elements(lqr, eta, J):
+def generic_lin_dyn_elements(lqr, eta, J):
     S, v = J, eta 
     c =  lqr.a
     B = lqr.B
@@ -154,7 +167,7 @@ def generic_dynamics_elements(lqr, eta, J):
 
 
 
-def first_dynamics_element(model, eta0, J0): 
+def first_lin_dyn_element(model, eta0, J0, alpha): 
     S0, v0 = J0, eta0 #this needs to be at k+1 so T = 1
     c =  model.lqr.a[0]
     B = model.lqr.B[0]
@@ -165,12 +178,12 @@ def first_dynamics_element(model, eta0, J0):
     Kc = Kv@S0
     Kx = Kc@A
     F0 = A - B@Kx
-    c0 = c + B@Kv@v0 - B@Kc@c # c0 = Ax0  + Bu0 = where u0 = -Kx0 + Kv@v0 -Kc@c
-    return jnp.zeros_like(J0), F0@model.x0 + c0
+    c0 = c + alpha*(B@Kv@v0 - B@Kc@c)
+    return jnp.zeros_like(J0), F0@model.x0 + c0, (Kx, Kv, Kc)
 
 
-def build_associative_dynamics_elements(
-    model: LQRParams, etas, Js
+def build_associative_lin_dyn_elements(
+    model: LQRParams, etas, Js, alpha
 )-> Tuple[Tuple[Array, Array, Array, Array, Array]]:
     """Join set of elements for associative scan.
     Args:
@@ -179,19 +192,19 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    first_elem = first_dynamics_element(model, etas[1], Js[1]) #not working right now, might need to double check the indices
-    #seems to start at k+1 
-    etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
-    Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
-    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[2:], Js[2:])
-    return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es[1:]]) 
+    first_elem = first_lin_dyn_element(model, etas[1], Js[1], alpha) #this is at k+1
+    
+    # etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
+    # Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
+    generic_elems = jax.vmap(generic_lin_dyn_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
+    return tuple(jnp.r_[jnp.expand_dims(first_e, 0), gen_es] 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
 
 # parallellised riccati scan
-def parallel_dynamics_scan(model: LQRParams, etas, Js):
+def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
     #need to add vmaps
-    initial_elements = build_associative_dynamics_elements(model, etas, Js)
+    initial_elements = build_associative_lin_dyn_elements(model, etas, Js, alpha)
 
     # riccati operator
     @vmap
@@ -206,15 +219,15 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js):
         assoc_dynamics_operator, initial_elements
     )
 
-    return final_elements #have to check shapes of this : hope is that it returns F, c for all k and that the c is the x we want? 
+    return final_elements
 
 
-
+#@jax.jit
 def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
-    etas, Js = parallel_riccati_scan(model)
-    Fs, cs = parallel_dynamics_scan(model, etas, Js)
+    etas, Js, _ = parallel_riccati_scan(model)
+    Fs, cs, _ = parallel_lin_dyn_scan(model, etas, Js)
     return jnp.concatenate([model.x0[None], cs])#Fs@model.x0 + cs])
     # _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # # forward
@@ -224,228 +237,60 @@ def solve_plqr(model: LQRParams):
     # return gains, Xs, Us, Lambs
 
 
-# def generic_gain_element(model, eta, J):
-#     S, v = J, eta
-#     # S, v = elems #at k+1
-#     c =  model.lqr.a
-#     B = model.lqr.B
-#     R = model.lqr.R
-#     A = model.lqr.A
-#     #get the 
-#     pinv = jsc.linalg.inv(B.T@S@B + R)
-#     Kv = pinv@B.T
-#     Kx = Kv@S@A
-#     Kc = Kv@S
-#     return Kv, Kx, Kc, v, c, A, B
+
+# --------
+# Parallel forward integration
+# --------
+def build_fwd_lin_dyn_elements(
+    lqr_params: LQRParams, Us_init: Array
+) -> Tuple[Array, Array]:
+    """Generate sequence of elements {c} for forward integration
+
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): Input sequence
+
+    Returns:
+        Tuple[Array, Array]: set of elements {c} for associative scan
+    """
+
+    initial_element = (jnp.diag(lqr_params.x0), lqr_params.x0)
+    # print(initial_element[0].shape, initial_element[1].shape)
+
+    def gen_ele(a_mat: Array, b_mat: Array, u: Array) -> Tuple[Array, Array]:
+        """Generate tuple (c_i,a, c_i,b) to parallelise"""
+        return a_mat, b_mat @ u
+
+    generic_elements = vmap(gen_ele, (0, 0, 0))(
+        lqr_params.lqr.A, lqr_params.lqr.B, Us_init
+    )
+    # print(generic_elements[0].shape, generic_elements[1].shape)
+    return tuple(
+        jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es])
+        for first_e, gen_es in zip(initial_element, generic_elements)
+    )
 
 
-    #Kv, Kx, Kc
-    #then unroll with x (roll forward)
-    # u = -Kx@x[k] + Kv@v - Kc@c[k]
-# def build_associative_dynamics_elements(
-# model: LQRParams,  etas, Js
-# )-> Tuple[Tuple[Array, Array, Array, Array, Array]]:
-#     first_elem = first_gain_element(etas[0], Js[0])
-#     generic_elems = vmap(generic_gain_element)(model, etas[1:], Js[1:])
-#     return tuple(
-#         jnp.concatenate(gen_es, jnp.expand_dims(first_e, 0))
-#         for gen_es, first_e in zip(generic_elems, first_elem)
-#     )
-  
-# def unroll(x, gain_elems):
-#     Kv, Kx, Kc, v, c, A, B = gain_elems
-#     #optimal_x_k = np.linalg.inv(np.eye(n) + csk@s_k)@(a_ks@xs +bsk + csk@vk)
-#     u = -Kx@x + Kv@v - Kc@c
-#     nx = A@x + B@u
-#     return nx, (x, u)
+def parallel_forward_lin_integration(
+    lqr_params: LQRParams, Us_init: Array
+) -> Array:
+    """Associative scan for forward linear dynamics
 
-# def build_dynamic_elemnt():
-#     S, v = J, eta
-#     # S, v = elems #at k+1
-#     c =  model.lqr.a
-#     B = model.lqr.B
-#     R = model.lqr.R
-#     A = model.lqr.A
-#     #get the 
-#     pinv = jsc.linalg.inv(B.T@S@B + R)
-#     Kv = pinv@B.T
-#     Kx = Kv@S@A
-#     Kc = Kv@S
-#     f = A - B@K
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): input sequence
 
-# def lqr_step(model):
-#     initial_elements = make_associative_smoothing_elements(model, filtered_means, filtered_covariances)
-#     final_elements = associative_scan(smoothing_operator, initial_elements, reverse=True)  # note the vmap
-#     gain_elems =  build_associative_gain_elements(model, filtered_means, filtered_covariances)
-#     ##I guess also associative unroll would be needed to avoid the T scaling...
-#     return final_elements[1], final_elements[2]
+    Returns:
+        Array: state trajectory
+    """
 
+    dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init)
 
-#def run_forward... #standard ilqr run forward function
+    @vmap
+    def associative_dyn_op(elem1, elem2):
+        a1, b1 = elem1
+        a2, b2 = elem2
+        return a1 @ a2, a2 @ b1 + b2
 
-"""
-def kf(model, observations):
-    def body(carry, y):
-        m, P = carry
-        m = model.F @ m
-        P = model.F @ P @ model.F.T + model.Q
-
-        obs_mean = model.H @ m
-        S = model.H @ P @ model.H.T + model.R
-
-        K = solve(S, model.H @ P, assume_a='pos').T  # notice the jsc here
-        m = m + K @ (y - model.H @ m)
-        P = P - K @ S @ K.T
-        return (m, P), (m, P)
-
-    _, (fms, fPs) = scan(body, (model.m0, model.P0), observations)
-    return fms, fPs
-
-
-def first_filtering_element(model, y):
-    S = model.H @ model.Q @ model.H.T + model.R
-    CF, low = jsc.linalg.cho_factor(S)  # note the jsc
-
-    m1 = model.F @ model.m0
-    P1 = model.F @ model.P0 @ model.F.T + model.Q
-    S1 = model.H @ P1 @ model.H.T + model.R
-    K1 = jsc.linalg.solve(S1, model.H @ P1, assume_a='pos').T  # note the jsc
-
-    A = jnp.zeros_like(model.F)
-    b = m1 + K1 @ (y - model.H @ m1)
-    C = P1 - K1 @ S1 @ K1.T
-
-    # note the jsc
-    eta = model.F.T @ model.H.T @ jsc.linalg.cho_solve((CF, low), y)
-    J = model.F.T @ model.H.T @ jsc.linalg.cho_solve((CF, low), model.H @ model.F)
-    return A, b, C, J, eta
-
-
-def generic_filtering_element(model, y):
-    S = model.H @ model.Q @ model.H.T + model.R
-    CF, low = jsc.linalg.cho_factor(S)  # note the jsc
-    K = jsc.linalg.cho_solve((CF, low), model.H @ model.Q).T  # note the jsc
-    A = model.F - K @ model.H @ model.F
-    b = K @ y
-    C = model.Q - K @ model.H @ model.Q
-
-    # note the jsc
-    eta = model.F.T @ model.H.T @ jsc.linalg.cho_solve((CF, low), y)
-    J = model.F.T @ model.H.T @ jsc.linalg.cho_solve((CF, low), model.H @ model.F)
-    return A, b, C, J, eta
-
-
-def make_associative_filtering_elements(model, observations):
-    first_elems = first_filtering_element(model, observations[0])
-    generic_elems = vmap(lambda o: generic_filtering_element(model, o))(observations[1:])
-    return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es]) 
-                 for first_e, gen_es in zip(first_elems, generic_elems))
-
-
-@vmap
-def filtering_operator(elem1, elem2):
-    # # note the jsc everywhere
-    A1, b1, C1, J1, eta1 = elem1
-    A2, b2, C2, J2, eta2 = elem2
-    dim = A1.shape[0]
-    I = jnp.eye(dim)  # note the jnp
-
-    I_C1J2 = I + C1 @ J2
-    temp = jsc.linalg.solve(I_C1J2.T, A2.T).T
-    A = temp @ A1
-    b = temp @ (b1 + C1 @ eta2) + b2
-    C = temp @ C1 @ A2.T + C2
-
-    I_J2C1 = I + J2 @ C1
-    temp = jsc.linalg.solve(I_J2C1.T, A1).T
-
-    eta = temp @ (eta2 - J2 @ b1) + eta1
-    J = temp @ J2 @ A1 + J1
-
-    return A, b, C, J, eta
-
-
-
-def pkf(model, observations):
-    initial_elements = make_associative_filtering_elements(model, observations)
-    final_elements = associative_scan(filtering_operator, initial_elements)
-    return final_elements[1], final_elements[2]
-
-
-
-def ks(model, ms, Ps):
-    def body(carry, inp):
-        m, P = inp
-        sm, sP = carry
-
-        pm = model.F @ m
-        pP = model.F @ P @ model.F.T + model.Q
-
-        C = solve(pP, model.F @ P, assume_a='pos').T  # notice the jsc here
-        
-        sm = m + C @ (sm - pm)
-        sP = P + C @ (sP - pP) @ C.T
-        return (sm, sP), (sm, sP)
-
-    _, (sms, sPs) = scan(body, (ms[-1], Ps[-1]), (ms[:-1], Ps[:-1]), reverse=True)
-    sms = jnp.append(sms, jnp.expand_dims(ms[-1], 0), 0)
-    sPs = jnp.append(sPs, jnp.expand_dims(Ps[-1], 0), 0)
-    return sms, sPs
-
-
-def last_smoothing_element(m, P):
-    return jnp.zeros_like(P), m, P
-
-def generic_smoothing_element(model, m, P):
-    Pp = model.F @ P @ model.F.T + model.Q
-
-    E  = jsc.linalg.solve(Pp, model.F @ P, assume_a='pos').T
-    g  = m - E @ model.F @ m
-    L  = P - E @ Pp @ E.T
-    return E, g, L
-
-def make_associative_smoothing_elements(model, filtering_means, filtering_covariances):
-    last_elems = last_smoothing_element(filtering_means[-1], filtering_covariances[-1])
-    generic_elems = vmap(lambda m, P: generic_smoothing_element(model, m, P))(filtering_means[:-1], filtering_covariances[:-1])
-    return tuple(jnp.append(gen_es, jnp.expand_dims(last_e, 0), axis=0) 
-                 for gen_es, last_e in zip(generic_elems, last_elems))
-
-
-@vmap
-def smoothing_operator(elem1, elem2):
-    E1, g1, L1 = elem1
-    E2, g2, L2 = elem2
-
-    E = E2 @ E1
-    g = E2 @ g1 + g2
-    L = E2 @ L1 @ E2.T + L2
-
-    return E, g, L
-
-
-def pks(model, filtered_means, filtered_covariances):
-    initial_elements = make_associative_smoothing_elements(model, filtered_means, filtered_covariances)
-    final_elements = associative_scan(smoothing_operator, initial_elements, reverse=True)  # note the vmap
-    return final_elements[1], final_elements[2]
-"""
-
-
-
-# @vmap
-# def lqr_operator(elem1, elem2):
-    # E1, g1, L1 = elem1
-    # E2, g2, L2 = elem2
-
-    # E = E2 @ E1
-    # g = E2 @ g1 + g2
-    # L = E2 @ L1 @ E2.T + L2
-
-    # return E, g, L
-
-# def generic_smoothing_element(model, m, P):
-#     Pp = model.F @ P @ model.F.T + model.Q
-
-#     E  = jsc.linalg.solve(Pp, model.F @ P, assume_a='pos').T
-#     g  = m - E @ model.F @ m
-#     L  = P - E @ Pp @ E.T
-#     return E, g, L
+    c_as, c_bs = associative_scan(associative_dyn_op, dyn_elements)
+    return c_bs
