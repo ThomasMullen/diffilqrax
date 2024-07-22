@@ -108,7 +108,7 @@ def parallel_riccati_scan(model: LQRParams):
 
     # riccati operator
     @vmap
-    def assoc_riccati_operator(elem1, elem2):
+    def assoc_riccati_operator(elem2, elem1):
         A1, b1, C1, η1, J1 = elem1
         A2, b2, C2, η2, J2 = elem2
 
@@ -165,7 +165,7 @@ def first_dynamics_element(model, eta0, J0):
     Kc = Kv@S0
     Kx = Kc@A
     F0 = A - B@Kx
-    c0 = c + B@Kv@v0 - B@Kc@c
+    c0 = c + B@Kv@v0 - B@Kc@c # c0 = Ax0  + Bu0 = where u0 = -Kx0 + Kv@v0 -Kc@c
     return jnp.zeros_like(J0), F0@model.x0 + c0
 
 
@@ -183,7 +183,7 @@ def build_associative_dynamics_elements(
     #seems to start at k+1 
     etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
     Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
-    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[1:-1], Js[1:-1])
+    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(model.lqr, etas[2:], Js[2:])
     return tuple(jnp.concatenate([jnp.expand_dims(first_e, 0), gen_es[1:]]) 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
