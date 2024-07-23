@@ -40,7 +40,7 @@ def gen_lqr_problem():
 
 
 def lqr_cov_backward_pass(
-    lqr: LQR, sys_dims: ModelDims
+    lqr: LQR
 ) -> Tuple[Array, Array, Array, Array]:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
@@ -56,6 +56,7 @@ def lqr_cov_backward_pass(
     """
 
     a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    n_dim, m_dim = lqr.B[0].shape
 
     def riccati_step(
         carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
@@ -71,13 +72,13 @@ def lqr_cov_backward_pass(
         hu = r + BT @ (v + V @ a)
 
         # With Levenberg-Marquardt regulisation
-        I_mu = 1e-7 * jnp.eye(sys_dims.m)
+        I_mu = 1e-7 * jnp.eye(m_dim)
 
         # solve gains with cholesky
         c, lower = cho_factor(Huu + I_mu)
         K, k, Huu_inv = jnp.hsplit(
-            cho_solve((c, lower), jnp.c_[-Hxu.T, -hu, jnp.eye(sys_dims.m)]),
-            [sys_dims.n, sys_dims.n + 1],
+            cho_solve((c, lower), jnp.c_[-Hxu.T, -hu, jnp.eye(m_dim)]),
+            [n_dim, n_dim + 1],
         )
         k = k.squeeze()
 
@@ -106,21 +107,31 @@ def lqr_cov_backward_pass(
 
 
 def lqr_covariance(
-    sys_dims: ModelDims,
     gains: Gains,
     val_funs: CostToGo,
     Huu_invs: Array,
-    params: LQRParams,
-):
+    lqr_params: LQR,
+)->Tuple[Array, Array, Array]:
+    """Calculate the posterior state and input covariances LQR problem.
+
+    Args:
+        gains (Gains): The optimal control gains.
+        val_funs (CostToGo): The cost-to-go values.
+        Huu_invs (Array): The inverse of the input input covariance matrix.
+        lqr_params (LQR): The LQR parameters.
+
+    Returns:
+        Tuple: A tuple containing the posterior state and input covariances, and intermediate precision matrices
+    """
     # TODO: add the linear term
     # TODO: add the cross-term covariance
 
-    x0, lqr = params.x0, params.lqr
-    a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    n_dim, m_dim = lqr.B[0].shape
+    a_transp, b_transp = lqr_params.A.transpose(0, 2, 1), lqr_params.B.transpose(0, 2, 1)
     k_transp = gains.K.transpose(0, 2, 1)
     Vs = val_funs.V
     # initialise P0, V0
-    p_init = jnp.zeros((sys_dims.n, sys_dims.n), dtype=float)
+    p_init = jnp.zeros((n_dim, n_dim), dtype=float)
 
     # x_cov = inv(Vs[0])
     # carry_init = (p_init, x_cov)
@@ -143,59 +154,31 @@ def lqr_covariance(
     x_covs, u_covs, ps = lax.scan(
         precision_step,
         init=p_init,
-        xs=(gains.K, k_transp, Vs, Huu_invs, a_transp, b_transp, lqr.A, lqr.B, lqr.Q, lqr.R),
+        xs=(gains.K, k_transp, Vs, Huu_invs, a_transp, b_transp, lqr_params.A, lqr_params.B, lqr_params.Q, lqr_params.R),
     )[1]
     # NOTE: check to append first x_cov, p, u_cov
     return x_covs, u_covs, ps
 
 
-def solve_lqr(params: LQRParams, sys_dims: ModelDims):
+def solve_lqr(params: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains, val_fns, q_invs = lqr_cov_backward_pass(params.lqr, sys_dims)
+    _, gains, val_fns, q_invs = lqr_cov_backward_pass(params.lqr)
+    # covariance
+    xcvs, ucvs, ps = lqr_covariance(Ks, Vs, Huu_invs, params.lqr)
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, params)
-    return gains, Xs, Us, Lambs
+    return gains, Xs, Us, Lambs, (xcvs, ucvs, ps)
 
 
-lqr, dims = gen_lqr_problem()
-dJ, Ks, Vs, Huu_invs = lqr_cov_backward_pass(lqr, dims)
+if __name__ == "__main__":
 
-# troubleshoot backpass step
-sys_dims = dims
-a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
-inps_all = zip(
-    a_transp, b_transp, lqr.A, lqr.B, lqr.a, lqr.Q, lqr.q, lqr.R, lqr.r, lqr.S
-)
-carry0 = (CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0)))
-
-AT, BT, A, B, a, Q, q, R, r, S = next(inps_all)
-curr_val, cost_step = carry0
-V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-
-Hxx = symmetrise_matrix(Q + AT @ V @ A)
-Huu = symmetrise_matrix(R + BT @ V @ B)
-Hxu = S + AT @ V @ B
-hx = q + AT @ (v + V @ a)
-hu = r + BT @ (v + V @ a)
-
-I_mu = 1e-7 * jnp.eye(sys_dims.m)
-
-# solve with cholesky
-c, lower = cho_factor(Huu + I_mu)
-K, k, Huu_inv = jnp.hsplit(
-    cho_solve((c, lower), jnp.c_[-Hxu.T, -hu, jnp.eye(sys_dims.m)]),
-    [sys_dims.n, sys_dims.n + 1],
-)
-k = k.squeeze()
-
-V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
-v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
-
-dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
-dj = dj + (k.T @ hu).squeeze()
-
-carry1 = (CostToGo(V_curr, v_curr), CostToGo(dJ, dj))
-st1 = (Gains(K, k), CostToGo(V_curr, v_curr))
+    lqr, dims = gen_lqr_problem()
+    x_init = jnp.zeros(dims.n)
+    lqr_params = LQRParams(x_init, lqr)
+    dJ, Ks, Vs, Huu_invs = lqr_cov_backward_pass(lqr_params.lqr)
+    xcvs, ucvs, ps = lqr_covariance(Ks, Vs, Huu_invs, lqr_params.lqr)
+    
+    gains, Xs, Us, Lambs, (xcvs, ucvs, ps) = solve_lqr(lqr_params)
