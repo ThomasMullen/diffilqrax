@@ -252,7 +252,7 @@ def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
 def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
-    etas, Js, _ = parallel_riccati_scan(model)
+    etas, Js = parallel_riccati_scan(model)
     Fs, cs, _ = parallel_lin_dyn_scan(model, etas, Js)
     return jnp.concatenate([model.x0[None], cs])#Fs@model.x0 + cs])
     # _, gains = lqr_backward_pass(params.lqr, sys_dims)

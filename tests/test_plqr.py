@@ -31,11 +31,11 @@ from diffilqrax.utils import keygen, initialise_stable_dynamics
 # jax.config.update('jax_platform_name', 'gpu')
 
 
-# PLOT_URL = ("https://gist.githubusercontent.com/"
-#        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
-#        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
-#        "figure_style.mplstyle")
-style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
+PLOT_URL = ("https://gist.githubusercontent.com/"
+       "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
+       "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
+       "figure_style.mplstyle")
+#style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
 
 
 def is_jax_array(arr: Array)->bool:
@@ -132,7 +132,7 @@ class TestPLQR(unittest.TestCase):
                     end = time.time()
                     parallel_time = end-start
                     start = time.time()
-                    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, sys_dims)
+                    gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
                     end = time.time()
                     normal_time = end-start
                     if seed == 0:
