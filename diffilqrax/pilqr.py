@@ -64,7 +64,6 @@ def pilqr_forward_pass(
     delta_Xs = jnp.concatenate([jnp.zeros((1, delta_Xs.shape[1])), delta_Xs], axis = 0)
     delta_Us = jax.vmap(get_delta_u)(Ks, delta_Xs[:-1], etas[1:], lqr_model.lqr.a)
     new_Us = Us + delta_Us
-    print("tree", new_Us.shape, new_Us.sum(),new_Us[:10])
     (new_Xs, _), _ = pilqr_simulate(model, new_Us, params)
     total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta)) + model.costf(new_Xs[-1], params.theta)
     return (new_Xs, new_Us), total_cost  
@@ -146,7 +145,6 @@ def pilqr_solver(
 
         # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / jnp.abs(old_cost)
-        print(old_cost, new_total_cost)
 
         # determine cond: Δold_cost > threshold
         carry_on = z > convergence_thresh  # n_iter < 70 #

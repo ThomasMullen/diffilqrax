@@ -218,7 +218,6 @@ def ilqr_forward_pass(
     )
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
-    print("tree2", new_Us.shape, new_Us.sum(), new_Us[:10])
     return (new_Xs, new_Us), total_cost
 
 
@@ -380,8 +379,6 @@ def linesearch(
 
         # calc expected cost reduction
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
-        print("edJ", expected_delta_j)
-        print("old, new", old_cost, new_cost)
         # calc z-value
         z = (old_cost - new_cost) / jnp.abs(expected_delta_j) 
         ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and 
