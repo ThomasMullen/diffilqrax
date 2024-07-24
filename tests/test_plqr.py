@@ -28,7 +28,7 @@ from diffilqrax.exact import quad_solve, exact_solve
 from diffilqrax.utils import keygen, initialise_stable_dynamics
 
 # jax.config.update('jax_default_device', jax.devices('cpu')[0])
-jax.config.update('jax_platform_name', 'gpu')
+# jax.config.update('jax_platform_name', 'gpu')
 
 
 # PLOT_URL = ("https://gist.githubusercontent.com/"

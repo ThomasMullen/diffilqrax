@@ -23,14 +23,8 @@ from diffilqrax.typs import (
     Theta,
 )
 
-# jax.config.update('jax_default_device', jax.devices('cpu')[0])
+jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
-
-PLOT_URL = ("https://gist.githubusercontent.com/"
-       "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
-       "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
-       "figure_style.mplstyle")
-style.use(PLOT_URL)
 
 
 class TestiLQRStructs(unittest.TestCase):
@@ -42,20 +36,20 @@ class TestiLQRStructs(unittest.TestCase):
         key, skeys = keygen(key, 3)
 
         dt = 0.1
-        Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
-        Wh = jnp.array([[0, 0], [1, 0]]) * dt
+        Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.1 * dt]])
+        Wh = jnp.array([[0.5, 0], [1, 0]]) * dt
         Q = jnp.eye(2)
         # initialise params
         self.theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)), Q=Q)
-        self.params = iLQRParams(x0=jnp.array([0.3, 0.0]), theta=self.theta)
+        self.params = iLQRParams(x0=jnp.array([2., 0.7]), theta=self.theta)
 
         # define model
         def cost(t: int, x: Array, u: Array, theta: Theta):
-            return jnp.log(x**2) + jnp.sum(u**2)
+            return jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**4)  + jnp.sum(u**2) #+ jnp.sum(x) #+ jnp.sum(jnp.log(1 + u**2)) + 0*jnp.log(1 + x**2)
 
         def costf(x: Array, theta: Theta):
             # return jnp.sum(jnp.abs(x))
-            return jnp.sum(x**2)
+            return jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**4)#+ jnp.sum(x))
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return theta.Uh @ x + theta.Wh @ u
@@ -70,8 +64,8 @@ class TestiLQRStructs(unittest.TestCase):
         # define linesearch parameters
         self.ls_kwargs = {
         "beta": 0.8,
-        "max_iter_linesearch": 16,
-        "tol": 1e0,
+        "max_iter_linesearch": 10,
+        "tol": 0.1,
         "alpha_min": 0.0001,
         }
 
@@ -81,9 +75,6 @@ class TestiLQRStructs(unittest.TestCase):
         # setup
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
-        (Xs_init, _), initial_cost = ilqr.ilqr_simulate(
-            self.model, self.Us_init, self.params
-        )
         # exercise
         (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = pilqr.pilqr_solver(
             self.model,
@@ -96,45 +87,37 @@ class TestiLQRStructs(unittest.TestCase):
             use_linesearch=True,
             **self.ls_kwargs,
         )
+        (Xs_stars_ilqr, Us_stars_ilqr, _), converged_cost, cost_log = ilqr.ilqr_solver(
+            self.model,
+            self.params,
+            self.Us_init,
+            max_iter=70,
+            convergence_thresh=1e-8,
+            alpha_init=1.0,
+            verbose=True,
+            use_linesearch=True,
+            **self.ls_kwargs,
+        )
         fig, ax = subplots(2, 2, sharey=True)
-        ax[0, 0].plot(Xs_init)
-        ax[0, 0].set(title="X")
-        ax[0, 1].plot(self.Us_init)
-        ax[0, 1].set(title="U")
-        ax[1, 0].plot(Xs_stars)
-        ax[1, 1].plot(Us_stars)
+        ax[0, 1].plot(Us_stars)
+        ax[0, 0].plot(Xs_stars)
+        ax[0, 1].set(title="U (parallel)")
+        ax[0, 0].set(title="X (parallel)")
+        ax[1, 0].plot(Xs_stars_ilqr)
+        ax[1, 1].plot(Us_stars_ilqr)
+        ax[1, 1].set(title="U (normal)")
+        ax[1, 0].set(title="X (normal)")
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/pilqr_solver.png")
-        close()
-        lqr_params_stars = ilqr.approx_lqr(self.model, Xs_stars, Us_stars, self.params)
-        lqr_tilde_params = LQRParams(Xs_stars[0], lqr_params_stars)
-        dLdXs, dLdUs, dLdLambs = lqr.kkt(
-            lqr_tilde_params, Xs_stars, Us_stars, Lambs_stars
-        )
-        fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
-        ax[0, 0].plot(Xs_stars)
-        ax[0, 0].set(title="X")
-        ax[0, 1].plot(Us_stars)
-        ax[0, 1].set(title="U")
-        ax[0, 2].plot(Lambs_stars)
-        ax[0, 2].set(title="λ")
-        ax[1, 0].plot(dLdXs)
-        ax[1, 0].set(title="dLdX")
-        ax[1, 1].plot(dLdUs)
-        ax[1, 1].set(title="dLdUs")
-        ax[1, 2].plot(dLdLambs)
-        ax[1, 2].set(title="dLdλ")
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/ilqr_kkt.png")
-        close()
-        fig, ax = subplots()
-        ax.scatter(jnp.arange(cost_log.size), cost_log)
-        ax.set(xlabel="Iteration", ylabel="Total cost")
-        fig.savefig(f"{fig_dir}/ilqr_cost_log.png")
-        close()
+        chex.assert_trees_all_close(Xs_stars, Xs_stars_ilqr, rtol=1e-03, atol=1e-02)
+        #close()
 
-        # verify
-        assert converged_cost < initial_cost
+        # # verify
+        # assert converged_cost < initial_cost
         # assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-03, atol=1e-04)
         # assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-03, atol=1e-04)
         # assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-03, atol=1e-04)
+        
+        
+if __name__ == "__main__":
+    unittest.main()

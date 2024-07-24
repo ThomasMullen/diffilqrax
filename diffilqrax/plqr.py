@@ -21,6 +21,7 @@ from diffilqrax.typs import (
     CostToGo,
     LQR,
     RiccatiStepParams,
+    CostToGo
 )
 
 #jax.config.update("jax_enable_x64", True)  # double precision
@@ -79,7 +80,7 @@ def generic_riccati_element(model: LQRParams):
     n_dims = model.lqr.Q.shape[1]
     A = model.lqr.A
     b = model.lqr.a
-    R_invs = vmap(jsc.linalg.inv)(model.lqr.R)
+    R_invs = vmap(jsc.linalg.inv)(model.lqr.R + 1e-7*jnp.eye(n_dims))
     C = jnp.einsum('ijk,ikl,iml->ijm', model.lqr.B, R_invs, model.lqr.B)
     # lqr of form : 0.5 x^T Q x + q^t x + u^T R u + r^T u
     # if we expand 0.5 * (Hx - r)^TX(Hx - r) = 0.5 x^T H^T X H x - r^T X H x - 0.5 r^T X r
@@ -137,11 +138,31 @@ def parallel_riccati_scan(model: LQRParams):
         assoc_riccati_operator, first_elements, reverse = True
     )
     etas = final_elements[-2]
-    Js = final_elements[-1] 
-    return etas, Js, etas[0] + Js[0]@model.x0
+    Js = final_elements[-1]  #dJ and dj we are supposed to add Quu@k and k@QuuQk.T
+    return etas, Js
 
 
+def get_dJ(lqr, eta, J):
+    c =  lqr.a
+    B = lqr.B
+    R = lqr.R
+    A = lqr.A
+    r = lqr.r
+    P = B.T@J@B + R
+    pinv = jsc.linalg.inv(P + 1e-7*jnp.eye(P.shape[0])) #quu_inv
+    qu = B.T@eta #+ r #- B.T@Kc@c
+    hu = B.T @ (-eta + J @ c)
+    Huu = symmetrise_matrix(R + B.T @ J @ B)
+    k = -pinv@qu
+    dj = k.T@hu
+    dJ = 0.5 * (k.T @ Huu @ k).squeeze()   #0.5*qu.T@pinv@qu
+    return CostToGo(dJ, -dj) ##this needs to be a function of alpha
 
+def get_dJs(model, etas, Js):
+    lqr = model.lqr
+    dJs = vmap(get_dJ, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(lqr, etas[1:], Js[1:])
+    dj, dJ = dJs.v, dJs.V
+    return CostToGo(V = jnp.sum(dJ), v = jnp.sum(dj)) #this needs to be a function of alpha
 #jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
 #jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
@@ -150,19 +171,22 @@ def parallel_riccati_scan(model: LQRParams):
 
 
 
-def generic_lin_dyn_elements(lqr, eta, J):
+def generic_lin_dyn_elements(lqr, eta, J, alpha):
     S, v = J, eta 
     c =  lqr.a
     B = lqr.B
     R = lqr.R
     A = lqr.A
-    pinv = jsc.linalg.inv(B.T@S@B + R)
+    r = lqr.r
+    P = B.T@S@B + R
+    pinv = jsc.linalg.inv(P + 1e-7*jnp.eye(P.shape[0])) #quu_inv
     Kv = pinv@B.T
+    #Kv_eta for including eta
     Kc = Kv@S
     Kx = Kc@A
     Ft = A - B@Kx
-    ct = c + B@Kv@v - B@Kc@c
-    return Ft, ct
+    ct = c + (B@Kv@v - B@Kc@c)
+    return (Ft, ct), (Kx,  alpha*Kv,  alpha*Kc)
 
 
 
@@ -173,13 +197,14 @@ def first_lin_dyn_element(model, eta0, J0, alpha):
     B = model.lqr.B[0]
     R = model.lqr.R[0]
     A = model.lqr.A[0]
-    pinv = jsc.linalg.inv(B.T@S0@B + R)
+    r = model.lqr.r[0]
+    pinv = jsc.linalg.inv(B.T@S0@B + R + 1e-7*jnp.eye(R.shape[0])) #quu_inv
     Kv = pinv@B.T
     Kc = Kv@S0
     Kx = Kc@A
     F0 = A - B@Kx
-    c0 = c + alpha*(B@Kv@v0 - B@Kc@c)
-    return jnp.zeros_like(J0), F0@model.x0 + c0, (Kx, Kv, Kc)
+    c0 = c + (B@Kv@v0 - B@Kc@c) #
+    return (jnp.zeros_like(J0), F0@model.x0 + c0), (Kx,  alpha*Kv,  alpha*Kc)
 
 
 def build_associative_lin_dyn_elements(
@@ -192,19 +217,20 @@ def build_associative_lin_dyn_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    first_elem = first_lin_dyn_element(model, etas[1], Js[1], alpha) #this is at k+1
-    
+    first_elem, Ks0 = first_lin_dyn_element(model, etas[1], Js[1], alpha) #this is at k+1
     # etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
     # Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
-    generic_elems = jax.vmap(generic_lin_dyn_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
+    generic_elems, Ks = jax.vmap(generic_lin_dyn_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0, None))(pop_first(model.lqr), etas[2:], Js[2:], alpha)
+    Ks = tuple(jnp.r_[jnp.expand_dims(first_k, 0), kk] for first_k, kk in zip(Ks0, Ks))
+    generic_elems = generic_elems[:2]
     return tuple(jnp.r_[jnp.expand_dims(first_e, 0), gen_es] 
-                 for first_e, gen_es in zip(first_elem, generic_elems))
+                 for first_e, gen_es in zip(first_elem, generic_elems)), Ks
 
 
 # parallellised riccati scan
 def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
     #need to add vmaps
-    initial_elements = build_associative_lin_dyn_elements(model, etas, Js, alpha)
+    final_elements, Ks = build_associative_lin_dyn_elements(model, etas, Js, alpha)
 
     # riccati operator
     @vmap
@@ -215,11 +241,11 @@ def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
         c = F2@c1 + c2
         return F, c
     
-    final_elements = associative_scan(
-        assoc_dynamics_operator, initial_elements
+    final_Fs, final_cs = associative_scan(
+        assoc_dynamics_operator, final_elements
     )
 
-    return final_elements
+    return final_Fs, final_cs, Ks
 
 
 #@jax.jit
@@ -294,3 +320,6 @@ def parallel_forward_lin_integration(
 
     c_as, c_bs = associative_scan(associative_dyn_op, dyn_elements)
     return c_bs
+
+
+

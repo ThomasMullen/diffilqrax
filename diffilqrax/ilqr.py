@@ -19,8 +19,8 @@ from diffilqrax.typs import (
 )
 
 
-#jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
+jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
 
 
 def sum_cost_to_go(x: CostToGo) -> Array:
@@ -169,7 +169,6 @@ def ilqr_simulate(
     (xf, nx_cost), (new_Xs, new_Us) = lax.scan(fwd_step, init=(x0, 0.0), xs=(tps, Us))
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
-
     return (new_Xs, new_Us), total_cost
 
 
@@ -219,7 +218,7 @@ def ilqr_forward_pass(
     )
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
-
+    print("tree2", new_Us.shape, new_Us.sum(), new_Us[:10])
     return (new_Xs, new_Us), total_cost
 
 
@@ -306,10 +305,9 @@ def ilqr_solver(
         )
 
         # calc change in dold_cost w.r.t old dold_cost
-        z = (old_cost - new_total_cost) / old_cost
-
+        z = (old_cost - new_total_cost) / jnp.abs(old_cost)
         # determine cond: Δold_cost > threshold
-        carry_on = jnp.abs(z) > convergence_thresh  # n_iter < 70 #
+        carry_on = z > convergence_thresh  # n_iter < 70 #
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
@@ -382,8 +380,12 @@ def linesearch(
 
         # calc expected cost reduction
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
+        print("edJ", expected_delta_j)
+        print("old, new", old_cost, new_cost)
         # calc z-value
-        z = (old_cost - new_cost) / expected_delta_j
+        z = (old_cost - new_cost) / jnp.abs(expected_delta_j) 
+        ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and 
+        #so that will be positive hopefully, and we want to check that the magnitude of the change is larger than some scaled version of the expected change 
 
         # if verbose:
         # jax.debug.print(
@@ -402,7 +404,6 @@ def linesearch(
         new_cost = jnp.where(above_threshold, new_cost, old_cost)
         # update alpha
         alpha *= beta
-
         return (
             new_Xs,
             new_Us,

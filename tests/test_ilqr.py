@@ -23,8 +23,8 @@ from diffilqrax.typs import (
     Theta,
 )
 
-jax.config.update('jax_default_device', jax.devices('cpu')[0])
-jax.config.update("jax_enable_x64", True)  # double precision
+#jax.config.update('jax_default_device', jax.devices('cpu')[0])
+#jax.config.update("jax_enable_x64", True)  # double precision
 
 PLOT_URL = ("https://gist.githubusercontent.com/"
        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
