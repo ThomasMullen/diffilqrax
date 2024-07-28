@@ -7,8 +7,9 @@ import jax
 from jax import lax
 import jax.numpy as jnp
 
-from diffilqrax import lqr, ilqr
+from diffilqrax.lqr import lqr_adjoint_pass
 from diffilqrax.plqr import parallel_lin_dyn_scan, parallel_riccati_scan, build_fwd_lin_dyn_elements, get_dJs
+from diffilqrax.ilqr import approx_lqr, linesearch
 from diffilqrax.typs import (
     iLQRParams,
     System,
@@ -17,7 +18,6 @@ from diffilqrax.typs import (
     CostToGo,
     LQRParams,
 )
-from diffilqrax.ilqr import approx_lqr
 
 #jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
@@ -39,7 +39,8 @@ def make_pilqr_simulate(
     ##same as running linear dynamics but replacing the cs with B@us
     #lqr_params = LQRParams(x0=params.x0, lqr=approx_lqr(model, params.x0, Us, params)
     Xs = parallel_fwd_integration(model, params, Us)
-    total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), Xs[:-1], Us, params.theta)) + model.costf(Xs[-1], params.theta).sum()
+    total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), Xs[:-1], Us, params.theta))
+    total_cost += model.costf(Xs[-1], params.theta)
     return (Xs, Us), total_cost
 
 def get_delta_u(Ks, x, v, c):
@@ -64,9 +65,10 @@ def pilqr_forward_pass(
     delta_Xs = jnp.concatenate([jnp.zeros((1, delta_Xs.shape[1])), delta_Xs], axis = 0)
     delta_Us = jax.vmap(get_delta_u)(Ks, delta_Xs[:-1], etas[1:], lqr_model.lqr.a)
     new_Us = Us + delta_Us
-    (new_Xs, _), _ = pilqr_simulate(model, new_Us, params)
-    total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta)) + model.costf(new_Xs[-1], params.theta)
-    return (new_Xs, new_Us), total_cost  
+    (new_Xs, _), total_cost = pilqr_simulate(model, new_Us, params)
+    # total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta)) + model.costf(new_Xs[-1], params.theta)
+    return (new_Xs, new_Us), total_cost 
+
 
 def parallel_forward_lin_integration_ilqr(
     model: System, params: iLQRParams, Us_init: Array
@@ -107,7 +109,7 @@ def pilqr_solver(
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     pilqr_simulate = partial(make_pilqr_simulate, parallel_fwd_integration) 
-    (Xs_init, _), c_init = pilqr_simulate(model, Us_init, params) ### need to make some parallel v of that ###
+    (Xs_init, _), c_init = pilqr_simulate(model, Us_init, params) ### need to make some     changes to the simulate function to make it work with the parallel dynamics 
     initial_carry = (Xs_init, Us_init, c_init, 0, True)
     prollout = partial(pilqr_forward_pass, parallel_dynamics_update, pilqr_simulate, model, params)
     def plqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
@@ -121,7 +123,7 @@ def pilqr_solver(
         values = (etas, Js)
         def linesearch_wrapped(*args): 
             values, Xs_init, Us_init, alpha_init = args
-            return ilqr.linesearch(
+            return linesearch(
                 prollout,
                 values, ###the linesearch should be done with the Ks, not the etas and Js
                 Xs_init,
@@ -163,7 +165,7 @@ def pilqr_solver(
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
-    Lambs_star = lqr.lqr_adjoint_pass(
+    Lambs_star = lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
     ) #do we need a parallel v of this? yes bc it requires a scan... 
     return (Xs_star, Us_star, Lambs_star), total_cost, costs
