@@ -142,27 +142,40 @@ def parallel_riccati_scan(model: LQRParams):
     return etas, Js
 
 
-def get_dJ(lqr, eta, J):
-    c =  lqr.a
-    B = lqr.B
-    R = lqr.R
-    A = lqr.A
-    r = lqr.r
-    P = B.T@J@B + R
-    pinv = jsc.linalg.inv(P + 1e-7*jnp.eye(P.shape[0])) #quu_inv
-    qu = B.T@eta #+ r #- B.T@Kc@c
-    hu = B.T @ (-eta + J @ c)
-    Huu = symmetrise_matrix(R + B.T @ J @ B)
-    k = -pinv@qu
-    dj = k.T@hu
-    dJ = 0.5 * (k.T @ Huu @ k).squeeze()   #0.5*qu.T@pinv@qu
-    return CostToGo(dJ, -dj) ##this needs to be a function of alpha
 
-def get_dJs(model, etas, Js):
-    lqr = model.lqr
-    dJs = vmap(get_dJ, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(lqr, etas[1:], Js[1:])
-    dj, dJ = dJs.v, dJs.V
-    return CostToGo(V = jnp.sum(dJ), v = jnp.sum(dj)) #this needs to be a function of alpha
+def get_dJs(model:LQRParams, etas:Array, Js:Array, alpha:float = 1.)->CostToGo:
+    """Calculate expected change in cost-to-go. Can change alpha to relevant backtrack
+    step size.
+
+    Args:
+        model (LQRParams): LQR model parameters
+        etas (Array): eta values through time
+        Js (Array): J values through time
+        alpha (float, optional): linesearch alpha parameter. Defaults to 1..
+
+    Returns:
+        CostToGo: Return total change in cost-to-go
+    """
+    @vmap(in_axes=(LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))
+    def get_dJ(lqr, eta, J):
+        c =  lqr.a
+        B = lqr.B
+        R = lqr.R
+        A = lqr.A
+        r = lqr.r
+        P = B.T@J@B + R
+        pinv = jsc.linalg.inv(P + 1e-7*jnp.eye(P.shape[0])) #quu_inv
+        qu = B.T@eta #+ r #- B.T@Kc@c
+        hu = B.T @ (-eta + J @ c)
+        Huu = symmetrise_matrix(R + B.T @ J @ B)
+        k = -pinv@qu
+        dj = k.T@hu
+        dJ = 0.5 * (k.T @ Huu @ k).squeeze()   #0.5*qu.T@pinv@qu
+        return CostToGo(dJ, -dj) ##this needs to be a function of alpha
+    
+    dJs = get_dJ(model.lqr, etas[1:], Js[1:])
+    # dj, dJ = dJs.v, dJs.V
+    return CostToGo(V = jnp.sum(dJs.V*alpha**2), v = jnp.sum(dJs.v*alpha)) #this needs to be a function of alpha
 #jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
 #jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
