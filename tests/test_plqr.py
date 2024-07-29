@@ -94,7 +94,7 @@ class TestPLQR(unittest.TestCase):
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         # Plot the KKT residuals
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params, self.sys_dims)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,2,figsize=(8,3), sharex = True, sharey =True)
