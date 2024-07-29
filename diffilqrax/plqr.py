@@ -244,18 +244,8 @@ def build_associative_lin_dyn_elements(
 def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
     #need to add vmaps
     final_elements, Ks = build_associative_lin_dyn_elements(model, etas, Js, alpha)
-
-    # riccati operator
-    @vmap
-    def assoc_dynamics_operator(elem1, elem2):
-        F1, c1 = elem1
-        F2, c2 = elem2
-        F = F2@F1
-        c = F2@c1 + c2
-        return F, c
-    
     final_Fs, final_cs = associative_scan(
-        assoc_dynamics_operator, final_elements
+        dynamic_operator, final_elements
     )
 
     return final_Fs, final_cs, Ks
@@ -324,15 +314,26 @@ def parallel_forward_lin_integration(
     """
 
     dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init)
-
-    @vmap
-    def associative_dyn_op(elem1, elem2):
-        a1, b1 = elem1
-        a2, b2 = elem2
-        return a1 @ a2, a2 @ b1 + b2
-
-    c_as, c_bs = associative_scan(associative_dyn_op, dyn_elements)
+    c_as, c_bs = associative_scan(dynamic_operator, dyn_elements)
     return c_bs
 
 
+# Define associative operators
+# ----------------------------
 
+@vmap
+def dynamic_operator(elem1, elem2):
+    """Associative operator for forward linear dynamics
+    
+    Args:
+        elem1 (Tuple[Array, Array]): Previous effective state dynamic and effective bias
+        elem2 (Tuple[Array, Array]): Next effective state dynamic and effective bias
+    
+    Returns:
+        Tuple[Array, Array]: Updated state and control  
+    """
+    F1, c1 = elem1
+    F2, c2 = elem2
+    F = F2@F1
+    c = F2@c1 + c2
+    return F, c

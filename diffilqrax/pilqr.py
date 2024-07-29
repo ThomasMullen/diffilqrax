@@ -8,7 +8,13 @@ from jax import lax
 import jax.numpy as jnp
 
 from diffilqrax.lqr import lqr_adjoint_pass
-from diffilqrax.plqr import parallel_lin_dyn_scan, parallel_riccati_scan, build_fwd_lin_dyn_elements, get_dJs
+from diffilqrax.plqr import (
+    parallel_lin_dyn_scan,
+    parallel_riccati_scan,
+    build_fwd_lin_dyn_elements,
+    get_dJs,
+    dynamic_operator
+)
 from diffilqrax.ilqr import approx_lqr, linesearch
 from diffilqrax.typs import (
     iLQRParams,
@@ -85,14 +91,7 @@ def parallel_forward_lin_integration_ilqr(
     x0 = params.x0
     lqr_params = approx_lqr(model, jnp.concatenate([x0[None,...], jnp.zeros((Us_init.shape[0],x0.shape[0]))], axis = 0), Us_init, params)
     dyn_elements = build_fwd_lin_dyn_elements(LQRParams(x0, lqr_params), Us_init)
-
-    @jax.vmap
-    def associative_dyn_op(elem1, elem2):
-        a1, b1 = elem1
-        a2, b2 = elem2
-        return a1 @ a2, a2 @ b1 + b2
-
-    c_as, c_bs = jax.lax.associative_scan(associative_dyn_op, dyn_elements)
+    c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
     return c_bs
     
 def pilqr_solver(
