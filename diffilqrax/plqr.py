@@ -248,7 +248,7 @@ def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
     return final_Fs, final_cs, Ks
 
 
-#@jax.jit
+@jax.jit
 def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward

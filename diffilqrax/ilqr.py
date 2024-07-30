@@ -20,7 +20,7 @@ from diffilqrax.typs import (
 
 
 jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
+jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 
 def sum_cost_to_go(x: CostToGo) -> Array:
@@ -383,7 +383,7 @@ def linesearch(
         z = (old_cost - new_cost) / jnp.abs(expected_delta_j) 
         ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and 
         #so that will be positive hopefully, and we want to check that the magnitude of the change is larger than some scaled version of the expected change 
-
+ 
         # if verbose:
         # jax.debug.print(
         # f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f}",

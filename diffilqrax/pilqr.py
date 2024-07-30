@@ -20,7 +20,7 @@ from diffilqrax.typs import (
 from diffilqrax.ilqr import approx_lqr
 
 #jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
+jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 def make_pilqr_simulate(
     parallel_fwd_integration: Callable, model: System, Us: Array, params: LQRParams
