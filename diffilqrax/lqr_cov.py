@@ -165,7 +165,7 @@ def solve_lqr(params: LQRParams):
     # backward
     _, gains, val_fns, q_invs = lqr_cov_backward_pass(params.lqr)
     # covariance
-    xcvs, ucvs, ps = lqr_covariance(Ks, Vs, Huu_invs, params.lqr)
+    xcvs, ucvs, ps = lqr_covariance(gains, val_fns, q_invs, params.lqr)
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
