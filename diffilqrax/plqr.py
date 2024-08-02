@@ -236,7 +236,7 @@ def get_delta_u(Ks, x, v, c):
     return delta_U
 
 @jax.jit
-def solve_plqr(model: LQRParams):
+def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
     "run backward forward sweep to find optimal control"
     # backward
     etas, Js = parallel_riccati_scan(model)
@@ -245,7 +245,11 @@ def solve_plqr(model: LQRParams):
     new_model = LQRParams(model.x0, LQR(model.lqr.A - Kx, model.lqr.B, 0*model.lqr.a, model.lqr.Q, model.lqr.q, model.lqr.R, model.lqr.r, model.lqr.S, model.lqr.Qf, model.lqr.qf))
     new_Us = Ks[-1] + offsets + model.lqr.a ##not entirely sure if this is the right way to handle a -- it seems to work and think it makes sense to offset what we pass in the parallel_lin_scan, but need to double check
     new_Xs = parallel_forward_lin_integration(new_model, new_Us)
-    return new_Xs, new_Us - jax.vmap(lambda a, b, c, d : jnp.linalg.pinv(c)@(a@b + d), in_axes = (0,0,0,0))(Kx, new_Xs[:-1], model.lqr.B, model.lqr.a)
+    new_Lambdas = parallel_reverse_lin_integration(new_model, new_Xs, new_Us)
+    return (new_Xs, 
+            new_Us - jax.vmap(lambda a, b, c, d : jnp.linalg.pinv(c)@(a@b + d), in_axes = (0,0,0,0))(Kx, new_Xs[:-1], model.lqr.B, model.lqr.a),
+            new_Lambdas)
+
 
 # --------
 # Parallel forward integration
@@ -293,6 +297,68 @@ def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array) -> A
     #delta_us = compute_offset_us(lqr_params)
     dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init)
     c_as, c_bs = associative_scan(dynamic_operator, dyn_elements)
+    return c_bs
+
+
+# parallel adjoint integration
+def build_rev_lin_dyn_elements(
+    lqr_params: LQRParams, xs_traj: Array, us_traj: Array,
+) -> Tuple[Array, Array]:
+    """Generate sequence of elements {c} for reverse integration of adjoints
+
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): Input sequence
+
+    Returns:
+        Tuple[Array, Array]: set of elements {c} for associative scan
+    """
+
+    lambda_f = lqr_params.lqr.Qf@xs_traj[-1] + lqr_params.lqr.qf
+    
+    last_element = (jnp.diag(lambda_f), lambda_f)
+    print(last_element[0].shape, last_element[1].shape)
+
+    @vmap
+    def _generic(aT_mat: Array, 
+                 s_mat: Array,
+                 q_mat: Array, 
+                 q_vec: Array, 
+                 x: Array,
+                 u: Array
+                 ) -> Tuple[Array, Array]:
+        """Generate tuple (c_i,a, c_i,b) to parallelise"""
+        b_coef = s_mat@u + q_vec + q_mat@x
+        return aT_mat, b_coef
+
+    generic_elements = _generic(
+        lqr_params.lqr.A.transpose(0,2,1),
+        lqr_params.lqr.S,
+        lqr_params.lqr.Q,
+        lqr_params.lqr.q,
+        xs_traj[:-1],
+        us_traj)
+
+    # print(generic_elements[0].shape, generic_elements[1].shape)
+    return tuple(
+        jnp.concatenate([gen_, jnp.expand_dims(last_, 0)])
+        for gen_, last_ in zip(generic_elements, last_element)
+    )
+
+
+def parallel_reverse_lin_integration(lqr_params: LQRParams, xs_traj: Array, us_traj: Array) -> Array:
+    """Associative scan for reverse linear dynamics
+
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): input sequence
+
+    Returns:
+        Array: state trajectory
+    """
+    #delta_us = compute_offset_us(lqr_params)
+    dyn_elements = build_rev_lin_dyn_elements(lqr_params, xs_traj, us_traj)
+    c_as, c_bs = associative_scan(dynamic_operator, dyn_elements, reverse=True)
     return c_bs
 
 

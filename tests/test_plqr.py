@@ -117,8 +117,31 @@ class TestPLQR(unittest.TestCase):
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/TestPLQR_lqr_us.png")
         chex.assert_trees_all_close(xs, Xs_lqr, rtol=1e-5, atol=1e-5)
-        
-        
+    
+    def test_lqr_adjoint(self):
+        """test LQR adjoint solution"""
+        params = LQRParams(self.x0, self.lqr)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
+        # test
+        xs, us, lmda = solve_plqr(params)
+        # visualise 01
+        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir.mkdir(exist_ok=True)
+        fig, axes = subplots(1,3,figsize=(12,3),sharey=False)
+        for i,ax in enumerate(axes.flatten()):
+            ax.plot(Lambs_lqr[:,i], linestyle="-")
+            ax.plot(lmda[:,i], linestyle=":")
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/TestPLQR_adjoint01.png")
+        close()
+        # visualise 02
+        fig, ax = subplots(1,2,sharey=True)
+        ax[0].plot(Lambs_lqr)
+        ax[1].plot(lmda)
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/TestPLQR_adjoint02.png")
+        # validate
+        chex.assert_trees_all_close(lmda, Lambs_lqr, rtol=1e-5, atol=1e-5)
         
     def test_time(self):
         from jax.lib import xla_bridge
