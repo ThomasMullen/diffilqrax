@@ -37,7 +37,7 @@ class TestiLQRStructs(unittest.TestCase):
 
         dt = 0.1
         Uh = jnp.array([[1, dt, 0.01], [-1 * dt, 1 - 0.1 * dt, 0.],  [-1 * dt, 1 - 0.1 * dt, 0.05]])
-        Wh = jnp.eye(3) #jnp.array([[0.5, 2., 0.], [1., -1.2, 0.1]]).T * dt
+        Wh = jnp.array([[0.5, 2., 0.], [1., -1.2, 0.1]]).T * dt
         Q = jnp.eye(3)
         # initialise params
         self.theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)), Q=Q)
@@ -55,9 +55,9 @@ class TestiLQRStructs(unittest.TestCase):
             return theta.Uh @ x + theta.Wh @ u
 
         self.model = System(
-            cost, costf, dynamics, ModelDims(horizon=100, n=3, m=3, dt=dt)
+            cost, costf, dynamics, ModelDims(horizon=100, n=3, m=2, dt=dt)
         )
-        self.dims = chex.Dimensions(T=100, N=3, M=3, X=1)
+        self.dims = chex.Dimensions(T=100, N=3, M=2, X=1)
         self.Us_init = 0.1 * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )

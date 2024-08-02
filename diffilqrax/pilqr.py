@@ -64,7 +64,7 @@ def pilqr_forward_pass(
     Fs, cs, Ks, offsets = parallel_dynamics_update(lqr_model, etas, Js, alpha) ##not sure why it fails at this linerization...
     Kx = Ks[0]
     delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs]
-    delta_Us = Ks[-1] + offsets + lqr_model.lqr.a - jax.vmap(lambda a, b, c : jnp.linalg.pinv(c)@(a@b), in_axes = (0,0,0))(Kx, delta_Xs[:-1], lqr_model.lqr.B)
+    delta_Us = Ks[-1] + offsets - jax.vmap(lambda a, b, c : jnp.linalg.pinv(c)@(a@b), in_axes = (0,0,0))(Kx, delta_Xs[:-1], lqr_model.lqr.B) #lqr_model.lqr.a
     new_Us = Us + delta_Us
     # delta_Xs = cs #- Xs[1:]
     # delta_Xs = jnp.r_[jnp.zeros((1, delta_Xs.shape[1])), delta_Xs]

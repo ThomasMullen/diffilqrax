@@ -92,7 +92,8 @@ def build_associative_riccati_elements(
         η = -model.lqr.q
         J = model.lqr.Q
         r = model.lqr.r
-        b = model.lqr.a - jnp.einsum("ijk,ik->ij", R_invs, r)
+        B = model.lqr.B
+        b = model.lqr.a - jax.vmap(jnp.matmul)(B, jnp.einsum("ijk,ik->ij", R_invs, r))
         return A, b, C, η, J
 
     generic_elems = _generic(model)
