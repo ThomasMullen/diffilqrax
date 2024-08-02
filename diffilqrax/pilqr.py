@@ -15,7 +15,7 @@ from diffilqrax.plqr import (
     get_dJs,
     dynamic_operator
 )
-from diffilqrax.ilqr import approx_lqr, linesearch
+from diffilqrax.ilqr import approx_lqr, linesearch, approx_lqr_dyn
 from diffilqrax.typs import (
     iLQRParams,
     System,
@@ -25,8 +25,8 @@ from diffilqrax.typs import (
     LQRParams,
 )
 
-#jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
+jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
 
 def make_pilqr_simulate(
     parallel_fwd_integration: Callable, model: System, Us: Array, params: LQRParams
@@ -49,11 +49,6 @@ def make_pilqr_simulate(
     total_cost += model.costf(Xs[-1], params.theta)
     return (Xs, Us), total_cost
 
-def get_delta_u(Ks, x, v, c):
-    Kx, Kv, Kc = Ks
-    delta_U = -Kx@x + Kv@v - Kc@c
-    return delta_U
-
 def pilqr_forward_pass(
     parallel_dynamics_update: Callable,
     pilqr_simulate: Callable,
@@ -66,13 +61,17 @@ def pilqr_forward_pass(
 ) -> Tuple[Tuple[Array, Array], float]:
     etas, Js = values
     lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = approx_lqr(model, Xs, Us, params)) #this is the model from delta_x, so delta_x0 = 0
-    Fs, cs, Ks = parallel_dynamics_update(lqr_model, etas, Js, alpha)
-    delta_Xs = cs
-    delta_Xs = jnp.concatenate([jnp.zeros((1, delta_Xs.shape[1])), delta_Xs], axis = 0)
-    delta_Us = jax.vmap(get_delta_u)(Ks, delta_Xs[:-1], etas[1:], lqr_model.lqr.a)
+    Fs, cs, Ks, offsets = parallel_dynamics_update(lqr_model, etas, Js, alpha) ##not sure why it fails at this linerization...
+    Kx = Ks[0]
+    delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs]
+    delta_Us = Ks[-1] + offsets + lqr_model.lqr.a - jax.vmap(lambda a, b, c : jnp.linalg.pinv(c)@(a@b), in_axes = (0,0,0))(Kx, delta_Xs[:-1], lqr_model.lqr.B)
     new_Us = Us + delta_Us
+    # delta_Xs = cs #- Xs[1:]
+    # delta_Xs = jnp.r_[jnp.zeros((1, delta_Xs.shape[1])), delta_Xs]
+    # delta_Us = jax.vmap(get_delta_u)(Ks, delta_Xs[:-1], etas[1:], lqr_model.lqr.a) + offsets
+    # #print(Us[:10], offsets[:10], "cattt")
+    # new_Us = Us + delta_Us
     (new_Xs, _), total_cost = pilqr_simulate(model, new_Us, params)
-    # total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta)) + model.costf(new_Xs[-1], params.theta)
     return (new_Xs, new_Us), total_cost 
 
 
@@ -89,7 +88,7 @@ def parallel_forward_lin_integration_ilqr(
         Array: state trajectory
     """
     x0 = params.x0
-    lqr_params = approx_lqr(model, jnp.concatenate([x0[None,...], jnp.zeros((Us_init.shape[0],x0.shape[0]))], axis = 0), Us_init, params)
+    lqr_params = approx_lqr(model, jnp.r_[x0[None,...], jnp.zeros((Us_init.shape[0],x0.shape[0]))], Us_init, params)
     dyn_elements = build_fwd_lin_dyn_elements(LQRParams(x0, lqr_params), Us_init)
     c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
     return c_bs
@@ -166,7 +165,7 @@ def pilqr_solver(
     lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
     Lambs_star = lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
-    ) #do we need a parallel v of this? yes bc it requires a scan... 
+    ) #TODO : write parallel version
     return (Xs_star, Us_star, Lambs_star), total_cost, costs
 
 

@@ -36,28 +36,28 @@ class TestiLQRStructs(unittest.TestCase):
         key, skeys = keygen(key, 3)
 
         dt = 0.1
-        Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.1 * dt]])
-        Wh = jnp.array([[0.5, 0], [1, 0]]) * dt
-        Q = jnp.eye(2)
+        Uh = jnp.array([[1, dt, 0.01], [-1 * dt, 1 - 0.1 * dt, 0.],  [-1 * dt, 1 - 0.1 * dt, 0.05]])
+        Wh = jnp.eye(3) #jnp.array([[0.5, 2., 0.], [1., -1.2, 0.1]]).T * dt
+        Q = jnp.eye(3)
         # initialise params
         self.theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)), Q=Q)
-        self.params = iLQRParams(x0=jnp.array([2., 0.7]), theta=self.theta)
+        self.params = iLQRParams(x0=jnp.array([2., 0.1, -0.5]), theta=self.theta)
 
         # define model
         def cost(t: int, x: Array, u: Array, theta: Theta):
-            return jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**4)  + jnp.sum(u**2) #+ jnp.sum(x) #+ jnp.sum(jnp.log(1 + u**2)) + 0*jnp.log(1 + x**2)
+            return jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**2)  + jnp.sum(u**2) #+ jnp.sum(x) #+ jnp.sum(jnp.log(1 + u**2)) + 0*jnp.log(1 + x**2)
 
         def costf(x: Array, theta: Theta):
             # return jnp.sum(jnp.abs(x))
-            return jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**4)#+ jnp.sum(x))
+            return 0*jnp.sum(jnp.log(1 + x**2)) + 0*jnp.sum(x**4)#+ jnp.sum(x))
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return theta.Uh @ x + theta.Wh @ u
 
         self.model = System(
-            cost, costf, dynamics, ModelDims(horizon=100, n=2, m=2, dt=dt)
+            cost, costf, dynamics, ModelDims(horizon=100, n=3, m=3, dt=dt)
         )
-        self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
+        self.dims = chex.Dimensions(T=100, N=3, M=3, X=1)
         self.Us_init = 0.1 * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )
@@ -87,6 +87,7 @@ class TestiLQRStructs(unittest.TestCase):
             use_linesearch=True,
             **self.ls_kwargs,
         )
+        #difference when Us_init is not 0...
         (Xs_stars_ilqr, Us_stars_ilqr, _), converged_cost, cost_log = ilqr.ilqr_solver(
             self.model,
             self.params,

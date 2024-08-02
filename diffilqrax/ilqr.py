@@ -259,7 +259,6 @@ def ilqr_solver(
     """
     # simulate initial cost
     (Xs_init, _), c_init = ilqr_simulate(model, Us_init, params)
-
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
     initial_carry = (Xs_init, Us_init, c_init, 0, True)
 
@@ -302,8 +301,6 @@ def ilqr_solver(
             old_Us,
             alpha_init,
         )
-
-        # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / jnp.abs(old_cost)
         # determine cond: Δold_cost > threshold
         carry_on = z > convergence_thresh  # n_iter < 70 #

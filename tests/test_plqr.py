@@ -51,16 +51,20 @@ def setup_lqr(dims: chex.Dimensions,
     # initialise dynamics
     span_time_m=dims["TXX"]
     span_time_v=dims["TX"]
-    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.6) 
-    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
-    a = 2*jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
+    dt = 0.1
+    Uh = jnp.array([[1, dt, 0.01], [-1 * dt, 1 - 0.1 * dt, 0.],  [-1 * dt, 1 - 0.1 * dt, 0.05]])
+    Wh = jnp.eye(3) #jnp.array([[0.5, 2., 0.], [1., -1.2, 0.1]]).T * dt
+    Q = 1.
+    A = jnp.tile(Uh, span_time_m)
+    B = jnp.tile(Wh, span_time_m)
+    a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     # define cost matrices
     Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time_m)
     q = -5* jnp.tile(jnp.ones(dims['N']), span_time_v)
     R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time_m)
-    r = 0. * jnp.tile(jnp.ones(dims['M']), span_time_v)
+    r = -2.* jnp.tile(jnp.ones(dims['M']), span_time_v)
     S =0* pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time_m)
-    Qf = 2*pen_weight["Q"] * jnp.eye(dims['N'][0])
+    Qf = 0*pen_weight["Q"] * jnp.eye(dims['N'][0])
     qf = 0 * jnp.ones(dims['N'])
     # construct LQR
     lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
@@ -73,7 +77,7 @@ class TestPLQR(unittest.TestCase):
     def setUp(self):
         """Instantiate dummy LQR"""
         print("\nRunning setUp method...")
-        self.dims = chex.Dimensions(T=100, N=3, M=2, X=1)
+        self.dims = chex.Dimensions(T=100, N=3, M=3, X=1)
         self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.01)
         print("Model dimensionality", self.dims["TNMX"])
         print("\nMake LQR struct")
@@ -89,12 +93,13 @@ class TestPLQR(unittest.TestCase):
     def test_solve_lqr(self):
         """test LQR solution shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
+        #print(Xs_lqr)
         ##for this we might need to define the LQRParams class with everything of size T x ...
-        xs = solve_plqr(params)
+        xs, us = solve_plqr(params)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         # Plot the KKT residuals
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,2,figsize=(8,3), sharex = True, sharey =True)
@@ -103,6 +108,17 @@ class TestPLQR(unittest.TestCase):
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs.png")
         close()
+        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir.mkdir(exist_ok=True)
+        fig, ax = subplots(1,3,figsize=(8,3), sharex = True, sharey =True)
+        ax[0].plot(Us_lqr)
+        ax[1].plot(us)
+        ax[2].plot(Us_lqr - us)
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/TestPLQR_lqr_us.png")
+        chex.assert_trees_all_close(xs, Xs_lqr, rtol=1e-5, atol=1e-5)
+        
+        
         
     def test_time(self):
         from jax.lib import xla_bridge
