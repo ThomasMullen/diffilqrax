@@ -11,6 +11,7 @@ from diffilqrax.lqr import lqr_adjoint_pass
 from diffilqrax.plqr import (
     parallel_lin_dyn_scan,
     parallel_riccati_scan,
+    parallel_reverse_lin_integration,
     build_fwd_lin_dyn_elements,
     get_dJs,
     dynamic_operator
@@ -163,9 +164,7 @@ def pilqr_solver(
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
-    Lambs_star = lqr_adjoint_pass(
-        Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
-    ) #TODO : write parallel version
+    Lambs_star = parallel_reverse_lin_integration(lqr_params_stars, Xs_star, Us_star)
     return (Xs_star, Us_star, Lambs_star), total_cost, costs
 
 
