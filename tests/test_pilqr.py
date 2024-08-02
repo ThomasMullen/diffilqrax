@@ -111,14 +111,8 @@ class TestiLQRStructs(unittest.TestCase):
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/pilqr_solver.png")
         chex.assert_trees_all_close(Xs_stars, Xs_stars_ilqr, rtol=1e-03, atol=1e-02)
-        #close()
-
-        # # verify
-        # assert converged_cost < initial_cost
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-03, atol=1e-04)
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-03, atol=1e-04)
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-03, atol=1e-04)
         
-        
+     ##TODO : add more thorough tests including possible offset in dynamics
+     ##add speed test of pilqr   
 if __name__ == "__main__":
     unittest.main()
