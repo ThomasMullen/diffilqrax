@@ -242,12 +242,20 @@ def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
     etas, Js = parallel_riccati_scan(model)
     Fs, cs, Ks, offsets = parallel_lin_dyn_scan(model, etas, Js)
     Kx = Ks[0]
-    new_model = LQRParams(model.x0, LQR(model.lqr.A - Kx, model.lqr.B, 0*model.lqr.a, model.lqr.Q, model.lqr.q, model.lqr.R, model.lqr.r, model.lqr.S, model.lqr.Qf, model.lqr.qf))
+    new_model = LQRParams(
+        model.x0, LQR(
+                    model.lqr.A - Kx, model.lqr.B, 0*model.lqr.a, 
+                    model.lqr.Q, model.lqr.q, 
+                    model.lqr.R, model.lqr.r,
+                    model.lqr.S, 
+                    model.lqr.Qf, model.lqr.qf
+                    ))
     new_Us = Ks[-1] + offsets + model.lqr.a ##not entirely sure if this is the right way to handle a -- it seems to work and think it makes sense to offset what we pass in the parallel_lin_scan, but need to double check
     new_Xs = parallel_forward_lin_integration(new_model, new_Us)
-    new_Lambdas = parallel_reverse_lin_integration(new_model, new_Xs, new_Us)
+    updated_Us = new_Us - jax.vmap(lambda a, b, c, d : jnp.linalg.pinv(c)@(a@b + d), in_axes = (0,0,0,0))(Kx, new_Xs[:-1], model.lqr.B, model.lqr.a)
+    new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
     return (new_Xs, 
-            new_Us - jax.vmap(lambda a, b, c, d : jnp.linalg.pinv(c)@(a@b + d), in_axes = (0,0,0,0))(Kx, new_Xs[:-1], model.lqr.B, model.lqr.a),
+            updated_Us,
             new_Lambdas)
 
 
