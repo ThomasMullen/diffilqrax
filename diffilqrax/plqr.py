@@ -93,7 +93,7 @@ def build_associative_riccati_elements(
         J = model.lqr.Q
         r = model.lqr.r
         B = model.lqr.B
-        b = model.lqr.a - jax.vmap(jnp.matmul)(B, jnp.einsum("ijk,ik->ij", R_invs, r))
+        b = model.lqr.a - jax.vmap(jnp.matmul)(B, jnp.einsum("ijk,ik->ij", R_invs, r)) #this redefines the offset term in the dynamics to include the linear term in input
         return A, b, C, η, J
 
     generic_elems = _generic(model)
@@ -172,7 +172,7 @@ def build_associative_lin_dyn_elements(
     """
 
     def _first(model, eta0, J0, alpha):
-        S0, v0 = J0, eta0  # this needs to be at k+1 so T = 1
+        S0, v0 = J0, eta0  
         B = model.lqr.B[0]
         R = model.lqr.R[0]
         A = model.lqr.A[0]
@@ -185,9 +185,11 @@ def build_associative_lin_dyn_elements(
         Kc = Kv @ S0
         Kx = Kc @ A
         F0 = A - B @ Kx
-        c0 = c   + alpha * (B @ Kv @ v0 - B @ Kc @ c) #- B@offset
-        return (jnp.zeros_like(J0), F0 @ model.x0 + c0), (B@Kx, alpha * Kv, alpha * Kc, (Kv @ v0 - Kc @ c)), offset
-
+        c0 = c   + alpha * (B @ Kv @ v0 - B @ Kc @ c)
+        return (jnp.zeros_like(J0), F0 @ model.x0 + c0), (Kx, alpha * Kv, alpha * Kc, (Kv @ v0 - Kc @ c)), offset #we return the Ks to be able to compute the u update. 
+    #the Kv and Kc terms are multiplied by alpha for the linesearch, because they correspond to the k term in delta_u = Kx + alpha*k
+    #The offset corresponds to the coordinate transformation back into the original space (while here we are solving the lqr problem in a linearly transformed space to account fo the linear term in u)
+    #TODO : should the offset be multiplied by alpha?
     first_elem, Ks0, offset0 = _first(model, etas[1], Js[1], alpha)  # this is at k+1
     @partial(vmap, in_axes=(LQR(0, 0, 0, 0, 0, 0, 0, 0, None, None), 0, 0, None))
     def _generic(lqr: LQR, eta: Array, J: Array, alpha: float):
@@ -209,9 +211,9 @@ def build_associative_lin_dyn_elements(
         Kx = Kc @ A
         Ft = A - B @ Kx
         offset = -Rinv @ r  
-        c += B@offset #+ B@Rinv@r
-        ct = c  + alpha * (B @ Kv @ v - B @ Kc @ c)#+ B@offset#-  B @ Rinv @ r
-        return (Ft, ct), (B@Kx, alpha * Kv, alpha * Kc, (Kv @ v - Kc @ c)), offset
+        c += B@offset 
+        ct = c  + alpha * (B @ Kv @ v - B @ Kc @ c)
+        return (Ft, ct), (Kx, alpha * Kv, alpha * Kc, (Kv @ v - Kc @ c)), offset
     generic_elems, Ks, offsets = _generic(pop_first(model.lqr), etas[2:], Js[2:], alpha)
     Ks = tuple(jnp.r_[jnp.expand_dims(first_k, 0), kk] for first_k, kk in zip(Ks0, Ks))
     associative_elems = tuple(
@@ -242,7 +244,7 @@ def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
     etas, Js = parallel_riccati_scan(model)
     # NOTE: cs is already finding updated Xs -> jnp.r_[model.x0[None],cs] == new_xs
     Fs, cs, Ks, offsets = parallel_lin_dyn_scan(model, etas, Js)
-    new_Xs = jnp.r_[model.x0, cs]
+    new_Xs = jnp.r_[model.x0[None], cs]
     
     Kx = Ks[0]
     # NOTE: new_xs already found new_model redundant - could be useful for testing though
@@ -259,9 +261,10 @@ def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
     
     # NOTE: Not sure about the `a` - this generally would project to the correct space
     # NOTE: Why does this solution not work: vmatmul = vmap(jnp.matmul); us_ = - vmatmul(Kx, xs_[:-1]) + vmatmul(Kv, etas[1:]) + vmatmul(Kc, params.lqr.a)
-    new_Us = Ks[-1] + offsets + model.lqr.a ##not entirely sure if this is the right way to handle a -- it seems to work and think it makes sense to offset what we pass in the parallel_lin_scan, but need to double check
+    # NOTE: I think this doesn't work because the c isn't exactly lqr.a in this case but it also has this additional offset term 
+    new_Us = Ks[-1] + offsets
     
-    updated_Us = new_Us - jax.vmap(lambda a, b, c, d : jnp.linalg.pinv(c)@(a@b + d), in_axes = (0,0,0,0))(Kx, new_Xs[:-1], model.lqr.B, model.lqr.a)
+    updated_Us = new_Us - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, new_Xs[:-1])
     # NOTE: alternative to additional scan and just vmap
     # new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
     vmatmul = vmap(jnp.matmul)

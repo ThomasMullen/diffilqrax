@@ -27,7 +27,7 @@ from diffilqrax.typs import (
 )
 
 jax.config.update("jax_enable_x64", True)  # double precision
-#jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
+jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
 
 def make_pilqr_simulate(
     parallel_fwd_integration: Callable, model: System, Us: Array, params: LQRParams
@@ -62,16 +62,15 @@ def pilqr_forward_pass(
 ) -> Tuple[Tuple[Array, Array], float]:
     etas, Js = values
     lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = approx_lqr(model, Xs, Us, params)) #this is the model from delta_x, so delta_x0 = 0
-    Fs, cs, Ks, offsets = parallel_dynamics_update(lqr_model, etas, Js, alpha) ##not sure why it fails at this linerization...
+    #new_lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = lqr_model.lqr._replace(a = jnp.zeros_like(lqr_model.lqr.a))) #this is the model from delta_x, so delta_x0 = 0
+    _, cs, Ks, offsets = parallel_dynamics_update(lqr_model, etas, Js, alpha)
     Kx = Ks[0]
     delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs]
-    delta_Us = Ks[-1] + offsets - jax.vmap(lambda a, b, c : jnp.linalg.pinv(c)@(a@b), in_axes = (0,0,0))(Kx, delta_Xs[:-1], lqr_model.lqr.B) #lqr_model.lqr.a
+    delta_Us = Ks[-1] + offsets - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, delta_Xs[:-1]) #here we have delta_\hat{u} = Kv@v - Kc@c - Kx@x 
+    #where u = \hat{u} + offset (eq 64 in https://arxiv.org/abs/2104.03186)
+    
+    #jax.vmap(lambda a, b, c, d : (a@b) - jnp.linalg.pinv(c)@d, in_axes = (0,0,0,0))(Kx, delta_Xs[:-1], lqr_model.lqr.B, lqr_model.lqr.a)
     new_Us = Us + delta_Us
-    # delta_Xs = cs #- Xs[1:]
-    # delta_Xs = jnp.r_[jnp.zeros((1, delta_Xs.shape[1])), delta_Xs]
-    # delta_Us = jax.vmap(get_delta_u)(Ks, delta_Xs[:-1], etas[1:], lqr_model.lqr.a) + offsets
-    # #print(Us[:10], offsets[:10], "cattt")
-    # new_Us = Us + delta_Us
     (new_Xs, _), total_cost = pilqr_simulate(model, new_Us, params)
     return (new_Xs, new_Us), total_cost 
 
@@ -164,7 +163,7 @@ def pilqr_solver(
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
-    Lambs_star = parallel_reverse_lin_integration(lqr_params_stars, Xs_star, Us_star)
+    Lambs_star = parallel_reverse_lin_integration(LQRParams(lqr = lqr_params_stars, x0 = params.x0), Xs_star, Us_star)
     return (Xs_star, Us_star, Lambs_star), total_cost, costs
 
 
