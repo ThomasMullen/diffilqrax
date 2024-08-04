@@ -96,7 +96,7 @@ class TestPLQR(unittest.TestCase):
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         #print(Xs_lqr)
         ##for this we might need to define the LQRParams class with everything of size T x ...
-        xs, us = solve_plqr(params)
+        xs, us, _  = solve_plqr(params)
         fig_dir = Path(Path(getcwd()), "fig_dump")
         fig_dir.mkdir(exist_ok=True)
         # Plot the KKT residuals
