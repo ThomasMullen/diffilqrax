@@ -15,7 +15,7 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-jax.config.update("jax_disable_jit", True)  # Disable JIT for debugging
+jax.config.update("jax_disable_jit", False)  # Disable JIT for debugging
 
 
 def gen_lqr_problem():
@@ -126,7 +126,7 @@ def lqr_covariance(
     # TODO: add the linear term
     # TODO: add the cross-term covariance
 
-    n_dim, m_dim = lqr.B[0].shape
+    n_dim, m_dim = lqr_params.B[0].shape
     a_transp, b_transp = lqr_params.A.transpose(0, 2, 1), lqr_params.B.transpose(0, 2, 1)
     k_transp = gains.K.transpose(0, 2, 1)
     Vs = val_funs.V
