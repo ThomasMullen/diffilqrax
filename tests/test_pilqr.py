@@ -52,7 +52,7 @@ class TestiLQRStructs(unittest.TestCase):
             return 0*jnp.sum(jnp.log(1 + x**2)) + 0*jnp.sum(x**4)#+ jnp.sum(x))
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return theta.Uh @ x + theta.Wh @ u + 0.05
+            return theta.Uh @ x + theta.Wh @ u + 0.0
 
         self.model = System(
             cost, costf, dynamics, ModelDims(horizon=100, n=3, m=2, dt=dt)
