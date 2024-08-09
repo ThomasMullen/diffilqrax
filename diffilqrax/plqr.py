@@ -279,7 +279,7 @@ def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
 # Parallel forward integration
 # --------
 def build_fwd_lin_dyn_elements(
-    lqr_params: LQRParams, Us_init: Array
+    lqr_params: LQRParams, Us_init: Array, a_term: Array = None
 ) -> Tuple[Array, Array]:
     """Generate sequence of elements {c} for forward integration
 
@@ -291,15 +291,15 @@ def build_fwd_lin_dyn_elements(
         Tuple[Array, Array]: set of elements {c} for associative scan
     """
 
-    initial_element = (jnp.zeros_like(jnp.diag(lqr_params.x0)), lqr_params.x0)
+    initial_element = (jnp.zeros_like(jnp.diag(lqr_params.x0)), lqr_params.x0, jnp.zeros_like(a_term[0]))
     # print(initial_element[0].shape, initial_element[1].shape)
 
-    @partial(vmap, in_axes=(0, 0, 0))
-    def _generic(a_mat: Array, b_mat: Array, u: Array) -> Tuple[Array, Array]:
+    @partial(vmap, in_axes=(0, 0, 0, 0))
+    def _generic(a_mat: Array, b_mat: Array, u: Array, a: Array) -> Tuple[Array, Array]:
         """Generate tuple (c_i,a, c_i,b) to parallelise"""
-        return a_mat, b_mat @ u
+        return a_mat, b_mat @ u + a
 
-    generic_elements = _generic(lqr_params.lqr.A, lqr_params.lqr.B, Us_init)
+    generic_elements = _generic(lqr_params.lqr.A, lqr_params.lqr.B, Us_init, a_term)
 
     # print(generic_elements[0].shape, generic_elements[1].shape)
     return tuple(
@@ -308,7 +308,7 @@ def build_fwd_lin_dyn_elements(
     )
 
 
-def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array) -> Array:
+def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array, a_term: Array) -> Array:
     """Associative scan for forward linear dynamics
 
     Args:
@@ -319,7 +319,7 @@ def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array) -> A
         Array: state trajectory
     """
     #delta_us = compute_offset_us(lqr_params)
-    dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init)
+    dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init, a_term)
     c_as, c_bs = associative_scan(dynamic_operator, dyn_elements)
     return c_bs
 

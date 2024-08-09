@@ -207,7 +207,7 @@ def ilqr_forward_pass(
         t, x, u, K, k = inputs
 
         delta_x = x_hat - x
-        delta_u = K @ delta_x + alpha * k
+        delta_u = K @ delta_x + alpha * k 
         u_hat = u + delta_u
         nx_hat = model.dynamics(t, x_hat, u_hat, theta)
         nx_cost = nx_cost + model.cost(t, x_hat, u_hat, theta)

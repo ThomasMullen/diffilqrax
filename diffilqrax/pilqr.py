@@ -30,7 +30,7 @@ jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
 
 def make_pilqr_simulate(
-    parallel_fwd_integration: Callable, model: System, Us: Array, params: LQRParams
+    parallel_fwd_integration: Callable, model: System, Us: Array, params: LQRParams, a_term: Array
 ) -> Tuple[Tuple[Array, Array], float]:
     """Simulate forward trajectory and cost with nonlinear params
 
@@ -45,7 +45,7 @@ def make_pilqr_simulate(
     """
     ##same as running linear dynamics but replacing the cs with B@us
     #lqr_params = LQRParams(x0=params.x0, lqr=approx_lqr(model, params.x0, Us, params)
-    Xs = parallel_fwd_integration(model, params, Us)
+    Xs = parallel_fwd_integration(model, params, Us, a_term)
     total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), Xs[:-1], Us, params.theta))
     total_cost += model.costf(Xs[-1], params.theta)
     return (Xs, Us), total_cost
@@ -61,22 +61,23 @@ def pilqr_forward_pass(
     alpha: float = 1.0,
 ) -> Tuple[Tuple[Array, Array], float]:
     etas, Js = values
-    lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = approx_lqr(model, Xs, Us, params)) #this is the model from delta_x, so delta_x0 = 0
+    lqr_model_with_a = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = approx_lqr_dyn(model, Xs, Us, params)) #this is the model from delta_x, so delta_x0 = 0
+    lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = lqr_model_with_a.lqr._replace(a = jnp.zeros_like(lqr_model_with_a.lqr.a)))
     #new_lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = lqr_model.lqr._replace(a = jnp.zeros_like(lqr_model.lqr.a))) #this is the model from delta_x, so delta_x0 = 0
-    _, cs, Ks, offsets = parallel_dynamics_update(lqr_model, etas, Js, alpha)
+    _, cs, Ks, offsets = parallel_dynamics_update(lqr_model, etas, Js, alpha)  
     Kx = Ks[0]
-    delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs]
+    delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs] ##TODO : this isn't exactly right for nonlinear dynamics, need to define a different forward step
+    #Unfortunatley I don't think we can bypass the vmap because we haven't comptued Delta_x yet in when we get the K terms (since it relies on the parallel dyn scan)
+    #Potentially we could return it as output of the parallel scan 
     delta_Us = Ks[-1] + offsets - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, delta_Xs[:-1]) #here we have delta_\hat{u} = Kv@v - Kc@c - Kx@x 
     #where u = \hat{u} + offset (eq 64 in https://arxiv.org/abs/2104.03186)
-    
-    #jax.vmap(lambda a, b, c, d : (a@b) - jnp.linalg.pinv(c)@d, in_axes = (0,0,0,0))(Kx, delta_Xs[:-1], lqr_model.lqr.B, lqr_model.lqr.a)
-    new_Us = Us + delta_Us
-    (new_Xs, _), total_cost = pilqr_simulate(model, new_Us, params)
+    new_Us = Us + delta_Us 
+    (new_Xs, _), total_cost = pilqr_simulate(model, new_Us, params, lqr_model_with_a.lqr.a)
     return (new_Xs, new_Us), total_cost 
 
 
 def parallel_forward_lin_integration_ilqr(
-    model: System, params: iLQRParams, Us_init: Array
+    model: System, params: iLQRParams, Us_init: Array, a_term: Array
 ) -> Array:
     """Associative scan for forward linear dynamics
 
@@ -89,7 +90,7 @@ def parallel_forward_lin_integration_ilqr(
     """
     x0 = params.x0
     lqr_params = approx_lqr(model, jnp.r_[x0[None,...], jnp.zeros((Us_init.shape[0],x0.shape[0]))], Us_init, params)
-    dyn_elements = build_fwd_lin_dyn_elements(LQRParams(x0, lqr_params), Us_init)
+    dyn_elements = build_fwd_lin_dyn_elements(LQRParams(x0, lqr_params), Us_init, a_term)
     c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
     return c_bs
     
@@ -107,7 +108,9 @@ def pilqr_solver(
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     pilqr_simulate = partial(make_pilqr_simulate, parallel_fwd_integration) 
-    (Xs_init, _), c_init = pilqr_simulate(model, Us_init, params) ### need to make some     changes to the simulate function to make it work with the parallel dynamics 
+    (Xs_init, _), c_init = pilqr_simulate(model, Us_init, params, jnp.zeros_like(Us_init[...,0]))
+    a_term = approx_lqr_dyn(model, Xs_init, Us_init, params).a
+    (Xs_init, _), c_init = pilqr_simulate(model, Us_init, params, a_term) #not entirely sure how to avoid computing this twice if we want to keep things general
     initial_carry = (Xs_init, Us_init, c_init, 0, True)
     prollout = partial(pilqr_forward_pass, parallel_dynamics_update, pilqr_simulate, model, params)
     def plqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):

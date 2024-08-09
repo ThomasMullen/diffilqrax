@@ -58,7 +58,7 @@ class TestiLQRStructs(unittest.TestCase):
             return jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+            return jnp.tanh(theta.Uh @ x + theta.Wh @ u) + jnp.ones(2)
 
         self.model = System(
             cost, costf, dynamics, ModelDims(horizon=100, n=2, m=2, dt=dt)
@@ -161,7 +161,7 @@ class TestiLQRStructs(unittest.TestCase):
         )
         lqr_params = ilqr.approx_lqr(self.model, old_Xs, self.Us_init, self.params)
         exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, dims=self.model.dims, expected_change=False
+            lqr_params, expected_change=False
         )
         exp_change_J0 = lqr.calc_expected_change(exp_cost_red, alpha=1.0)
         # exercise
