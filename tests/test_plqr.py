@@ -70,7 +70,28 @@ def setup_lqr(dims: chex.Dimensions,
     lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
     return lqr()
 
-
+def setup_lqr_time(dims: chex.Dimensions,
+              pen_weight: dict = {"Q": 10., "R": 1., "Qf": 1e0, "S": 1e-3}) -> LQR:
+    """Setup LQR problem"""
+    key = jr.PRNGKey(seed=234)
+    key, skeys = keygen(key, 3)
+    # initialise dynamics
+    span_time_m=dims["TXX"]
+    span_time_v=dims["TX"]
+    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.6) 
+    B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
+    a = 2*jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
+    # define cost matrices
+    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time_m)
+    q = -5* jnp.tile(jnp.ones(dims['N']), span_time_v)
+    R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time_m)
+    r = 0. * jnp.tile(jnp.ones(dims['M']), span_time_v)
+    S =0* pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time_m)
+    Qf = 2*pen_weight["Q"] * jnp.eye(dims['N'][0])
+    qf = 0 * jnp.ones(dims['N'])
+    # construct LQR
+    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
+    return lqr()
 class TestPLQR(unittest.TestCase):
     """Test LQR dimensions and dtypes"""
 
@@ -163,7 +184,7 @@ class TestPLQR(unittest.TestCase):
                 dims = chex.Dimensions(T=T, N=n, M=m, X=1)
                 sys_dims = ModelDims(*dims["NMT"], dt=0.01)
                 x0 = jnp.ones(dims["N"])
-                lqr = setup_lqr(dims)
+                lqr = setup_lqr_time(dims)
                 params = LQRParams(x0, lqr)
                 for seed in [0,1]:
                     start = time.time()

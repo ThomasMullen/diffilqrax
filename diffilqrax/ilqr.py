@@ -1,6 +1,6 @@
 """iterative LQR solver"""
 
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 from functools import partial
 from jax import Array
 import jax
@@ -16,6 +16,7 @@ from diffilqrax.typs import (
     Gains,
     CostToGo,
     LQRParams,
+    ParallelSystem
 )
 
 
@@ -66,12 +67,12 @@ def time_map(fun: Callable) -> Callable:
     # return jax.vmap(fun, in_axes=(None, 0, 0, None))
 
 
-def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
+def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """Approximate non-linear model as LQR by taylor expanding about state and
     control trajectories.
 
     Args:
-        model (System): The system model
+        model (System or Parallel Sytem): The system model
         Xs (Array): The state trajectory
         Us (Array): The control trajectory
         params (iLQRParams): The iLQR parameters

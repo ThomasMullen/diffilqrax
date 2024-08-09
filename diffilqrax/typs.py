@@ -57,25 +57,6 @@ class System(NamedTuple):
     dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
     dims: ModelDims
 
-class ParallelSystem(NamedTuple):
-    """iLQR System
-
-    cost : Callable
-        running cost l(t, x, u, params)
-    costf : Callable
-        final state cost lf(xf, params)
-    dynamics : Callable
-        dynamical update f(t, x, u, params)
-    dims : ModelDims
-        ilQR evaluate time horizon, dt, state and input dimension
-    """
-
-    cost: Callable[[int, Array, Array, Optional[Any]], Array]
-    costf: Callable[[Array, Optional[Any]], Array]
-    dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
-    parallel_dynamics: Callable[[ArrayLike, Optional[Any]], Array]
-    dims: ModelDims
-    
     
 class LQR(NamedTuple):
     """LQR params
@@ -156,3 +137,8 @@ class PendulumParams(NamedTuple):
     m: float
     l: float
     g: float
+
+
+class ParallelSystem(NamedTuple):
+    model: System
+    parallel_dynamics: Callable[[System, iLQRParams,  Array, Array], Array]

@@ -431,3 +431,4 @@ def riccati_operator(elem2, elem1):
     J = temp @ J2 @ A1 + J1
     return A, b, C, η, J
 
+
