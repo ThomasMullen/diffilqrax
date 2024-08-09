@@ -106,8 +106,6 @@ def fwd_dlqr(
         S=lqr.S,
     )
     new_params = LQRParams(params.x0, new_lqr)
-    _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params)
-    # new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
     return tau_star, (new_params, sol)  # check whether params or new_params
 
 
@@ -220,8 +218,6 @@ def fwd_dllqr(
         S=lqr.S,
     )
     new_params = LQRParams(params.x0, new_lqr)
-    _, new_Xs_star, new_Us_star, new_Lambs = solve_lqr(new_params)
-    new_sol = gains, new_Xs_star, new_Us_star, new_Lambs
     return tau_star, (new_params, sol)  # check whether params or new_params
 
 

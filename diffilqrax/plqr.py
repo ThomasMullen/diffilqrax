@@ -275,6 +275,23 @@ def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
             new_Lambdas)
 
 
+def solve_plqr_swap_x0(model: LQRParams):
+    "run backward forward sweep to find optimal control freeze x0 to zero"
+    model = model._replace(x0 = jnp.zeros_like(model.x0))
+    etas, Js = parallel_riccati_scan(model)
+    Fs, cs, Ks, offsets = parallel_lin_dyn_scan(model, etas, Js)
+    new_Xs = jnp.r_[model.x0[None], cs]
+    Kx = Ks[0]
+    new_Us = Ks[-1] + offsets
+    
+    updated_Us = new_Us - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, new_Xs[:-1])
+    # NOTE: alternative to additional scan and just vmap
+    # new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
+    vmatmul = vmap(jnp.matmul)
+    new_Lambdas = vmatmul(Js, new_Xs) - etas #TODO: move operation in the asssociative forward scan with eta and Js
+    return (new_Xs, 
+            updated_Us,
+            new_Lambdas)
 # --------
 # Parallel forward integration
 # --------

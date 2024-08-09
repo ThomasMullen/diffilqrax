@@ -40,8 +40,8 @@ class TestDILQR(unittest.TestCase):
     def setUp(self):
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 3)
-        n = 20
-        m = 5
+        n = 5
+        m = 3
         self.n = n
         self.m = m
         dt = 0.1
@@ -77,9 +77,9 @@ class TestDILQR(unittest.TestCase):
             return jax.nn.sigmoid(theta.Uh @ x + theta.Wh @ u)
 
         self.model = System(
-            cost, costf, dynamics, ModelDims(horizon=200, n=n, m=m, dt=dt)
+            cost, costf, dynamics, ModelDims(horizon=50, n=n, m=m, dt=dt)
         )
-        self.dims = chex.Dimensions(T=100, N=n, M=m, X=1)
+        self.dims = chex.Dimensions(T=50, N=n, M=m, X=1)
         self.Us_init = 0.1 * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )
