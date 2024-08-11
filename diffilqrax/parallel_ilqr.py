@@ -3,6 +3,7 @@
 from typing import Callable, Tuple, Optional, Any
 from functools import partial
 from jax import Array
+from diffilqrax.lqr import bmm
 import jax
 from jax import lax
 import jax.numpy as jnp
@@ -27,9 +28,6 @@ from diffilqrax.typs import (
 )
 
 jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", True)
-
-
 
 def parallel_forward_lin_integration_ilqr(
     model: System, params: iLQRParams, Us_init: Array, a_term: Array
@@ -49,6 +47,26 @@ def parallel_forward_lin_integration_ilqr(
     c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
     return c_bs
 
+
+def parallel_feedback_lin_dyn_ilqr(
+    model: System, params: iLQRParams, Us_init: Array, a_term: Array, Kx: Array
+) -> Array:
+    """Associative scan for forward linear dynamics
+
+    Args:
+        lqr_params (LQRParams): LQR parameters and initial state
+        Us_init (Array): input sequence
+
+    Returns:
+        Array: state trajectory
+    """
+    x0 = params.x0
+    lqr_params = approx_lqr(model, jnp.r_[x0[None,...], jnp.zeros((Us_init.shape[0],x0.shape[0]))], Us_init, params)
+    lqr_params = lqr_params._replace(A = lqr_params.A - bmm(lqr_params.B, Kx))
+    dyn_elements = build_fwd_lin_dyn_elements(LQRParams(x0, lqr_params), Us_init, a_term)
+    c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
+    return c_bs
+
 def pilqr_forward_pass(
     parallel_model: ParallelSystem, ##same as system but additionally taking in the parallel dynamics (could be None in which case we would default to linear w a warning)
     params: iLQRParams,
@@ -64,13 +82,18 @@ def pilqr_forward_pass(
     #new_lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = lqr_model.lqr._replace(a = jnp.zeros_like(lqr_model.lqr.a))) #this is the model from delta_x, so delta_x0 = 0
     _, cs, Ks, offsets = parallel_lin_dyn_scan(lqr_model, etas, Js, alpha)  #this is a parallel lin scan anyway b
     Kx = Ks[0]
-    delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs] ##TODO : this isn't exactly right for nonlinear dynamics, need to define a different forward step
-    #Unfortunatley I don't think we can bypass the vmap because we haven't comptued Delta_x yet in when we get the K terms (since it relies on the parallel dyn scan)
+    ##dyn with Kx edit to linear dyn, Us + Ks[-1] + Kx@Xs as constant term
+    ##can define function to include feedback + edit the dynamcis to have A - Kx
+    delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs] 
     #Potentially we could return it as output of the parallel scan 
-    delta_Us = Ks[-1] + offsets - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, delta_Xs[:-1]) #here we have delta_\hat{u} = Kv@v - Kc@c - Kx@x 
+    delta_Us = Ks[-1] + offsets - bmm(Kx, delta_Xs[:-1]) #jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, delta_Xs[:-1]) #here we have delta_\hat{u} = Kv@v - Kc@c - Kx@x 
     #where u = \hat{u} + offset (eq 64 in https://arxiv.org/abs/2104.03186)
+    Kxxs = bmm(Kx, Xs[:-1]) +  Ks[-1] + offsets  #jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, Xs[:-1])
+    new_Xs = parallel_model.parallel_dynamics_feedback(model, params,  Us + Kxxs,  lqr_model_with_a.lqr.a, Kx) 
+    #this should define the dynamics incorporating the feedback term that says how to handle delta_X (current state - initial traj)
+    ##we assume Kx@initial_traj is already passed as input so only care about the current state and the parallel_dynamics_feedback function should define how to handle that
     new_Us = Us + delta_Us 
-    new_Xs = parallel_model.parallel_dynamics(model, params,  new_Us,  lqr_model_with_a.lqr.a) #this is potentially where we could have the delta_Us be computed properly
+    #new_Xs = parallel_model.parallel_dynamics(model, params,  new_Us,  lqr_model_with_a.lqr.a)
     total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta))
     total_cost += model.costf(new_Xs[-1], params.theta)
     return (new_Xs, new_Us), total_cost 
@@ -128,7 +151,6 @@ def pilqr_solver(
 
         # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / jnp.abs(old_cost)
-
         # determine cond: Δold_cost > threshold
         carry_on = z > convergence_thresh  # n_iter < 70 #
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)

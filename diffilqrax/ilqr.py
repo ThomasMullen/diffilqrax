@@ -276,7 +276,7 @@ def ilqr_solver(
         (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, expected_change=False
         )
-
+        print(exp_cost_red)
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):
@@ -399,6 +399,7 @@ def linesearch(
         new_cost = jnp.where(above_threshold, new_cost, old_cost)
         # update alpha
         alpha *= beta
+        print(alpha)
         return (
             new_Xs,
             new_Us,
