@@ -229,13 +229,13 @@ class TestiLQRStructs(unittest.TestCase):
         fig, axes = subplots(2,1,figsize=(5,3), sharex = True)
         colors = ['r','b','g', 'magenta']
         for i, n in enumerate(ns) : 
-            axes[0].plot(Ts, parallel_lqr_times_0[i], label = f"Parallel LQR n = {n}", color = colors[i])
-            axes[0].plot(Ts, normal_lqr_times_0[i], label = f"Normal LQR n = {n}", color = colors[i], linestyle = "--")
+            axes[0].plot(Ts, parallel_lqr_times_0[i], label = f"Parallel iLQR n = {n}", color = colors[i])
+            axes[0].plot(Ts, normal_lqr_times_0[i], label = f"Normal iLQR n = {n}", color = colors[i], linestyle = "--")
         axes[0].legend(loc = (1,0.2))
         axes[0].set_title("First run time")
         for i, n in enumerate(ns) : 
-            axes[1].plot(Ts, parallel_lqr_times[i], label = f"Parallel LQR n = {n}", color = colors[i])
-            axes[1].plot(Ts, normal_lqr_times[i], label = f"Normal LQR n = {n}", color = colors[i], linestyle = "--")
+            axes[1].plot(Ts, parallel_lqr_times[i], label = f"Parallel iLQR n = {n}", color = colors[i])
+            axes[1].plot(Ts, normal_lqr_times[i], label = f"Normal iLQR n = {n}", color = colors[i], linestyle = "--")
         axes[1].set_title("Second run time")
         axes[1].set_xlabel("Number of timesteps")
         fig.text(-0.01, 0.5, "Time (s)", va='center', rotation='vertical')
