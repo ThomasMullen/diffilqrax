@@ -23,7 +23,8 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-jax.config.update("jax_enable_x64", True)  # double precision
+#jax.config.update("jax_enable_x64", True)  # double precision
+from jax.lib import xla_bridge
 
 # helper functions - pop first and last element from namedtuple
 pop_first = partial(jax.tree_map, lambda x: x[1:])
@@ -103,18 +104,18 @@ def build_associative_riccati_elements(
     last_elem = last_riccati_element(model)
     generic_elems = generic_riccati_element(model)
     return tuple(
-        jnp.concatenate([jnp.expand_dims(last_e, 0), gen_es])
+        jnp.concatenate([gen_es, jnp.expand_dims(last_e, 0)])
         for gen_es, last_e in zip(generic_elems, last_elem)
     )
 
 
 # parallellised riccati scan
 def parallel_riccati_scan(model: LQRParams):
-    initial_elements = build_associative_riccati_elements(model)
+    first_elements = build_associative_riccati_elements(model)
 
     # riccati operator
     @vmap
-    def assoc_riccati_operator(elem1, elem2):
+    def assoc_riccati_operator(elem2, elem1):
         A1, b1, C1, η1, J1 = elem1
         A2, b2, C2, η2, J2 = elem2
 
@@ -133,17 +134,23 @@ def parallel_riccati_scan(model: LQRParams):
         J = temp @ J2 @ A1 + J1
         return A, b, C, η, J
     final_elements = associative_scan(
-        assoc_riccati_operator, initial_elements, reverse=True
+        assoc_riccati_operator, first_elements, reverse = True
     )
-    
-    return final_elements[-2], final_elements[-1] #this only returns J, eta, which are the only things we need to compute 
+    etas = final_elements[-2]
+    Js = final_elements[-1] 
+    return etas, Js, etas[0] + Js[0]@model.x0
+
+
+
+#jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
+#jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute 
 #Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
 ##or is it? how do we have all k and k+1 accessible? 
 
 
 
 
-def generic_dynamics_elements(lqr, eta, J):
+def generic_lin_dyn_elements(lqr, eta, J):
     S, v = J, eta 
     c =  lqr.a
     B = lqr.B
@@ -160,7 +167,7 @@ def generic_dynamics_elements(lqr, eta, J):
 
 
 
-def first_dynamics_element(model, eta0, J0): 
+def first_lin_dyn_element(model, eta0, J0, alpha): 
     S0, v0 = J0, eta0 #this needs to be at k+1 so T = 1
     c =  model.lqr.a[0]
     B = model.lqr.B[0]
@@ -171,12 +178,12 @@ def first_dynamics_element(model, eta0, J0):
     Kc = Kv@S0
     Kx = Kc@A
     F0 = A - B@Kx
-    c0 = c + B@Kv@v0 - B@Kc@c
-    return jnp.zeros_like(J0), F0@model.x0 + c0
+    c0 = c + alpha*(B@Kv@v0 - B@Kc@c)
+    return jnp.zeros_like(J0), F0@model.x0 + c0, (Kx, Kv, Kc)
 
 
-def build_associative_dynamics_elements(
-    model: LQRParams, etas, Js
+def build_associative_lin_dyn_elements(
+    model: LQRParams, etas, Js, alpha
 )-> Tuple[Tuple[Array, Array, Array, Array, Array]]:
     """Join set of elements for associative scan.
     Args:
@@ -185,19 +192,19 @@ def build_associative_dynamics_elements(
     Returns:
         Tuple: return tuple of elements Fs, Cs
     """
-    first_elem = first_dynamics_element(model, etas[1], Js[1]) #this is at k+1
+    first_elem = first_lin_dyn_element(model, etas[1], Js[1], alpha) #this is at k+1
     
     # etas = jnp.concatenate([etas, jnp.zeros_like(etas[0])[None]])
     # Js = jnp.concatenate([Js, jnp.zeros_like(Js[0])[None]])
-    generic_elems = jax.vmap(generic_dynamics_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
+    generic_elems = jax.vmap(generic_lin_dyn_elements, in_axes = (LQR(0,0,0,0,0,0,0,0,None,None), 0, 0))(pop_first(model.lqr), etas[2:], Js[2:])
     return tuple(jnp.r_[jnp.expand_dims(first_e, 0), gen_es] 
                  for first_e, gen_es in zip(first_elem, generic_elems))
 
 
 # parallellised riccati scan
-def parallel_dynamics_scan(model: LQRParams, etas, Js):
+def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha = 1.0):
     #need to add vmaps
-    initial_elements = build_associative_dynamics_elements(model, etas, Js)
+    initial_elements = build_associative_lin_dyn_elements(model, etas, Js, alpha)
 
     # riccati operator
     @vmap
@@ -215,12 +222,12 @@ def parallel_dynamics_scan(model: LQRParams, etas, Js):
     return final_elements
 
 
-
+#@jax.jit
 def solve_plqr(model: LQRParams):
     "run backward forward sweep to find optimal control"
     # backward
-    etas, Js = parallel_riccati_scan(model)
-    Fs, cs = parallel_dynamics_scan(model, etas, Js)
+    etas, Js, _ = parallel_riccati_scan(model)
+    Fs, cs, _ = parallel_lin_dyn_scan(model, etas, Js)
     return jnp.concatenate([model.x0[None], cs])#Fs@model.x0 + cs])
     # _, gains = lqr_backward_pass(params.lqr, sys_dims)
     # # forward
@@ -234,7 +241,7 @@ def solve_plqr(model: LQRParams):
 # --------
 # Parallel forward integration
 # --------
-def build_fwd_dyn_elements(
+def build_fwd_lin_dyn_elements(
     lqr_params: LQRParams, Us_init: Array
 ) -> Tuple[Array, Array]:
     """Generate sequence of elements {c} for forward integration
@@ -264,7 +271,7 @@ def build_fwd_dyn_elements(
     )
 
 
-def parallel_forward_integration(
+def parallel_forward_lin_integration(
     lqr_params: LQRParams, Us_init: Array
 ) -> Array:
     """Associative scan for forward linear dynamics
@@ -277,7 +284,7 @@ def parallel_forward_integration(
         Array: state trajectory
     """
 
-    dyn_elements = build_fwd_dyn_elements(lqr_params, Us_init)
+    dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init)
 
     @vmap
     def associative_dyn_op(elem1, elem2):

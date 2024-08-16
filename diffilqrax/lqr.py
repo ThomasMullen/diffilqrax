@@ -1,5 +1,5 @@
 """LQR solver via dynamic programming"""
-
+from functools import partial
 from typing import Callable, Tuple
 from jax.typing import ArrayLike
 from jax import Array
@@ -19,7 +19,7 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-jax.config.update("jax_enable_x64", True)  # double precision
+#jax.config.update("jax_enable_x64", True)  # double precision
 
 def bmm(arr1: Array, arr2: Array) -> Array:
     """Batch matrix multiplication"""
