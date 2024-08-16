@@ -40,10 +40,13 @@ style.use(PLOT_URL)
 fig_dir = Path(Path(getcwd()), "fig_dump")
 fig_dir.mkdir(exist_ok=True)
 
+
 def tuple_block_until_ready(x_tuple):
     """Apply block for leaves in a pytree struct"""
+
     def block_each_element(x):
         return x.block_until_ready()
+
     return jax.tree.map(block_each_element, x_tuple)
 
 
@@ -110,78 +113,89 @@ cpu = devices("cpu")[0]
 gpu = devices("gpu")[0]
 
 
-# Single size example
-n_iter = 5
-log10T = 5
-input_sizes = np.logspace(2, log10T, num=10, base=10).astype(int)
-dim_n=4
+# # Single size example
+# n_iter = 5
+# log10T = 5
+# input_sizes = np.logspace(2, log10T, num=10, base=10).astype(int)
+# dim_n=4
 
-# Test runtime for each function
-cpu_sequential_runtimes = get_average_runtimes(cpu_lqr, n_iter, cpu, dim_n)
-cpu_parallel_runtimes = get_average_runtimes(cpu_plqr, n_iter, cpu, dim_n)
-gpu_sequential_runtimes = get_average_runtimes(gpu_lqr, n_iter, gpu, dim_n)
-gpu_parallel_runtimes = get_average_runtimes(gpu_plqr, n_iter, gpu, dim_n)
-
-
-# Pretty plots of results
-fig, axes = subplots(ncols=2, figsize=(15, 6), sharex=True, sharey=True)
-axes[0].loglog(
-    input_sizes,
-    cpu_sequential_runtimes,
-    label="Sequential-CPU",
-    linestyle="-.",
-    linewidth=3,
-)
-axes[0].loglog(input_sizes, cpu_parallel_runtimes, label="Parallel-CPU", linewidth=3)
-axes[0].legend()
-
-axes[1].loglog(
-    input_sizes,
-    gpu_sequential_runtimes,
-    label="Sequential-GPU",
-    linestyle="-.",
-    linewidth=3,
-)
-axes[1].loglog(input_sizes, gpu_parallel_runtimes, label="Parallel-GPU", linewidth=3)
-_ = axes[0].set_ylabel("Average run time (seconds)")
-
-for ax in axes:
-    _ = ax.set_xlabel("Number of data points")
-
-_ = fig.suptitle("Runtime comparison on CPU and GPU", size=15)
-_ = axes[1].legend()
-
-fig.savefig(f"{fig_dir}/runtime_slqr_plqr_n{dim_n:03}.png", dpi=350)
+# # Test runtime for each function
+# cpu_sequential_runtimes = get_average_runtimes(cpu_lqr, n_iter, cpu, dim_n)
+# cpu_parallel_runtimes = get_average_runtimes(cpu_plqr, n_iter, cpu, dim_n)
+# gpu_sequential_runtimes = get_average_runtimes(gpu_lqr, n_iter, gpu, dim_n)
+# gpu_parallel_runtimes = get_average_runtimes(gpu_plqr, n_iter, gpu, dim_n)
 
 
+# # Pretty plots of results
+# fig, axes = subplots(ncols=2, figsize=(15, 6), sharex=True, sharey=True)
+# axes[0].loglog(
+#     input_sizes,
+#     cpu_sequential_runtimes,
+#     label="Sequential-CPU",
+#     linestyle="-.",
+#     linewidth=3,
+# )
+# axes[0].loglog(input_sizes, cpu_parallel_runtimes, label="Parallel-CPU", linewidth=3)
+# axes[0].legend()
+
+# axes[1].loglog(
+#     input_sizes,
+#     gpu_sequential_runtimes,
+#     label="Sequential-GPU",
+#     linestyle="-.",
+#     linewidth=3,
+# )
+# axes[1].loglog(input_sizes, gpu_parallel_runtimes, label="Parallel-GPU", linewidth=3)
+# _ = axes[0].set_ylabel("Average run time (seconds)")
+
+# for ax in axes:
+#     _ = ax.set_xlabel("Number of data points")
+
+# _ = fig.suptitle("Runtime comparison on CPU and GPU", size=15)
+# _ = axes[1].legend()
+
+# fig.savefig(f"{fig_dir}/runtime_slqr_plqr_n{dim_n:03}.png", dpi=350)
 
 
 # define time length
 n_iter = 5
 log10T = 5
 input_sizes = np.logspace(2, log10T, num=10, base=10).astype(int)
-dim_ns=np.logspace(2, 7, num=6, base=2).astype(int)
+# dim_ns = np.array([2,4,8,16])
+dim_ns = np.logspace(2, 6, num=5, base=2).astype(int)
 
-run_time_log = np.empty((4,dim_ns.size, input_sizes.size))
+run_time_log = np.empty((4, dim_ns.size, input_sizes.size))
 
 for ix, dim_n in enumerate(dim_ns):
     # Test runtime for each function
     cpu_sequential_runtimes = get_average_runtimes(cpu_lqr, n_iter, cpu, dim_n)
-    run_time_log[0,ix] = cpu_sequential_runtimes
+    run_time_log[0, ix] = cpu_sequential_runtimes
     cpu_parallel_runtimes = get_average_runtimes(cpu_plqr, n_iter, cpu, dim_n)
-    run_time_log[1,ix] = cpu_parallel_runtimes
+    run_time_log[1, ix] = cpu_parallel_runtimes
     gpu_sequential_runtimes = get_average_runtimes(gpu_lqr, n_iter, gpu, dim_n)
-    run_time_log[2,ix] = gpu_sequential_runtimes
+    run_time_log[2, ix] = gpu_sequential_runtimes
     gpu_parallel_runtimes = get_average_runtimes(gpu_plqr, n_iter, gpu, dim_n)
-    run_time_log[3,ix] = gpu_parallel_runtimes
-    
+    run_time_log[3, ix] = gpu_parallel_runtimes
+    print(dim_n)
 
+np.save(f"{fig_dir}/runtime_slqr_plqr_arr.npy", run_time_log)
 
-fig, axes = subplots(figsize=(8, 6), sharex = True, sharey=True)
+fig, axes = subplots(figsize=(8, 6), sharex=True, sharey=True)
 colors = cmc.navia(np.linspace(0.2, 1, dim_ns.size))
-for i, n in enumerate(dim_ns) : 
-    axes.plot(input_sizes, run_time_log[2][i], label = f"Sequential LQR n = {n}", color = colors[i])
-    axes.plot(input_sizes, run_time_log[3][i], label = f"Parallel LQR n = {n}", color = colors[i], linestyle = "-.")
+for i, n in enumerate(dim_ns):
+    axes.plot(
+        input_sizes,
+        run_time_log[2][i],
+        label=f"Sequential LQR n = {n}",
+        color=colors[i],
+    )
+    axes.plot(
+        input_sizes,
+        run_time_log[3][i],
+        label=f"Parallel LQR n = {n}",
+        color=colors[i],
+        linestyle="-.",
+    )
 axes.legend()
 
 fig.savefig(f"{fig_dir}/runtime_slqr_plqr.png", dpi=350)
