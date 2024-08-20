@@ -42,6 +42,7 @@ from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
 import numpy as onp
+from matplotlib import pyplot as plt
 from matplotlib.pyplot import subplots, close, style
 
 from diffilqrax.utils import keygen, initialise_stable_dynamics
@@ -62,17 +63,17 @@ jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update('jax_disable_jit', True)
 
-
+zero_im = False
 def phi(x):
-    return jnp.tanh(x)
+    return x #jnp.tanh(x)
 ##Setting up the S5 model
 args = {
     "dir_name": './cache_dir',
     "dataset": 'mnist-classification',
-    "n_layers": 6,
-    "d_model": 3,
-    "ssm_size_base": 16,
-    "blocks": 8,
+    "n_layers": 3,
+    "d_model": 24,
+    "ssm_size_base": 24,
+    "blocks": 2,
     "C_init": "trunc_standard_normal",
     "discretization": "zoh",
     "mode": "pool",
@@ -142,7 +143,7 @@ import jax
 dropout = 0
 rng = jax.random.PRNGKey(0)
 m = 3
-horizon = 100
+horizon = 10
 s5_model =  StackedEncoderModel(init_ssm, d_model = args["d_model"], n_layers = args["n_layers"], training=False)
 init_rng, dropout_rng = jax.random.split(rng, num=2)
 variables = s5_model.init({"params": init_rng,
@@ -171,7 +172,7 @@ def diag_binary_operator(q_i, q_j):
 
 @jax.vmap
 def binary_operator(q_i, q_j):
-    """ Binary operator for parallel scan of linear recurrence. Assumes a diagonal matrix A.
+    """ Binary operator for parallel scan of linear recurrence. 
         Args:
             q_i: tuple containing A_i and Bu_i at position i       (P,), (P,)
             q_j: tuple containing A_j and Bu_j at position j       (P,), (P,)
@@ -200,9 +201,9 @@ class S5Model():
         self.num_layers = num_layers 
         self.conj_sym = False
         self.clip_eigs = True
-        self.blocks = 8
-        self.H= 8 #d_model,
-        self.P= 8 #ssm_size,
+        self.blocks = 2
+        self.H= 4 #d_model,
+        self.P= 4 #ssm_size,
         self.blocks = num_layers#default = 2 blocks
         self.discretization = "zoh"
         self.key = 4
@@ -212,7 +213,7 @@ class S5Model():
         self.layer_params_feedback = None
         self.lr = 0.001
         self.step_rescale = 1.0
-        self.zero_im = True
+        self.zero_im = zero_im #False
         ##for now do it with 2 layers, then will actually use the flax stuff
         
     def initialize_layer(self,key):
@@ -239,27 +240,27 @@ class S5Model():
             local_P = self.P
 
         # Initialize diagonal state to state matrix Lambda (eigenvalues)
-        Lambda_re = Lambda.real
+        Lambda_re = jax.random.uniform(jr.PRNGKey(0), minval = -0.8, maxval = -0.1, shape = Lambda.real.shape)#Lambda.real
         if self.zero_im :
             Lambda_im = np.zeros_like(Lambda_re)
         else : 
             Lambda_im = Lambda.imag
         if self.clip_eigs:
-            Lambda = np.clip(Lambda_re, None, -1e-4) #+ 1j * Lambda_im
+            Lambda = np.clip(Lambda_re, None, -1e-4) + 1j * Lambda_im
         else:
-            Lambda = Lambda_re #+ 1j * Lambda_im
+            Lambda = Lambda_re + 1j * Lambda_im ##setup : only complex dynamics, everything else real
 
         # Initialize input to state (B) matrix
         B_init = lecun_normal()
         B_shape = (local_P, self.H)
         key, subkey = jr.split(key)
         B = init_VinvB(B_init, subkey, B_shape, Vinv)
-        B_tilde =  B[..., 0] #+ 1j * B[..., 1]
+        B_tilde =  B[..., 0]+ 1j * B[..., 1] * 0 #B[..., 0] + 1j * B[..., 1]
         key, subkey = jr.split(key)
         C = jr.normal(key, shape =  (self.H, self.P, 2))
-        C_tilde = C[..., 0] #+ 1j * C[..., 1]
+        C_tilde =  C[..., 0] + 0j * C[..., 1]
         key, subkey = jr.split(subkey)
-        D = jr.normal(key, shape = (self.H,))
+        D = jnp.eye(self.H) #jr.normal(key, shape = (self.H,))
         log_step = jnp.linspace(self.dt_min, self.dt_max, self.P)
         step = self.step_rescale * np.exp(log_step)
 
@@ -270,37 +271,37 @@ class S5Model():
             Lambda_bar, B_bar = discretize_bilinear(Lambda, B_tilde, step)
         else:
             raise NotImplementedError("Discretization method {} not implemented".format(self.discretization))
-        return S5Layer(eff_Ks = jnp.zeros((self.P,self.P)), Lambda_re = Lambda_re, Lambda_im = Lambda_im, B_bar = B_bar.real, C_tilde = C_tilde.real, D = D)
+        return S5Layer(eff_Ks = jnp.zeros((self.P,self.P)), Lambda_re = Lambda_re, Lambda_im = Lambda_im, B_bar = B_tilde, C_tilde = C_tilde, D = D)
 
     def initialize_params(self, key):
         keys = jax.random.split(key, self.num_layers) ##need to put the lengths somewhere but for now fixed
         self.layer_params = [self.initialize_layer(k) for k in keys] 
     
     def apply_single_layer_full(self, layer_params, input_sequence):
-        Lambda_bar = layer_params.Lambda_re #+ 1j * layer_params.Lambda_im
+        Lambda_bar = layer_params.Lambda_re + 1j * layer_params.Lambda_im
         Bu_elements = jax.vmap(lambda u: layer_params.B_bar @ u)(input_sequence)
-        Lambda_elements = jnp.tile(jnp.diag(Lambda_bar), (input_sequence.shape[0],1,1))
-        
-        #jnp.diag(Lambda_bar) * np.ones((input_sequence.shape[0],
-         #                                       Lambda_bar.shape[0])) - layer_params.eff_Ks
-        
+        #Lambda_elements = jnp.tile(jnp.diag(Lambda_bar), (input_sequence.shape[0],1,1))
+        Lambda0 = jnp.diag(jnp.zeros_like(Lambda_bar))
+        Bu0 = jnp.zeros_like(input_sequence[0])
+        print(Lambda_bar.shape, layer_params.eff_Ks.shape, layer_params.eff_Ks[0])
+        Lambda_elements = jnp.tile(jnp.diag(Lambda_bar), (input_sequence.shape[0],1,1)) - layer_params.eff_Ks
+        #Bu_elements = jnp.concatenate([Bu0[None], Bu_elements])
+        #Lambda_elements = jnp.concatenate([Lambda0[None], Lambda_elements])
         _, xs = jax.lax.associative_scan(binary_operator, (Lambda_elements, Bu_elements))
         ##other optiosn : birectional, conj sym -> not using those yet
-        return jax.vmap(lambda x: (layer_params.C_tilde @ phi(x)))(xs), xs
-    #jax.vmap(lambda x: (layer_params.C_tilde @ x).real)(xs), xs
+        return xs, jax.vmap(lambda x: (layer_params.C_tilde @ phi(x)))(xs) #.real #.real
     
     def apply_single_layer_step(self, layer_params, xl_t, ul_t):
-        Lambda_bar = layer_params.Lambda_re #+ 1j * layer_params.Lambda_im
+        ul_t = ul_t#.real
+        Lambda_bar = layer_params.Lambda_re + 1j * layer_params.Lambda_im
         Lambda_bar = jnp.diag(Lambda_bar)
         nx = Lambda_bar @ xl_t + layer_params.B_bar @ ul_t
-        otpt = layer_params.C_tilde @ phi(nx)
-        #_, xs = jax.lax.associative_scan(binary_operator, (Lambda_elements, Bu_elements))
-        ##other optiosn : birectional, conj sym -> not using those yet
-        return nx, otpt#.real
+        otpt = layer_params.C_tilde @ phi(xl_t)
+        return nx, otpt
     
     def single_s5_step(self, xs_t, u0_t):
         ##go through the layers
-        u = u0_t
+        u = u0_t#.real
         nxs = []
         for i, layer_prms in enumerate(self.layer_params):
             x = xs_t[i*self.P:(i+1)*self.P]
@@ -311,29 +312,35 @@ class S5Model():
     
     def apply_full(self, us):
         ##go through the layers
-        u = us
+        u = us#.real
         nxs = []
-        for layer_prms in self.layer_params:
-            u, nx = self.apply_single_layer_full(layer_prms, u)
+        for i, layer_prms in enumerate(self.layer_params):
+            nx, otpt = self.apply_single_layer_full(layer_prms, u)
+            u = otpt
+            u = jnp.concatenate([jnp.zeros((1, self.H)), otpt[:-1]])
             nxs.append(nx)
         return jnp.concatenate(nxs, axis = 1), u
 
     def apply_full_feedback(self, us, Kxs):
         ##go through the layers
-        u = us
+        u = us#.real
         nxs = []
         for i, layer_prms in enumerate(self.layer_params):
-            B = layer_prms.B_bar
-            Lambda_re = layer_prms.Lambda_re 
-            Kx_l = Kxs[...,i*self.P:(i+1)*self.P]
+            B = layer_prms.B_bar#.real
+            print("KKK", Kxs[:10,0,0], u)
+            Kx_l = Kxs[...,i*self.P:(i+1)*self.P] 
             #(100, 16, 64) (32, 16) (32,)
             #new_layer_0 = layer_params_feedback[0]._replace(Lambda_re =jax.vmap(lambda l, b, k: l + b@k, in_axes = (None,None,0))(Lambda_re, B, Kx))
             #layer_prms_feedback = [new_layer_0 if i == 0 else layer_params_feedback[i] for i in np.arange(len(layer_params_feedback))]
             #s5model.layers_params_feedback = layer_prms_feedback
             ##we lose the nice diagonal property when we do this
+            plt.imshow(Kxs[4].real)
+            plt.savefig("Ks")
             eff_Ks = jax.vmap(lambda b, k: b@k, in_axes = (None,0))(B, Kx_l)
             new_layer_prms = layer_prms._replace(eff_Ks = eff_Ks)
-            u, nx = self.apply_single_layer_full(new_layer_prms, u)
+            nx, otpt = self.apply_single_layer_full(new_layer_prms, u)
+            u = otpt
+            u = jnp.concatenate([jnp.zeros((1, self.H)), otpt[:-1]])
             nxs.append(nx)
         return jnp.concatenate(nxs, axis = 1), u
 ##Setting up the iLQR problem and tests
@@ -344,7 +351,8 @@ class TestS5(unittest.TestCase):
 
     def setUp(self):
         """Setup LQR problem"""
-        s5model = S5Model(num_layers = 2)
+        num_layers = 2
+        s5model = S5Model(num_layers = num_layers)
         s5model.initialize_params(key = jax.random.PRNGKey(2))
         dt = 0.1
         Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
@@ -353,14 +361,16 @@ class TestS5(unittest.TestCase):
         key = jr.PRNGKey(0)
         # initialise params
         self.theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)), Q=Q)
-        self.params = iLQRParams(x0=jnp.zeros(2*s5model.P), theta=self.theta)
-        x_tgt = jnp.arange(2*s5model.P)/2*s5model.P
+        self.params = iLQRParams(x0=jnp.zeros(num_layers*s5model.P), theta=self.theta)
+        x_tgt = jnp.ones(num_layers*s5model.P)/2*s5model.P
         def cost(t: int, x: Array, u: Array, theta: Theta):
-            return jnp.sum((x.squeeze()[-1] - x_tgt.squeeze())**2) + 0.001*jnp.sum(u**2)
+            x_tgt = jnp.sin(t/10)
+            #x = jnp.tanh(x)
+            return (jnp.sum((x.squeeze() - x_tgt.squeeze())**2) + jnp.sum(u.real.squeeze()**2 + u.imag.squeeze()**2)).astype(jnp.complex128)
 
         def costf(x: Array, theta: Theta):
             # return jnp.sum(jnp.abs(x))
-            return 0*jnp.sum(x**2)
+            return 0*jnp.sum((x.squeeze() - x_tgt.squeeze())**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             nx, _ = s5model.single_s5_step(x, u)
@@ -368,31 +378,27 @@ class TestS5(unittest.TestCase):
         def parallel_dynamics(model, theta, us, a):
             xs, os = s5model.apply_full(us)
             return jnp.concatenate([theta.x0[None], xs])
-        def parallel_dynamics_feedback(model, theta, us, a, Kxs):
+        def parallel_dynamics_feedback(model, theta, us, a, Kxs): ##can't work because not editing the model!! 
             xs, os = s5model.apply_full_feedback(us, Kxs)
             return jnp.concatenate([theta.x0[None], xs])
-            # layer_params_feedback = s5model.layer_params
-            # B = s5model.layer_params[0].B_bar
-            # Lambda_re = s5model.layer_params[0].Lambda_re
-            # print(Kx.shape, B.shape, Lambda_re.shape)
-            # #(100, 16, 64) (32, 16) (32,)
-            # new_layer_0 = layer_params_feedback[0]._replace(Lambda_re =jax.vmap(lambda l, b, k: l + b@k, in_axes = (None,None,0))(Lambda_re, B, Kx))
-            # layer_prms_feedback = [new_layer_0 if i == 0 else layer_params_feedback[i] for i in np.arange(len(layer_params_feedback))]
-            # s5model.layers_params_feedback = layer_prms_feedback
-            # xs, os = s5model.apply_full_feedback(us)
-            # return jnp.concatenate([theta.x0[None], xs.real])
-        
+
         m = s5model.H
-        self.dims = ModelDims(horizon=100, n=2*s5model.P, m=m, dt=dt)
+        self.m = m
+        self.dims = ModelDims(horizon=horizon, n=num_layers*s5model.P, m=m, dt=dt)
         self.model = System(cost, costf, dynamics, self.dims)
         self.parallel_model = ParallelSystem(
-            self.model, parallel_dynamics, parallel_dynamics_feedback
-        )
+            self.model, parallel_dynamics,parallel_dynamics_feedback #parallel_forward_lin_integration_ilqr, 
+        ) #compare the two
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 3)
-        self.Us_init = 0. * jr.normal(
-            next(skeys), (self.model.dims.horizon, self.model.dims.m)
+        self.Us_init = 0*jr.normal(
+           next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )
+        # #
+        # jnp.asarray(onp.loadtxt("/Users/marineschimel/Desktop/code/ilqr_vae_py/or_0")) #+ 1j* onp.loadtxt("/Users/marineschimel/Desktop/code/ilqr_vae_py/oi_0"))
+        #. * jr.normal(
+          #  next(skeys), (self.model.dims.horizon, self.model.dims.m)
+        #)
         # define linesearch parameters
         self.ls_kwargs = {
         "beta": 0.8,
@@ -412,11 +418,11 @@ class TestS5(unittest.TestCase):
             self.parallel_model,
             self.params,
             self.Us_init,
-            max_iter=70,
+            max_iter=1,
             convergence_thresh=1e-8,
             alpha_init=1.0,
             verbose=True,
-            use_linesearch=True,
+            use_linesearch=False,
             **self.ls_kwargs,
         )
         #difference when Us_init is not 0...
@@ -424,53 +430,51 @@ class TestS5(unittest.TestCase):
             self.model,
             self.params,
             self.Us_init,
-            max_iter=70,
+            max_iter=1,
             convergence_thresh=1e-8,
             alpha_init=1.0,
             verbose=True,
-            use_linesearch=True,
+            use_linesearch=False,
             **self.ls_kwargs,
         )
-        print(Xs_stars_ilqr.shape)
-        fig, ax = subplots(2, 2, sharey=True)
-        ax[0, 1].plot(Us_stars)
-        ax[0, 0].plot(Xs_stars)
+        fig, ax = subplots(6, 2, sharey=False)
+        ax[0, 1].plot(Us_stars[:,:self.m])
+        ax[1, 1].plot(Us_stars[:,self.m:])
+        ax[0, 0].plot(Xs_stars[:,:self.m])
+        ax[1, 0].plot(Xs_stars[:,self.m:])
         ax[0, 1].set(title="U (parallel)")
         ax[0, 0].set(title="X (parallel)")
-        ax[1, 0].plot(Xs_stars_ilqr)
-        ax[1, 1].plot(Us_stars_ilqr)
+        ax[2, 0].plot(Xs_stars_ilqr[:,:self.m])
+        ax[2, 1].plot(Us_stars_ilqr[:,:self.m])
+        ax[3, 0].plot(Xs_stars_ilqr[:,self.m:])
+        ax[3, 1].plot(Us_stars_ilqr[:,self.m:])
         ax[1, 1].set(title="U (normal)")
         ax[1, 0].set(title="X (normal)")
+        ax[4, 0].plot(Xs_stars_ilqr.real - Xs_stars.real)
+        ax[5, 0].plot(Xs_stars_ilqr.imag - Xs_stars.imag)
+        ax[4, 1].plot(Us_stars_ilqr - Us_stars)
+        ax[5, 1].plot(Us_stars_ilqr.imag - Us_stars.imag)
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/s5_pilqr_solver.png")
+        if zero_im : 
+            fig.savefig(f"{fig_dir}/s5_pilqr_solver_noim_bc_2.png")
+        else : 
+            fig.savefig(f"{fig_dir}/s5_pilqr_solver_im_bc_2.png")
         chex.assert_trees_all_close(Xs_stars, Xs_stars_ilqr, rtol=1e-03, atol=1e-02)
+        
         
      ##add speed test of pilqr   
 if __name__ == "__main__":
     unittest.main()
     
     
+# NOTES : 
+## the complex stuff only works for holographic functions 
+# .real is NOT a holographic function -- this is fine in some settings (eg if input/ outputs are real) but will mess up the iLQR feedback 
+## in iLQR, if we want to use complex numbers we need to make sure that cost and dynamics are holographic
+## note that we can call . real on the output after, and things will be fine especially if the target is purely real 
 
-# nxs, output = s5model.full_s5_step(Us_init)
-# print(nxs[1].shape)
-# x0 = [jnp.zeros(s5model.P) for _ in range(s5model.num_layers)]
-# nx, o = s5model.single_s5_step(jnp.concatenate(x0), Us_init[0])
 
-#(Xs_init, _), _= parallel_ilqr.ilqr_simulate(model, Us_init, params)
-# (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = parallel_ilqr.pilqr_solver(
-#             model,
-#             params,
-#             Us_init,
-#             max_iter=80,
-#             convergence_thresh=1e-13,
-#             alpha_init=1.,
-#             verbose=True,
-#             use_linesearch=True,
-#             **ls_kwargs,
-#         )
-
-# from matplotlib import pyplot as plt
-# fig, axes = plt.subplots(3,1)
-# axes[0].plot(Us_init)
-# axes[1].plot(Us_stars)
-# axes[2].plot(Xs_stars)
+## the feedback for S5 currently doesn't work because the dynamic_feedback funciton written above is wrong 
+## the actual setup is that every part of the state (i.e every layer) finds into inputs that are given to the first layer
+## what's tricky is that this makes it impossible to compute things sequentially -- we would need to run forward a much bigger state and with some nonlinearity which isn't ideal 
+## so for now, only works for num_layers = 1 (basically linear) -- but we could do some sort of projected feedback to keep it efficient and make it work with S5

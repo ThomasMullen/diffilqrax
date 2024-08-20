@@ -38,7 +38,7 @@ def linearise(fun: Callable) -> Callable:
     Returns:
         Callable[[Callable], Callable]): Jacobian tuple evaluated at args 1 and 2
     """
-    return jax.jacrev(fun, argnums=(1, 2))
+    return jax.jacrev(fun, argnums=(1, 2), holomorphic=True)
 
 
 def quadratise(fun: Callable) -> Callable:
@@ -50,7 +50,7 @@ def quadratise(fun: Callable) -> Callable:
     Returns:
         Tuple([NDARRAY, NDARRAY]): Hessian tuple cross evaluated with args 1 and 2
     """
-    return jax.jacfwd(jax.jacrev(fun, argnums=(1, 2)), argnums=(1, 2))
+    return jax.jacfwd(jax.jacrev(fun, argnums=(1, 2),  holomorphic=True), argnums=(1, 2), holomorphic=True)
 
 
 def time_map(fun: Callable) -> Callable:
@@ -83,12 +83,11 @@ def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     theta = params.theta
     tps = jnp.arange(model.dims.horizon)
 
-    (Fx, Fu) = time_map(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
-    (Cx, Cu) = time_map(linearise(model.cost))(tps, Xs[:-1], Us, theta)
-    (Cxx, Cxu), (_, Cuu) = time_map(quadratise(model.cost))(tps, Xs[:-1], Us, theta)
-    fCx = jax.jacrev(model.costf)(Xs[-1], theta)
-    fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
-
+    (Fx, Fu) = time_map(linearise(model.dynamics))(tps, Xs[:-1].astype(jnp.complex128), Us.astype(jnp.complex128), theta)
+    (Cx, Cu) = time_map(linearise(model.cost))(tps, Xs[:-1].astype(jnp.complex128), Us.astype(jnp.complex128), theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(quadratise(model.cost))(tps, Xs[:-1].astype(jnp.complex128), Us.astype(jnp.complex128), theta)
+    fCx = jax.jacrev(model.costf, holomorphic=True)(Xs[-1].astype(jnp.complex128), theta)
+    fCxx = jax.jacfwd(jax.jacrev(model.costf, holomorphic=True), holomorphic=True)(Xs[-1].astype(jnp.complex128), theta)
     # set-up LQR
     lqr_params = LQR(
         A=Fx,
@@ -102,7 +101,11 @@ def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
         Qf=fCxx,
         qf=fCx,
     )()
-
+    from matplotlib import pyplot as plt
+    plt.imshow(Fx[5].astype(jnp.float64))
+    plt.savefig("test_FX.png")
+    plt.imshow(Fu[5].astype(jnp.float64))
+    plt.savefig("test_FU.png")
     return lqr_params
 
 
@@ -116,15 +119,15 @@ def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> L
     tps = jnp.arange(model.dims.horizon)
 
     def get_diff_dyn(t, x, u, theta):
-        (Fx, Fu) = linearise(model.dynamics)(t, x, u, theta)
+        (Fx, Fu) = linearise(model.dynamics)(t, x.astype(jnp.complex128), u.astype(jnp.complex128),theta)
         return model.dynamics(t, x, u, theta) - Fx @ x - Fu @ u
 
-    (Fx, Fu) = time_map(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
+    (Fx, Fu) = time_map(linearise(model.dynamics))(tps, Xs[:-1].astype(jnp.complex128), Us.astype(jnp.complex128), theta)
     f = jax.vmap(get_diff_dyn, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, theta)
-    (Cx, Cu) = time_map(linearise(model.cost))(tps, Xs[:-1], Us, theta)
-    (Cxx, Cxu), (_, Cuu) = time_map(quadratise(model.cost))(tps, Xs[:-1], Us, theta)
-    fCx = jax.jacrev(model.costf)(Xs[-1], theta)
-    fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
+    (Cx, Cu) = time_map(linearise(model.cost))(tps, Xs[:-1].astype(jnp.complex128), Us.astype(jnp.complex128), theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(quadratise(model.cost))(tps,   Xs[:-1].astype(jnp.complex128), Us.astype(jnp.complex128),theta)
+    fCx = jax.jacrev(model.costf, holomorphic=True)(Xs[-1].astype(jnp.complex128), theta)
+    fCxx = jax.jacfwd(jax.jacrev(model.costf, holomorphic=True), holomorphic=True)(Xs[-1].astype(jnp.complex128), theta)
 
     # set-up LQR
     lqr_params = LQR(
@@ -206,8 +209,8 @@ def ilqr_forward_pass(
     def fwd_step(state, inputs):
         x_hat, nx_cost = state
         t, x, u, K, k = inputs
-
         delta_x = x_hat - x
+        print(t, K[0,0], k)
         delta_u = K @ delta_x + alpha * k 
         u_hat = u + delta_u
         nx_hat = model.dynamics(t, x_hat, u_hat, theta)
@@ -276,7 +279,6 @@ def ilqr_solver(
         (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, expected_change=False
         )
-        print(exp_cost_red)
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):
@@ -302,6 +304,7 @@ def ilqr_solver(
             old_Us,
             alpha_init,
         )
+        print("KKK", gains.K)
         z = (old_cost - new_total_cost) / jnp.abs(old_cost)
         # determine cond: Δold_cost > threshold
         carry_on = z > convergence_thresh  # n_iter < 70 #
@@ -367,7 +370,6 @@ def linesearch(
     # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
     initial_carry = (Xs_init, Us_init, 0.0, cost_init, alpha_init, 0, 10.0, 0.0, True)
     # jax.debug.print(f"\nLinesearch: J0={cost_init:.03f} α={alpha_init:.03f} β={beta:.03f}")
-
     def backtrack_iter(carry):
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
@@ -399,7 +401,6 @@ def linesearch(
         new_cost = jnp.where(above_threshold, new_cost, old_cost)
         # update alpha
         alpha *= beta
-        print(alpha)
         return (
             new_Xs,
             new_Us,
