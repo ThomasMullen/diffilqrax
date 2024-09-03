@@ -184,7 +184,8 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
     # sol = solve_lqr(params, dims)  #  tau_guess)
     # _, Xs_star, Us_star, _ = sol
     # tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    return tau_star
+    return tau_star #jnp.nan_to_num(tau_star)*(1 - jnp.isnan(jnp.sum(tau_star)))
+    #return tau_star
 
 
 def fwd_dllqr(
@@ -226,6 +227,7 @@ def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     params, sol = res
     (_, Xs_star, Us_star, Lambs) = sol
     tau_bar, tau_bar_f = tau_bar[:-1], tau_bar[-1]
+    #isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     n = dims.n
     q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar, tau_bar_f)

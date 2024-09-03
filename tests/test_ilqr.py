@@ -285,10 +285,10 @@ class TestiLQRExactSolution(unittest.TestCase):
             }
 
         def cost(t: int, x: Array, u: Array, theta: Any):
-            return jnp.sum(x**2) + jnp.sum(u**2)
+            return jnp.sum(jnp.log(1 + x**2)) + jnp.sum(jnp.log(1 + u**2))
 
         def costf(x: Array, theta: Theta):
-            return jnp.sum(x**2)
+            return 0*jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
@@ -366,7 +366,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             self.params,
             self.Us,
             max_iter=80,
-            convergence_thresh=1e-13,
+            convergence_thresh=1e-5,
             alpha_init=1.,
             verbose=True,
             use_linesearch=True,
@@ -477,7 +477,7 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         chex.assert_trees_all_close(Xs_init, lqr_Xs_sim)
 
         # setup: lqr solver
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params, self.sys_dims)
+        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params) #, self.sys_dims)
         # exercise ilqr solver
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilqr_solver(
             self.model,

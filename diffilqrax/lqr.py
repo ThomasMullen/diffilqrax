@@ -145,16 +145,16 @@ def lqr_backward_pass(
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         # Hxx = Q + AT @ V @ A
         # Huu = R + BT @ V @ B
-        Hxx = symmetrise_matrix(Q + AT @ V @ A)
-        Huu = symmetrise_matrix(R + BT @ V @ B)
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)#.reshape(n_dim, n_dim)
+        Huu = symmetrise_matrix(R + BT @ V @ B)#.reshape(m_dim, m_dim)
         Hxu = S + AT @ V @ B
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
 
         # With Levenberg-Marquardt regulisation
-        # min_eval = jnp.linalg.eigh(Huu)[0][0]
-        # I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
-        I_mu = 1e-7 * jnp.eye(m_dim)
+        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
+        I_mu = jnp.maximum(1e-6, 1e-6- min_eval) * BT @B #jnp.eye(m_dim)
+        #I_mu = 1e-6 * BT @B #jnp.eye(m_dim)
 
         # solve gains
         # k = -solve(Huu + I_mu, hu, assume_a="her")
@@ -162,7 +162,7 @@ def lqr_backward_pass(
         K, k = jnp.hsplit(
             -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim]
         )
-        k = k.squeeze()
+        k = k.reshape(-1,)
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)

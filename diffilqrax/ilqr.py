@@ -6,6 +6,7 @@ from jax import Array
 import jax
 from jax import lax
 import jax.numpy as jnp
+import chex
 
 from diffilqrax import lqr
 from diffilqrax.lqr import bmm
@@ -276,7 +277,6 @@ def ilqr_solver(
         (exp_cost_red, gains) = lqr.lqr_backward_pass(
             lqr_params, expected_change=False
         )
-        print(exp_cost_red)
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):
@@ -323,7 +323,7 @@ def ilqr_solver(
     Lambs_star = lqr.lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
     )
-    return (Xs_star, Us_star, Lambs_star), total_cost, costs
+    return (Xs_star, Us_star, Lambs_star), total_cost, jnp.concatenate([jnp.array([c_init]),  costs])
 
 
 def linesearch(
@@ -335,9 +335,9 @@ def linesearch(
     cost_init: float,
     expected_dJ: CostToGo,
     beta: float = 0.5,
-    max_iter_linesearch: int = 20,
+    max_iter_linesearch: int = 12,
     tol: float = 0.1,
-    alpha_min=1e-8,
+    alpha_min=1e-6,
 ) -> Tuple[Tuple[Array, Array], float, float, Array]:
     """
     Implementation of the line search backtracking algorithm for ilqr algorithm.
@@ -399,7 +399,6 @@ def linesearch(
         new_cost = jnp.where(above_threshold, new_cost, old_cost)
         # update alpha
         alpha *= beta
-        print(alpha)
         return (
             new_Xs,
             new_Us,
@@ -429,4 +428,8 @@ def linesearch(
     # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f}",
     # f"ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
     # )
+    #assert old_cost < cost_opt
+    #assert jax.device_get(old_cost) < jax.device_get(cost_opt)
+    #lax.cond(old_cost > cost_opt, lambda : True, lambda : False)
+    #chex.assert_scalar_negative(jax.device_get(old_cost) - jax.device_get(cost_opt))#, "Cost did not decrease"
     return (Xs_star, Us_star), cost_opt
