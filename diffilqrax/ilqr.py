@@ -220,6 +220,7 @@ def ilqr_forward_pass(
     )
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
+    assert False
     return (new_Xs, new_Us), total_cost
 
 

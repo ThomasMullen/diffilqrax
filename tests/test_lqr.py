@@ -58,7 +58,7 @@ def setup_lqr(dims: chex.Dimensions,
     a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     # define cost matrices
     Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time_m)
-    q = 2*1e-1 * jnp.tile(jnp.ones(dims['N']), span_time_v)
+    q = 2*1e-1 * jnp.asarray([jnp.cos(t/5)*jnp.arange(dims["N"][0]) for t in range(dims["T"][0])])
     R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time_m)
     r = 1e-6 * jnp.tile(jnp.ones(dims['M']), span_time_v)
     S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time_m)
@@ -75,14 +75,15 @@ class TestLQR(unittest.TestCase):
     def setUp(self):
         """Instantiate dummy LQR"""
         print("\nRunning setUp method...")
-        self.dims = chex.Dimensions(T=60, N=3, M=2, X=1)
+        n = 30
+        self.dims = chex.Dimensions(T=60, N=n, M=15, X=1)
         self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         print("Model dimensionality", self.dims["TNMX"])
         print("\nMake LQR struct")
         self.lqr = setup_lqr(self.dims)
 
         print("\nMake initial state x0 and input U")
-        self.x0 = jnp.array([2.0, 1.0, 1.0])
+        self.x0 = jnp.ones((n,))
         Us = jnp.zeros(self.dims["TM"], dtype=float)
         Us = Us.at[2].set(1.0)
         self.Us = Us
