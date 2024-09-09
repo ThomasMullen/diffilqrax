@@ -100,7 +100,6 @@ RiccatiStepParams = Tuple[
 
 class LQRParams(NamedTuple):
     """Contains initial states and LQR parameters"""
-
     x0: ArrayLike
     lqr: Union[LQR, Tuple[ArrayLike]]
 

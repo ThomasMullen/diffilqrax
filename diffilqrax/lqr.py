@@ -19,7 +19,7 @@ from diffilqrax.typs import (
     RiccatiStepParams,
 )
 
-#jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_enable_x64", True)  # double precision
 
 def bmm(arr1: Array, arr2: Array) -> Array:
     """Batch matrix multiplication"""
@@ -145,22 +145,26 @@ def lqr_backward_pass(
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         # Hxx = Q + AT @ V @ A
         # Huu = R + BT @ V @ B
+        Huu = symmetrise_matrix(R + BT @ V @ B) #.reshape(m_dim, m_dim)
+        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
+        mu = jnp.maximum(1e-6, 1e-6- min_eval)
+        I_mu = mu * jnp.eye(n_dim)
         Hxx = symmetrise_matrix(Q + AT @ V @ A)#.reshape(n_dim, n_dim)
-        Huu = symmetrise_matrix(R + BT @ V @ B)#.reshape(m_dim, m_dim)
-        Hxu = S + AT @ V @ B
+        Hxu = S + AT @ (V + I_mu) @ B 
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
+        Huu = Huu + mu * BT @ B
 
         # With Levenberg-Marquardt regulisation
-        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        I_mu = jnp.maximum(1e-6, 1e-6- min_eval) * BT @B #jnp.eye(m_dim)
+        #min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
+        #I_mu = jnp.maximum(1e-6, 1e-6- min_eval) * BT @B #jnp.eye(m_dim)
         #I_mu = 1e-6 * BT @B #jnp.eye(m_dim)
 
         # solve gains
         # k = -solve(Huu + I_mu, hu, assume_a="her")
         # K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
         K, k = jnp.hsplit(
-            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim]
+            -solve(Huu, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim]
         )
         k = k.reshape(-1,)
 

@@ -53,12 +53,12 @@ def setup_lqr(dims: chex.Dimensions,
     # initialise dynamics
     span_time_m=dims["TXX"]
     span_time_v=dims["TX"]
-    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.6)
+    A = initialise_stable_dynamics(next(skeys), *dims['NT'],radii=0.1)
     B = jnp.tile(jr.normal(next(skeys), dims['NM']), span_time_m)
     a = jnp.tile(jr.normal(next(skeys), dims['N']), span_time_v)
     # define cost matrices
     Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims['N'][0]), span_time_m)
-    q = 2*1e-1 * jnp.asarray([jnp.cos(t/5)*jnp.arange(dims["N"][0]) for t in range(dims["T"][0])])
+    q = 1e-1 * jnp.asarray([jnp.cos(t/5)*jnp.arange(dims["N"][0]) for t in range(dims["T"][0])])
     R = pen_weight["R"] * jnp.tile(jnp.eye(dims['M'][0]), span_time_m)
     r = 1e-6 * jnp.tile(jnp.ones(dims['M']), span_time_v)
     S = pen_weight["S"] * jnp.tile(jnp.ones(dims['NM']), span_time_m)
