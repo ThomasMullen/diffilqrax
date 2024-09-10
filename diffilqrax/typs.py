@@ -3,6 +3,8 @@
 from typing import NamedTuple, Callable, Any, Union, Tuple, Optional
 from jax import Array
 from jax.typing import ArrayLike
+from flax import struct
+from diffilqrax.utils import linearise, quadratise
 
 def symmetrise_tensor(x: Array) -> Array:
     """Symmetrise tensor"""
@@ -37,9 +39,10 @@ class CostToGo(NamedTuple):
 
     V: ArrayLike
     v: ArrayLike
+    
+    
 
-
-class System(NamedTuple):
+class System:
     """iLQR System
 
     cost : Callable
@@ -51,11 +54,21 @@ class System(NamedTuple):
     dims : ModelDims
         ilQR evaluate time horizon, dt, state and input dimension
     """
-
-    cost: Callable[[int, Array, Array, Optional[Any]], Array]
-    costf: Callable[[Array, Optional[Any]], Array]
-    dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
-    dims: ModelDims
+    def __init__(self, cost: Callable, costf: Callable, dynamics: Callable, dims: ModelDims, lin_dyn: Optional[Callable] = None, lin_cost: Optional[Callable] = None, quad_cost: Optional[Callable] = None):
+        self.cost = cost
+        self.costf = costf
+        self.dynamics = dynamics
+        self.dims = dims
+        self.lin_dyn = linearise(self.dynamics) if lin_dyn is None else lin_dyn
+        self.lin_cost = linearise(self.cost) if lin_cost is None else lin_cost
+        self.quad_cost = quadratise(self.cost) if quad_cost is None else quad_cost
+    # cost: Callable[[int, Array, Array, Optional[Any]], Array]
+    # costf: Callable[[Array, Optional[Any]], Array]
+    # dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
+    # dims: ModelDims
+    # lin_dyn: Callable = linearise(dynamics) #Callable 
+    # lin_cost: Callable = linearise(cost)
+    # quad_cost: Callable  = quadratise(dynamics)
 
     
 class LQR(NamedTuple):

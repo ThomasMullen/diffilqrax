@@ -7,6 +7,8 @@ import jax
 from jax import lax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve
+from flax.struct import dataclass 
+
 
 from diffilqrax.typs import (
     symmetrise_matrix,
@@ -143,28 +145,18 @@ def lqr_backward_pass(
         AT, BT, (A, B, a, Q, q, R, r, S) = inps
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        # Hxx = Q + AT @ V @ A
-        # Huu = R + BT @ V @ B
         Huu = symmetrise_matrix(R + BT @ V @ B) #.reshape(m_dim, m_dim)
         min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
         mu = jnp.maximum(1e-6, 1e-6- min_eval)
-        I_mu = mu * jnp.eye(n_dim)
         Hxx = symmetrise_matrix(Q + AT @ V @ A)#.reshape(n_dim, n_dim)
-        Hxu = S + AT @ (V + I_mu) @ B 
+        Hxu = S + AT @ (V) @ B 
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
-        Huu = Huu + mu * BT @ B
-
-        # With Levenberg-Marquardt regulisation
-        #min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        #I_mu = jnp.maximum(1e-6, 1e-6- min_eval) * BT @B #jnp.eye(m_dim)
-        #I_mu = 1e-6 * BT @B #jnp.eye(m_dim)
-
-        # solve gains
-        # k = -solve(Huu + I_mu, hu, assume_a="her")
-        # K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
+        I_mu = mu * BT @B #jnp.eye(m_dim)
+        Hxu_reg = S + AT @ (V + mu*jnp.eye(n_dim)) @ B 
+        Huu_reg = Huu + I_mu
         K, k = jnp.hsplit(
-            -solve(Huu, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim]
+            -solve(Huu_reg, jnp.c_[Hxu_reg.T, hu], assume_a="her"), [n_dim]
         )
         k = k.reshape(-1,)
 

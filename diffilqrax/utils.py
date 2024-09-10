@@ -5,6 +5,9 @@ from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
 
+from typing import Callable, Tuple, Any
+import jax
+
 
 def keygen(key, nkeys):
     """Generate randomness that JAX can use by splitting the JAX keys.
@@ -56,3 +59,42 @@ def initialise_stable_time_varying_dynamics(
     mat /= jnp.sqrt(n_dim)
     mat -= jnp.eye(n_dim)
     return mat
+
+
+
+def linearise(fun: Callable) -> Callable:
+    """Function that finds jacobian w.r.t to x and u inputs.
+
+    Args:
+        fun (Callable): args (t, x, u, params)
+
+    Returns:
+        Callable[[Callable], Callable]): Jacobian tuple evaluated at args 1 and 2
+    """
+    return jax.jacrev(fun, argnums=(1, 2))
+
+
+def quadratise(fun: Callable) -> Callable:
+    """Function that finds Hessian w.r.t to x and u inputs.
+
+    Args:
+        fun (Callable): args (t, x, u, params)
+
+    Returns:
+        Tuple([NDARRAY, NDARRAY]): Hessian tuple cross evaluated with args 1 and 2
+    """
+    return jax.jacfwd(jax.jacrev(fun, argnums=(1, 2)), argnums=(1, 2))
+
+
+def time_map(fun: Callable) -> Callable:
+    """Vectorise function in time. Assumes 0th-axis is time for x and u args of fun, the last
+    arg (theta) of Callable function assumed to be time-invariant.
+
+    Args:
+        fun (Callable): function that takes args (t, x[Txn], u[Txm], theta)
+
+    Returns:
+        Callable: vectorised function along args 1 and 2 0th-axis
+    """
+    return jax.vmap(fun, in_axes=(0, 0, 0, None))
+    # return jax.vmap(fun, in_axes=(None, 0, 0, None))
