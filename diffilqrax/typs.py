@@ -103,7 +103,7 @@ class Theta(NamedTuple):
     Uh: Array
     Wh: Array
     sigma: ArrayLike
-    Q: Array
+    # Q: Array
 
 class Thetax0(NamedTuple):
     Uh: Array
