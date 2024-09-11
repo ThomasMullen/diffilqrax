@@ -24,7 +24,7 @@ def keygen(key, nkeys):
 def initialise_stable_dynamics(
     key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
 ) -> Array:
-    """Generate a state matrix with stable dynamics (eigenvalues < 1)
+    """Generate a state matrix with stable dynamics (|eigenvalues| < 1) discrete dynamics
 
     Args:
         key (Tuple[int,int]): random key
@@ -36,14 +36,13 @@ def initialise_stable_dynamics(
     """
     mat = jr.normal(key, (n_dim, n_dim)) * radii
     mat /= jnp.sqrt(n_dim)
-    mat -= jnp.eye(n_dim)
     return jnp.tile(mat, (T, 1, 1))
 
 
 def initialise_stable_time_varying_dynamics(
     key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
 ) -> Array:
-    """Generate a state matrix with stable dynamics (eigenvalues < 1)
+    """Generate a state matrix with stable dynamics (|eigenvalues| < 1)
 
     Args:
         key (Tuple[int,int]): random key
@@ -55,7 +54,7 @@ def initialise_stable_time_varying_dynamics(
     """
     mat = jr.normal(key, (T, n_dim, n_dim)) * radii
     mat /= jnp.sqrt(n_dim)
-    mat -= jnp.eye(n_dim)
+    # mat -= jnp.eye(n_dim)
     return mat
 
 

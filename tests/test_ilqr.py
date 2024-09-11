@@ -260,7 +260,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         # set-up model
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 5)
-        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], 0.6)[0]
+        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], .6)[0]
         Wh = jr.normal(next(skeys), self.dims["NM"])
         # chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
         # chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
@@ -285,7 +285,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             return jnp.sum(x**2) + jnp.sum(u**2)
 
         def costf(x: Array, theta: Theta):
-            return 0*jnp.sum(x**2)
+            return 1.0*jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return theta.Uh @ x + theta.Wh @ u
@@ -372,6 +372,8 @@ class TestiLQRExactSolution(unittest.TestCase):
         lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_approx_params = LQRParams(Xs_stars[0], lqr_tilde)
         # verify
+        print(jnp.linalg.eigvals(self.params.theta.Uh))
+        print(jnp.linalg.eigvals(lqr_tilde.A[0]))
         dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
         # plot kkt
         fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
@@ -396,6 +398,9 @@ class TestiLQRExactSolution(unittest.TestCase):
         fig.savefig(f"{self.fig_dir}/ilqr_ls_cost_log.png")
         close()
 
+        print(jnp.mean(jnp.abs(dLdXs)))
+        print(jnp.mean(jnp.abs(dLdUs)))
+        print(jnp.mean(jnp.abs(dLdLambs)))
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-04, atol=1e-05)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-04, atol=1e-05)
