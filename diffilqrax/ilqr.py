@@ -237,9 +237,7 @@ def ilqr_solver(
         # approximate dyn and loss to LQR with initial {u} and {x}
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dold_cost
-        (exp_cost_red, gains) = lqr.lqr_backward_pass(
-            lqr_params, expected_change=False
-        )
+        exp_cost_red, gains = lqr.lqr_backward_pass(lqr_params)
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):

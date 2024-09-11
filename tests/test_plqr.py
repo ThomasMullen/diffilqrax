@@ -118,10 +118,10 @@ class TestPLQR(unittest.TestCase):
         #print(Xs_lqr)
         ##for this we might need to define the LQRParams class with everything of size T x ...
         xs, us, _  = solve_plqr(params)
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
         fig_dir.mkdir(exist_ok=True)
         # Plot the KKT residuals
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,2,figsize=(8,3), sharex = True, sharey =True)
         ax[0].plot(Xs_lqr)
@@ -129,7 +129,7 @@ class TestPLQR(unittest.TestCase):
         fig.tight_layout()
         fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs.png")
         close()
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,3,figsize=(8,3), sharex = True, sharey =True)
         ax[0].plot(Us_lqr)
@@ -146,7 +146,7 @@ class TestPLQR(unittest.TestCase):
         # test
         xs, us, lmda = solve_plqr(params)
         # visualise 01
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
         fig_dir.mkdir(exist_ok=True)
         fig, axes = subplots(1,3,figsize=(12,3),sharey=False)
         for i,ax in enumerate(axes.flatten()):
@@ -205,7 +205,7 @@ class TestPLQR(unittest.TestCase):
             normal_lqr_times.append(ls)
             parallel_lqr_times_0.append(p0s)
             normal_lqr_times_0.append(l0s)
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
         fig_dir.mkdir(exist_ok=True)
         fig, axes = subplots(2,1,figsize=(5,3), sharex = True)
         colors = ['r','b','g', 'magenta']

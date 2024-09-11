@@ -150,22 +150,17 @@ class TestLQR(unittest.TestCase):
     def test_lqr_backward_pass(self):
         """test backward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
-        (dJ, Ks), exp_dJ = lqr_backward_pass(
-            lqr=params.lqr, expected_change=True
-        )
+        dJ, Ks = lqr_backward_pass(lqr=params.lqr)
         chex.assert_type(Ks.K, float)
         chex.assert_shape(Ks.K, self.dims["TMN"])
         chex.assert_type(Ks.k, float)
         chex.assert_shape(Ks.k, self.dims["TM"])
         chex.assert_type(dJ, float)
-        chex.assert_type(exp_dJ, float)
 
     def test_lqr_forward_pass(self):
         """test forward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
-        (dJ, Ks), exp_dJ = lqr_backward_pass(
-            lqr=params.lqr, expected_change=True
-        )
+        dJ, Ks= lqr_backward_pass(lqr=params.lqr)
         Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
         chex.assert_type(Xs_lqr, float)
         chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
@@ -197,20 +192,20 @@ class TestLQR(unittest.TestCase):
         """test LQR solution output"""
         params = LQRParams(self.x0, self.lqr)
         gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,3,figsize=(10,3))
         ax[0].plot(Xs_lqr)
         ax[1].plot(Us_lqr)
         ax[2].plot(Lambs_lqr)
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/lqr_solution_TestLQR.png")
+        fig.savefig(f"{fig_dir}/seq_lqr_solution_TestLQR.png")
         close()
 
     def test_kkt_optimal(self):
         """test KKT conditions for LQR optimality"""
         # Setup the LQR problem
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
         fig_dir.mkdir(exist_ok=True)
 
         params = LQRParams(self.x0, self.lqr)
@@ -232,7 +227,7 @@ class TestLQR(unittest.TestCase):
         ax[1,2].plot(dLdLambs)
         ax[1,2].set(title="dLdλ")
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/lqr_kkt_TestLQR.png")
+        fig.savefig(f"{fig_dir}/seq_lqr_kkt_TestLQR.png")
         close()
         print(jnp.mean(jnp.abs(dLdUs)))
         # Verify that the average KKT conditions are satisfied
@@ -277,7 +272,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
         r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
-        self.lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+        self.lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
         print("\nMake initial state x0 and input U")
         self.x0 = jnp.array([0.3, 0.])
@@ -290,7 +285,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # setup
         params = LQRParams(self.x0, self.lqr)
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
         fig_dir.mkdir(exist_ok=True)
         print("Make tmp dir")
         # Exercise the LQR solver function
@@ -308,7 +303,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         ax[2].plot(Us_exact.squeeze())
         ax[2].set(title="Inv solve")
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/u_star_solvers.png")
+        fig.savefig(f"{fig_dir}/seq_u_star_solvers.png")
         close()
         print("Plot u solutions")
         # Verify that the two solutions are close
@@ -320,7 +315,7 @@ class TestLQRSolutionExact(unittest.TestCase):
     def test_kkt_optimal(self):
         """test KKT conditions for LQR optimality"""
         # Setup the LQR problem
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
         fig_dir.mkdir(exist_ok=True)
 
         _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(self.params)
@@ -341,7 +336,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         ax[1,2].plot(dLdLambs.squeeze())
         ax[1,2].set(title="dLdλ")
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/lqr_kkt.png")
+        fig.savefig(f"{fig_dir}/seq_lqr_kkt.png")
         close()
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)

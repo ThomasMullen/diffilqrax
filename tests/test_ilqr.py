@@ -160,9 +160,7 @@ class TestiLQRStructs(unittest.TestCase):
             self.model, self.Us_init, self.params
         )
         lqr_params = ilqr.approx_lqr(self.model, old_Xs, self.Us_init, self.params)
-        exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, expected_change=False
-        )
+        exp_cost_red, gains = lqr.lqr_backward_pass(lqr_params)
         exp_change_J0 = lqr.calc_expected_change(exp_cost_red, alpha=1.0)
         # exercise
         (new_Xs, new_Us), new_total_cost = ilqr.ilqr_forward_pass(

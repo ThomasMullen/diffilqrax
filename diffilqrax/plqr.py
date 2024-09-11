@@ -1,36 +1,27 @@
 """LQR solver using associative parallel scan"""
 
-from typing import Callable, Tuple
+from typing import Tuple
 from functools import partial
-from jax.typing import ArrayLike
-from jax import Array
 import jax
-from jax import vmap
-from jax import lax
-from jax.lax import scan, associative_scan
 import jax.numpy as jnp
-from jax.scipy.linalg import solve
 import jax.scipy as jsc
+from jax import Array, vmap
+from jax.lax import associative_scan
+from jax.lib import xla_bridge
 
 from diffilqrax.typs import (
-    System,
     symmetrise_matrix,
-    symmetrise_tensor,
-    ModelDims,
     LQRParams,
-    Gains,
     CostToGo,
     LQR,
-    RiccatiStepParams,
-    CostToGo,
 )
 
 jax.config.update("jax_enable_x64", True)  # double precision
-from jax.lib import xla_bridge
 
-# helper functions - pop first and last element from namedtuple
-pop_first = partial(jax.tree_map, lambda x: x[1:])
-pop_last = partial(jax.tree_map, lambda x: x[:-1])
+# helper functions - pop first and last element from pytree structures
+_pop_first = partial(jax.tree_map, lambda x: x[1:])
+_pull_first = partial(jax.tree_map, lambda x: x[0])
+_pop_last = partial(jax.tree_map, lambda x: x[:-1])
 
 """
 Implementation:
@@ -80,7 +71,7 @@ def build_associative_riccati_elements(
         """Generate generic Riccati element.
 
         Args:
-            model (LQRParams): _description_
+            model (LQRParams): LQR problem
 
         Returns:
             Tuple: A, b, C, η, J
@@ -93,7 +84,9 @@ def build_associative_riccati_elements(
         J = model.lqr.Q
         r = model.lqr.r
         B = model.lqr.B
-        b = model.lqr.a - jax.vmap(jnp.matmul)(B, jnp.einsum("ijk,ik->ij", R_invs, r)) #this redefines the offset term in the dynamics to include the linear term in input
+        # redefines the offset term in the dynamics to include the linear term in input
+        # b = model.lqr.a - jax.vmap(jnp.matmul)(B, jnp.einsum("ijk,ik->ij", R_invs, r))
+        b = model.lqr.a - jnp.einsum("bij,bjk,bk->bi", B, R_invs, r)
         return A, b, C, η, J
 
     generic_elems = _generic(model)
@@ -105,14 +98,17 @@ def build_associative_riccati_elements(
     )
 
 
-# parallellised riccati scan
-def parallel_riccati_scan(model: LQRParams):
-    first_elements = build_associative_riccati_elements(model)
+def associative_riccati_scan(model: LQRParams) -> Tuple[Array, Array]:
+    """Obtain value function through associative riccati scan.
 
-    final_elements = associative_scan(riccati_operator, first_elements, reverse=True)
-    etas, Js = final_elements[
-        -2:
-    ]  # dJ and dj we are supposed to add Quu@k and k@QuuQk.T
+    Args:
+        model (LQRParams): LQR model parameters
+
+    Returns:
+        Tuple[Array, Array]: linear and quadratic value functions
+    """
+    lqr_elements = build_associative_riccati_elements(model)
+    _, _, _, etas, Js = associative_scan(riccati_operator, lqr_elements, reverse=True)
     return etas, Js
 
 
@@ -124,7 +120,7 @@ def get_dJs(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> Cos
         model (LQRParams): LQR model parameters
         etas (Array): eta values through time
         Js (Array): J values through time
-        alpha (float, optional): linesearch alpha parameter. Defaults to 1..
+        alpha (float, optional): linesearch alpha parameter. Defaults to 1.0.
 
     Returns:
         CostToGo: Return total change in cost-to-go
@@ -139,7 +135,7 @@ def get_dJs(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> Cos
         r = lqr.r
         P = B.T @ J @ B + R
         pinv = jsc.linalg.inv(P + 1e-7 * jnp.eye(P.shape[0]))  # quu_inv
-        qu = B.T @ eta  + r #- B.T@Kc@c
+        qu = B.T @ eta + r  # - B.T@Kc@c
         hu = B.T @ (-eta + J @ c)
         Huu = symmetrise_matrix(R + B.T @ J @ B)
         k = -pinv @ qu
@@ -161,8 +157,12 @@ def get_dJs(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> Cos
 
 
 def build_associative_lin_dyn_elements(
-    model: LQRParams, etas, Js, alpha
-) -> Tuple[Tuple[Array, Array, Array, Array, Array]]:
+    model: LQRParams, etas: Array, Js: Array, alpha: float
+) -> Tuple[
+    Tuple[Tuple[Array, Array], Tuple[Array, Array]],
+    Tuple[Tuple[Array, Array, Array, Array], Tuple[Array, Array, Array, Array]],
+    Array,
+]:
     """Join set of elements for associative scan.
     Args:
         model (LQRParams)
@@ -171,127 +171,181 @@ def build_associative_lin_dyn_elements(
         Tuple: return tuple of elements Fs, Cs
     """
 
-    def _first(model, eta0, J0, alpha):
-        S0, v0 = J0, eta0  
-        B = model.lqr.B[0]
-        R = model.lqr.R[0]
-        A = model.lqr.A[0]
-        r = model.lqr.r[0]
-        Rinv = jsc.linalg.inv(R + 1e-7 * jnp.eye(R.shape[0]))  
-        offset = - Rinv @ r 
-        c = model.lqr.a[0] + B@offset
-        pinv = jsc.linalg.inv(B.T @ S0 @ B + R + 1e-7 * jnp.eye(R.shape[0]))  # quu_inv
-        Kv = pinv @ B.T
-        Kc = Kv @ S0
-        Kx = Kc @ A
-        F0 = A - B @ Kx
-        c0 = c   + alpha * (B @ Kv @ v0 - B @ Kc @ c)
-        return (jnp.zeros_like(J0), F0 @ model.x0 + c0), (Kx, alpha * Kv, alpha * Kc, alpha*(Kv @ v0 - Kc @ c)), offset #we return the Ks to be able to compute the u update. 
-    #the Kv and Kc terms are multiplied by alpha for the linesearch, because they correspond to the k term in delta_u = Kx + alpha*k
-    #The offset corresponds to the coordinate transformation back into the original space (while here we are solving the lqr problem in a linearly transformed space to account fo the linear term in u)
-    #TODO : should the offset be multiplied by alpha?
-    first_elem, Ks0, offset0 = _first(model, etas[1], Js[1], alpha)  # this is at k+1
+    def _first(
+        model: LQRParams, eta0: Array, J0: Array, alpha: float
+    ) -> Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]:
+        """Build first associative element for optimal trajectory.
+            Offset correspond to the coordinate transformation back into the original space.
+            Ks returns to recover the optimal control.
+
+        Args:
+            model (LQRParams): LQR problem
+            eta0 (Array): linear value fn time point k+1
+            J0 (Array): quadratic value fn time point k+1
+            alpha (float): lineasearch step parameter. Multiply Kv and Kc terms as they correspond
+                to k term in δu = Kx + αk
+
+        Returns:
+            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]: 
+                (Efective state dynamics initialised with 0,
+                effective bias initialised with initial state), Ks, offset
+        """
+
+        lqr_init = _pull_first(model.lqr)
+        m_dim = lqr_init.R.shape[0]
+        mu = 1e-7 * jnp.eye(m_dim)
+
+        # TODO: change to dynamic regularisation
+        Rinv = jsc.linalg.inv(lqr_init.R + mu)
+        offset = -Rinv @ lqr_init.r
+        c = lqr_init.a + lqr_init.B @ offset
+        # TODO: change to dynamic regularisation
+        pinv = jsc.linalg.inv(lqr_init.B.T @ J0 @ lqr_init.B + lqr_init.R + mu)
+        Kv = pinv @ lqr_init.B.T
+        Kc = Kv @ J0
+        Kx = Kc @ lqr_init.A
+        F0 = lqr_init.A - lqr_init.B @ Kx
+        c0 = c + alpha * (lqr_init.B @ (Kv @ eta0 - Kc @ c))
+        # TODO : should the offset be multiplied by alpha?
+        return (
+            (jnp.zeros_like(J0), F0 @ model.x0 + c0),
+            (Kx, alpha * Kv, alpha * Kc, alpha * (Kv @ eta0 - Kc @ c)),
+            offset,
+        )
+
+    first_dyn_elem, Ks0, offset0 = _first(model, etas[1], Js[1], alpha)
+
     @partial(vmap, in_axes=(LQR(0, 0, 0, 0, 0, 0, 0, 0, None, None), 0, 0, None))
     def _generic(lqr: LQR, eta: Array, J: Array, alpha: float):
-        S, v = J, eta
-        c = lqr.a  
-        B = lqr.B
-        R = lqr.R
-        A = lqr.A
-        r = lqr.r
+        """Build generic associative element for optimal trajectory.
+
+        Args:
+            lqr (LQR): LQR parameters
+            eta (Array): linear value fn time point k+1
+            J (Array): quadratic value fn time point k+1
+            alpha (float): lineasearch step parameter.
+
+        Returns:
+            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]: 
+                (Efective state dynamics,
+                effective bias), Ks, offset
+        """
+        m_dim = lqr.R.shape[0]
+        mu = 1e-7 * jnp.eye(m_dim)
         # ̃n=cn+LnUn Mnrn+Lnsn
-        #0.5(u - s)U(u-s) = 0.ruUu - sUu + 0.5sUs -> r = -sU
-        #c_tilde = c - r@U^{-1}
-        P = B.T @ S @ B + R
-        Rinv = jsc.linalg.inv(R + 1e-7 * jnp.eye(R.shape[0]))  # quu_inv
-        pinv = jsc.linalg.inv(P + 1e-7 * jnp.eye(P.shape[0]))  # quu_inv
-        Kv = pinv @ B.T
-        # Kv_eta    for including eta
-        Kc = Kv @ S
-        Kx = Kc @ A
-        Ft = A - B @ Kx
-        offset = -Rinv @ r  
-        c += B@offset 
-        ct = c  + alpha * (B @ Kv @ v - B @ Kc @ c)
-        return (Ft, ct), (Kx, alpha * Kv, alpha * Kc, alpha*(Kv @ v - Kc @ c)), offset
-    generic_elems, Ks, offsets = _generic(pop_first(model.lqr), etas[2:], Js[2:], alpha)
-    Ks = tuple(jnp.r_[jnp.expand_dims(first_k, 0), kk] for first_k, kk in zip(Ks0, Ks))
-    associative_elems = tuple(
-        jnp.r_[jnp.expand_dims(first_e, 0), gen_es]
-        for first_e, gen_es in zip(first_elem, generic_elems)
+        # 0.5(u - s)U(u-s) = 0.ruUu - sUu + 0.5sUs -> r = -sU
+        # c_tilde = c - r@U^{-1}
+        P = lqr.B.T @ J @ lqr.B + lqr.R
+        Rinv = jsc.linalg.inv(lqr.R + mu)
+        pinv = jsc.linalg.inv(P + mu)
+        Kv = pinv @ lqr.B.T
+        # Kv_eta for including eta
+        Kc = Kv @ J
+        Kx = Kc @ lqr.A
+        Ft = lqr.A - lqr.B @ Kx
+        offset = -Rinv @ lqr.r
+        c = lqr.a + lqr.B @ offset
+        ct = c + alpha * (lqr.B @ Kv @ eta - lqr.B @ Kc @ c)
+        return (
+            (Ft, ct),
+            (Kx, alpha * Kv, alpha * Kc, alpha * (Kv @ eta - Kc @ c)),
+            offset,
+        )
+
+    generic_dyn_elems, Ks, offsets = _generic(
+        _pop_first(model.lqr), etas[2:], Js[2:], alpha
     )
+
+    Ks = tuple(jnp.r_[jnp.expand_dims(first_k, 0), kk] for first_k, kk in zip(Ks0, Ks))
+
+    associative_dyn_elems = tuple(
+        jnp.r_[jnp.expand_dims(first_e, 0), gen_es]
+        for first_e, gen_es in zip(first_dyn_elem, generic_dyn_elems)
+    )
+
     offsets = jnp.r_[jnp.expand_dims(offset0, 0), offsets]
-    return associative_elems, Ks, offsets
+
+    return associative_dyn_elems, Ks, offsets
 
 
 # parallellised riccati scan
-def parallel_lin_dyn_scan(model: LQRParams, etas, Js, alpha=1.0):
+def associative_opt_traj_scan(
+    model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0
+) -> Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]:
+    """Obtain effective state dynamic and bias through associative scan.
+        Ks returned (Kx, Kv, Kc, delta) to recover optimal control: state feedback gain,
+        linear val fn gain, dynamics offset gain, delta of linear gains.
+
+    Args:
+        model (LQRParams): LQR problem (initial state, LQR parameters)
+        etas (Array): linear value functions
+        Js (Array): quadratic value functions
+        alpha (float, optional): linesearch step parameter. Defaults to 1.0.
+
+    Returns:
+        Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]: 
+            Effective state dynamics, effective bias, Ks, offset
+    """
     # need to add vmaps
-    final_elements, Ks, offsets = build_associative_lin_dyn_elements(model, etas, Js, alpha)
-    final_Fs, final_cs = associative_scan(dynamic_operator, final_elements)
+    associative_dyn_elems, Ks, offsets = build_associative_lin_dyn_elements(
+        model, etas, Js, alpha
+    )
+    final_Fs, final_cs = associative_scan(dynamic_operator, associative_dyn_elems)
 
     return final_Fs, final_cs, Ks, offsets
 
-def get_delta_u(Ks, x, v, c):
-    Kx, Kv, Kc, ddelta = Ks
-    delta_U = ddelta #-Kx@x +  #Kv@v - Kc@c #+ ddelta #- c#Kv@v - Kc@c #
-    return delta_U
+
+def get_delta_u(
+    Ks: Tuple[Array, Array, Array, Array], x: Array, v: Array, c: Array
+) -> Array:
+    """Obtain δu from optimal control gains."""
+    _, _, _, ddelta = Ks
+    delta_us = ddelta  # -Kx@x +  #Kv@v - Kc@c #+ ddelta #- c#Kv@v - Kc@c #
+    return delta_us
+
 
 @jax.jit
-def solve_plqr(model: LQRParams)->Tuple[Array,Array,Array]:
+def solve_plqr(model: LQRParams) -> Tuple[Array, Array, Array]:
     "run backward forward sweep to find optimal control"
     # backward
-    etas, Js = parallel_riccati_scan(model)
+    vs, Vs = associative_riccati_scan(model)
     # NOTE: cs is already finding updated Xs -> jnp.r_[model.x0[None],cs] == new_xs
-    Fs, cs, Ks, offsets = parallel_lin_dyn_scan(model, etas, Js)
-    new_Xs = jnp.r_[model.x0[None], cs]
-    
-    Kx = Ks[0]
-    # NOTE: new_xs already found new_model redundant - could be useful for testing though
-    # new_model = LQRParams(
-    #     model.x0, LQR(
-    #                 model.lqr.A - Kx, model.lqr.B, 0*model.lqr.a, 
-    #                 model.lqr.Q, model.lqr.q, 
-    #                 model.lqr.R, model.lqr.r,
-    #                 model.lqr.S, 
-    #                 model.lqr.Qf, model.lqr.qf
-    #                 ))
-    # new_Us = Ks[-1] + offsets + model.lqr.a ##not entirely sure if this is the right way to handle a -- it seems to work and think it makes sense to offset what we pass in the parallel_lin_scan, but need to double check
-    # new_Xs = parallel_forward_lin_integration(new_model, new_Us)
-    
-    # NOTE: Not sure about the `a` - this generally would project to the correct space
-    # NOTE: Why does this solution not work: vmatmul = vmap(jnp.matmul); us_ = - vmatmul(Kx, xs_[:-1]) + vmatmul(Kv, etas[1:]) + vmatmul(Kc, params.lqr.a)
-    # NOTE: I think this doesn't work because the c isn't exactly lqr.a in this case but it also has this additional offset term 
-    new_Us = Ks[-1] + offsets
-    
-    updated_Us = new_Us - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, new_Xs[:-1])
-    # NOTE: alternative to additional scan and just vmap
-    # new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
-    vmatmul = vmap(jnp.matmul)
-    new_Lambdas = vmatmul(Js, new_Xs) - etas #TODO: move operation in the asssociative forward scan with eta and Js
+    Fs, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(model, vs, Vs)
+    Xs = jnp.r_[model.x0[None], cs]
+    Us = ks - jnp.einsum("bij,bj->bi", Ks, Xs[:-1]) + offsets
+    Lambdas = jnp.einsum("bij,bj->bi", Vs, Xs) - vs
+    return (Xs, Us, Lambdas)
 
-    return (new_Xs, 
-            updated_Us,
-            new_Lambdas)
+
+# TODO: Validation tests
+# TEST 1:
+# new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
+# TEST 2:
+# NOTE: new_xs already found new_model redundant - could be useful for testing though
+# new_model = LQRParams(
+#     model.x0, LQR(
+#                 model.lqr.A - Kx, model.lqr.B, 0*model.lqr.a,
+#                 model.lqr.Q, model.lqr.q,
+#                 model.lqr.R, model.lqr.r,
+#                 model.lqr.S,
+#                 model.lqr.Qf, model.lqr.qf
+#                 ))
+# new_Us = Ks[-1] + offsets + model.lqr.a ##not entirely sure if this is the right way to handle a -- 
+# it seems to work and think it makes sense to offset what we pass in the parallel_lin_scan, but need to double check
+# new_Xs = parallel_forward_lin_integration(new_model, new_Us)
 
 
 def solve_plqr_swap_x0(model: LQRParams):
     "run backward forward sweep to find optimal control freeze x0 to zero"
-    model = model._replace(x0 = jnp.zeros_like(model.x0))
-    etas, Js = parallel_riccati_scan(model)
-    Fs, cs, Ks, offsets = parallel_lin_dyn_scan(model, etas, Js)
-    new_Xs = jnp.r_[model.x0[None], cs]
-    Kx = Ks[0]
-    new_Us = Ks[-1] + offsets
-    
-    updated_Us = new_Us - jax.vmap(lambda a, b : (a@b), in_axes = (0,0))(Kx, new_Xs[:-1])
-    # NOTE: alternative to additional scan and just vmap
-    # new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
-    vmatmul = vmap(jnp.matmul)
-    new_Lambdas = vmatmul(Js, new_Xs) - etas #TODO: move operation in the asssociative forward scan with eta and Js
-    return (new_Xs, 
-            updated_Us,
-            new_Lambdas)
+    model = model._replace(x0=jnp.zeros_like(model.x0))
+    vs, Vs = associative_riccati_scan(model)
+    Fs, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(model, vs, Vs)
+    Xs = jnp.r_[model.x0[None], cs]
+    Us = ks - jnp.einsum("bij,bj->bi", Ks, Xs[:-1]) + offsets
+    Lambdas = jnp.einsum("bij,bj->bi", Vs, Xs) - vs
+    return (Xs, Us, Lambdas)
+
+
 # --------
 # Parallel forward integration
 # --------
@@ -308,7 +362,11 @@ def build_fwd_lin_dyn_elements(
         Tuple[Array, Array]: set of elements {c} for associative scan
     """
 
-    initial_element = (jnp.zeros_like(jnp.diag(lqr_params.x0)), lqr_params.x0, jnp.zeros_like(a_term[0]))
+    initial_element = (
+        jnp.zeros_like(jnp.diag(lqr_params.x0)),
+        lqr_params.x0,
+        jnp.zeros_like(a_term[0]),
+    )
     # print(initial_element[0].shape, initial_element[1].shape)
 
     @partial(vmap, in_axes=(0, 0, 0, 0))
@@ -325,7 +383,9 @@ def build_fwd_lin_dyn_elements(
     )
 
 
-def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array, a_term: Array) -> Array:
+def parallel_forward_lin_integration(
+    lqr_params: LQRParams, Us_init: Array, a_term: Array
+) -> Array:
     """Associative scan for forward linear dynamics
 
     Args:
@@ -335,7 +395,7 @@ def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array, a_te
     Returns:
         Array: state trajectory
     """
-    #delta_us = compute_offset_us(lqr_params)
+    # delta_us = compute_offset_us(lqr_params)
     dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init, a_term)
     c_as, c_bs = associative_scan(dynamic_operator, dyn_elements)
     return c_bs
@@ -343,7 +403,9 @@ def parallel_forward_lin_integration(lqr_params: LQRParams, Us_init: Array, a_te
 
 # parallel adjoint integration
 def build_rev_lin_dyn_elements(
-    lqr_params: LQRParams, xs_traj: Array, us_traj: Array,
+    lqr_params: LQRParams,
+    xs_traj: Array,
+    us_traj: Array,
 ) -> Tuple[Array, Array]:
     """Generate sequence of elements {c} for reverse integration of adjoints
 
@@ -355,30 +417,27 @@ def build_rev_lin_dyn_elements(
         Tuple[Array, Array]: set of elements {c} for associative scan
     """
 
-    lambda_f = lqr_params.lqr.Qf@xs_traj[-1] + lqr_params.lqr.qf
-    
+    lambda_f = lqr_params.lqr.Qf @ xs_traj[-1] + lqr_params.lqr.qf
+
     last_element = (jnp.diag(lambda_f), lambda_f)
     print(last_element[0].shape, last_element[1].shape)
 
     @vmap
-    def _generic(aT_mat: Array, 
-                 s_mat: Array,
-                 q_mat: Array, 
-                 q_vec: Array, 
-                 x: Array,
-                 u: Array
-                 ) -> Tuple[Array, Array]:
+    def _generic(
+        a_trsp_mat: Array, s_mat: Array, q_mat: Array, q_vec: Array, x: Array, u: Array
+    ) -> Tuple[Array, Array]:
         """Generate tuple (c_i,a, c_i,b) to parallelise"""
-        b_coef = s_mat@u + q_vec + q_mat@x
-        return aT_mat, b_coef
+        b_coef = s_mat @ u + q_vec + q_mat @ x
+        return a_trsp_mat, b_coef
 
     generic_elements = _generic(
-        lqr_params.lqr.A.transpose(0,2,1),
+        lqr_params.lqr.A.transpose(0, 2, 1),
         lqr_params.lqr.S,
         lqr_params.lqr.Q,
         lqr_params.lqr.q,
         xs_traj[:-1],
-        us_traj)
+        us_traj,
+    )
 
     # print(generic_elements[0].shape, generic_elements[1].shape)
     return tuple(
@@ -387,7 +446,9 @@ def build_rev_lin_dyn_elements(
     )
 
 
-def parallel_reverse_lin_integration(lqr_params: LQRParams, xs_traj: Array, us_traj: Array) -> Array:
+def parallel_reverse_lin_integration(
+    lqr_params: LQRParams, xs_traj: Array, us_traj: Array
+) -> Array:
     """Associative scan for reverse linear dynamics
 
     Args:
@@ -397,7 +458,7 @@ def parallel_reverse_lin_integration(lqr_params: LQRParams, xs_traj: Array, us_t
     Returns:
         Array: state trajectory
     """
-    #delta_us = compute_offset_us(lqr_params)
+    # delta_us = compute_offset_us(lqr_params)
     dyn_elements = build_rev_lin_dyn_elements(lqr_params, xs_traj, us_traj)
     c_as, c_bs = associative_scan(dynamic_operator, dyn_elements, reverse=True)
     return c_bs
@@ -447,5 +508,3 @@ def riccati_operator(elem2, elem1):
     η = temp @ (η2 - J2 @ b1) + η1
     J = temp @ J2 @ A1 + J1
     return A, b, C, η, J
-
-

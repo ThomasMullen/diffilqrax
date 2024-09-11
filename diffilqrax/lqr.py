@@ -1,18 +1,15 @@
 """LQR solver via dynamic programming"""
-from functools import partial
-from typing import Callable, Tuple
+
+from typing import Callable, Tuple, Any
 from jax.typing import ArrayLike
-from jax import Array
 import jax
-from jax import lax
+from jax import lax, Array
 import jax.numpy as jnp
 from jax.scipy.linalg import solve
-from flax.struct import dataclass 
 
 
 from diffilqrax.typs import (
     symmetrise_matrix,
-    symmetrise_tensor,
     ModelDims,
     LQRParams,
     Gains,
@@ -23,9 +20,11 @@ from diffilqrax.typs import (
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
+
 def bmm(arr1: Array, arr2: Array) -> Array:
     """Batch matrix multiplication"""
     return jax.vmap(jnp.matmul)(arr1, arr2)
+
 
 # LQR struct
 LQRBackParams = Tuple[
@@ -34,7 +33,10 @@ LQRBackParams = Tuple[
 
 
 def simulate_trajectory(
-    dynamics: Callable, Us: ArrayLike, params: LQRParams, dims: ModelDims
+    dynamics: Callable[[Array, Array, Array, Any], Array],
+    Us: ArrayLike,
+    params: LQRParams,
+    dims: ModelDims,
 ) -> Array:
     """Simulate forward pass with LQR params
 
@@ -55,7 +57,7 @@ def simulate_trajectory(
         nx = dynamics(t, x, u, lqr)
         return nx, nx
 
-    _, Xs = lax.scan(step, x0, (jnp.arange(horizon), Us))
+    Xs = lax.scan(step, x0, (jnp.arange(horizon), Us))[1]
 
     return jnp.vstack([x0[None], Xs])
 
@@ -110,9 +112,7 @@ def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
         nx = A @ x + B @ u + a
         return nx, (nx, u)
 
-    Xs, Us = lax.scan(
-        dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k)
-    )[1]
+    Xs, Us = lax.scan(dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k))[1]
 
     return jnp.vstack([x0[None], Xs]), Us
 
@@ -124,14 +124,11 @@ def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
 
 def lqr_backward_pass(
     lqr: LQR,
-    expected_change: bool = False,
 ) -> Gains:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
     Args:
         lqr (LQR): LQR parameters
-        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020].
-        Defaults to False.
 
     Returns:
         Gains: Optimal feedback gains.
@@ -145,20 +142,22 @@ def lqr_backward_pass(
         AT, BT, (A, B, a, Q, q, R, r, S) = inps
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        Huu = symmetrise_matrix(R + BT @ V @ B) #.reshape(m_dim, m_dim)
+        Huu = symmetrise_matrix(R + BT @ V @ B)  # .reshape(m_dim, m_dim)
         min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        mu = jnp.maximum(1e-6, 1e-6- min_eval)
-        Hxx = symmetrise_matrix(Q + AT @ V @ A)#.reshape(n_dim, n_dim)
-        Hxu = S + AT @ (V) @ B 
+        mu = jnp.maximum(1e-12, 1e-12 - min_eval)
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)  # .reshape(n_dim, n_dim)
+        Hxu = S + AT @ (V) @ B
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
-        I_mu = mu * BT @B #jnp.eye(m_dim)
-        Hxu_reg = S + AT @ (V + mu*jnp.eye(n_dim)) @ B 
+        I_mu = mu * BT @ B  # jnp.eye(m_dim)
+        Hxu_reg = S + AT @ (V + mu * jnp.eye(n_dim)) @ B
         Huu_reg = Huu + I_mu
         K, k = jnp.hsplit(
             -solve(Huu_reg, jnp.c_[Hxu_reg.T, hu], assume_a="her"), [n_dim]
         )
-        k = k.reshape(-1,)
+        k = k.reshape(
+            -1,
+        )
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
@@ -177,13 +176,12 @@ def lqr_backward_pass(
         reverse=True,
     )
 
-    if not expected_change:
-        return dJ, Ks
-
-    return (dJ, Ks), calc_expected_change(dJ=dJ)
+    return dJ, Ks
 
 
-def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
+def kkt(
+    params: LQRParams, Xs: Array, Us: Array, Lambs: Array
+) -> Tuple[Array, Array, Array]:
     """Define KKT conditions for LQR problem"""
     AT = params.lqr.A.transpose(0, 2, 1)
     BT = params.lqr.B.transpose(0, 2, 1)
@@ -208,10 +206,10 @@ def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
     return dLdXs, dLdUs, dLdLambs
 
 
-def solve_lqr(params: LQRParams):
+def solve_lqr(params: LQRParams) -> Tuple[Gains, Array, Array, Array]:
     "run backward forward sweep to find optimal control"
     # backward
-    _, gains = lqr_backward_pass(params.lqr)
+    gains = lqr_backward_pass(params.lqr)[1]
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
@@ -219,12 +217,10 @@ def solve_lqr(params: LQRParams):
     return gains, Xs, Us, Lambs
 
 
-def solve_lqr_swap_x0(params: LQRParams):
+def solve_lqr_swap_x0(params: LQRParams) -> Tuple[Gains, Array, Array, Array]:
     "run backward forward sweep to find optimal control freeze x0 to zero"
     # backward
-    # print("r", new_params.lqr.r[-10:])
-    _, gains = lqr_backward_pass(params.lqr)
-    # print("k", gains.k[-10:])
+    gains = lqr_backward_pass(params.lqr)[1]
     new_params = LQRParams(jnp.zeros_like(params.x0), params.lqr)
     Xs, Us = lqr_forward_pass(gains, new_params)
     # adjoint

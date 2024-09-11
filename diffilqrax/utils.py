@@ -1,12 +1,10 @@
 """Includes utility functions for the project. Generic functions to generate data, seeds, etc."""
 
-from typing import Tuple
+from typing import Callable, Tuple, Any
+import jax
 from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
-
-from typing import Callable, Tuple, Any
-import jax
 
 
 def keygen(key, nkeys):
@@ -97,4 +95,3 @@ def time_map(fun: Callable) -> Callable:
         Callable: vectorised function along args 1 and 2 0th-axis
     """
     return jax.vmap(fun, in_axes=(0, 0, 0, None))
-    # return jax.vmap(fun, in_axes=(None, 0, 0, None))
