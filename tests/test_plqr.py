@@ -22,6 +22,10 @@ from diffilqrax.typs import (
 )
 from diffilqrax.plqr import (
     solve_plqr,
+    associative_riccati_scan,
+    associative_opt_traj_scan,
+    parallel_reverse_lin_integration,
+    parallel_forward_lin_integration,
 )
 from diffilqrax.lqr import solve_lqr
 from diffilqrax.exact import quad_solve, exact_solve
@@ -92,6 +96,7 @@ def setup_lqr_time(dims: chex.Dimensions,
     # construct LQR
     lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
     return lqr()
+
 class TestPLQR(unittest.TestCase):
     """Test LQR dimensions and dtypes"""
 
@@ -164,6 +169,61 @@ class TestPLQR(unittest.TestCase):
         # validate
         chex.assert_trees_all_close(lmda, Lambs_lqr, rtol=1e-5, atol=1e-5)
         
+    def test_adjoint_via_rev_integration(self):
+        """Test adjoint via reverse integration and v-funs"""
+        # construct LQR and value functions
+        model = LQRParams(self.x0, self.lqr)
+        v_lins, v_quads = associative_riccati_scan(model)
+        # test optimal pass
+        Fs, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(model, v_lins, v_quads)
+        opt_xs = jnp.r_[model.x0[None], cs]
+        opt_us = ks - jnp.einsum("bij,bj->bi", Ks, opt_xs[:-1]) + offsets
+        lmbdas_vfns = jnp.einsum("bij,bj->bi", v_quads, opt_xs) - v_lins
+        lmbdas_rev = parallel_reverse_lin_integration(model, opt_xs, opt_us)
+        # validate
+        chex.assert_trees_all_close(lmbdas_rev, lmbdas_vfns, rtol=1e-5, atol=1e-5)        
+        pass
+    
+    
+    def test_lqr_direct_solve(self):
+        """Test optimal u and x obtained from gains equivalent as an effective problem"""
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
+        fig_dir.mkdir(exist_ok=True)
+        # construct LQR and value functions
+        model = LQRParams(self.x0, self.lqr)
+        v_lins, v_quads = associative_riccati_scan(model)
+        # test optimal pass
+        Fs, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(model, v_lins, v_quads)
+        opt_xs = jnp.r_[model.x0[None], cs]
+        
+        new_model = LQRParams(
+            model.x0, 
+            LQR(
+                model.lqr.A - Ks, 
+                model.lqr.B, 
+                0*model.lqr.a,
+                model.lqr.Q,
+                model.lqr.q,
+                model.lqr.R,
+                model.lqr.r,
+                model.lqr.S,
+                model.lqr.Qf,
+                model.lqr.qf
+                )
+            )
+        
+        new_us = ks + offsets + model.lqr.a
+        new_xs = parallel_forward_lin_integration(new_model, new_us, new_model.lqr.a)
+        
+        # verify
+        fig, ax = subplots(1,2,figsize=(8,3), sharex = True, sharey =True)
+        ax[0].plot(opt_xs)
+        ax[1].plot(new_xs)
+        fig.tight_layout()
+        fig.savefig(f"{fig_dir}/TestPLQR_dual_method.png")
+        chex.assert_trees_all_close(opt_xs, new_xs, rtol=1e-5, atol=1e-5)
+    
+        
     def test_time(self):
         from jax.lib import xla_bridge
         print(jax.default_backend())
@@ -223,8 +283,6 @@ class TestPLQR(unittest.TestCase):
         fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs_time_comp_jitting2.png")
         close()
         
-         
-
 
 if __name__ == "__main__":
     unittest.main()
