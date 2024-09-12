@@ -223,6 +223,13 @@ class PendulumParams(NamedTuple):
 
 
 class ParallelSystem(NamedTuple):
+    """Overloaded ilqr system for parallel dynamics
+
+    Args:
+        model (System): iLQR problem with non-linear cost, costf, dynamics, dims
+        parallel_dynamics (Callable): Take ilqr System, iLQRParams, Us, Xs and return Xs
+        parallel_dynamics_feedback (Callable): Take ilqr System, iLQRParams, Us, Xs, Kx and return Xs
+    """
     model: System
     parallel_dynamics: Callable[[System, iLQRParams, Array, Array], Array]
     parallel_dynamics_feedback: Callable[
