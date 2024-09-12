@@ -52,6 +52,7 @@ def parallel_feedback_lin_dyn_ilqr(
     model: System, params: iLQRParams, Us_init: Array, a_term: Array, Kx: Array
 ) -> Array:
     """Associative scan for forward linear dynamics
+    Function to include feedback + edit the dynamcis to have (A - K)x
 
     Args:
         lqr_params (LQRParams): LQR parameters and initial state
@@ -77,21 +78,28 @@ def pilqr_forward_pass(
 ) -> Tuple[Tuple[Array, Array], float]:
     model = parallel_model.model
 
-    lqr_model_with_a = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = approx_lqr_dyn(model, Xs, Us, params)) #this is the model from delta_x, so delta_x0 = 0
-    lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = lqr_model_with_a.lqr._replace(a = jnp.zeros_like(lqr_model_with_a.lqr.a)))
-    #new_lqr_model = LQRParams(x0 = jnp.zeros_like(params.x0), lqr = lqr_model.lqr._replace(a = jnp.zeros_like(lqr_model.lqr.a))) #this is the model from delta_x, so delta_x0 = 0
-    _, cs, (Ks,_,_,ks), offsets = associative_opt_traj_scan(lqr_model, values.v, values.V, alpha)  #this is a parallel lin scan anyway b
+    lqr_mats = approx_lqr_dyn(model, Xs, Us, params)
+    dyn_bias = lqr_mats.a
+    # this is the model from delta_x, so delta_x0 = 0
+    lqr_model = LQRParams(
+        x0=jnp.zeros_like(params.x0),
+        lqr=lqr_mats._replace(a=jnp.zeros_like(dyn_bias)))
+    # this is a parallel lin scan anyway b
+    _, cs, (Ks,_,_,ks), offsets = associative_opt_traj_scan(lqr_model, values.v, values.V, alpha)  
 
-    ##dyn with Ks edit to linear dyn, u + k + K@x as constant term
-    ##can define function to include feedback + edit the dynamcis to have (A - K)x
+    # dyn with Ks edit to linear dyn, u + k + K@x as constant term
+    # can define function to include feedback + edit the dynamcis to have (A - K)x
     delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs] 
     #Potentially we could return it as output of the parallel scan 
-    delta_Us = ks - bmm(Ks, delta_Xs[:-1]) + offsets # δu_= B @ Kv @ (v - V@c) - Kx@x 
-    #where u = \hat{u} + offset (eq 64 in https://arxiv.org/abs/2104.03186)
+    # δu_= B @ Kv @ (v - V@c) - Kx@x 
+    #where u = u_ + offset (eq 64 in https://arxiv.org/abs/2104.03186)
+    delta_Us = ks - bmm(Ks, delta_Xs[:-1]) + offsets 
     Kxxs = bmm(Ks, Xs[:-1]) +  ks + offsets
-    new_Xs = parallel_model.parallel_dynamics_feedback(model, params,  Us + Kxxs,  lqr_model_with_a.lqr.a, Ks) 
-    #this should define the dynamics incorporating the feedback term that says how to handle delta_X (current state - initial traj)
-    ##we assume Ks@initial_traj is already passed as input so only care about the current state and the parallel_dynamics_feedback function should define how to handle that
+    # NOTE: in the case of a linear system, equivalent to `parallel_feedback_lin_dyn_ilqr`
+    new_Xs = parallel_model.parallel_dynamics_feedback(model, params,  Us + Kxxs,  dyn_bias, Ks) 
+    # this should define the dynamics incorporating the feedback term that says how to handle delta_X (current state - initial traj)
+    # we assume Ks@initial_traj is already passed as input so only care about the current state and the parallel_dynamics_feedback 
+    # function should define how to handle that
     new_Us = Us + delta_Us 
     #new_Xs = parallel_model.parallel_dynamics(model, params,  new_Us,  lqr_model_with_a.lqr.a)
     total_cost = jnp.sum(jax.vmap(model.cost, in_axes = (0,0,0,None))(jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta))
@@ -144,7 +152,7 @@ def pilqr_solver(
             use_linesearch,
             linesearch_wrapped,
             prollout,
-            CostToGo(etas, Js),
+            CostToGo(Js, etas),
             old_Xs,
             old_Us,
             alpha_init,
@@ -169,9 +177,10 @@ def pilqr_solver(
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
+     #TODO : Not sure if this is needed - otherwise should solve with Vs and vs
     Lambs_star = lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
-    ) #TODO : write parallel version
+    )
     return (Xs_star, Us_star, Lambs_star), total_cost, costs
 
 
