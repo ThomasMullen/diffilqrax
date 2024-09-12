@@ -479,7 +479,7 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         chex.assert_trees_all_close(Xs_init, lqr_Xs_sim)
 
         # setup: lqr solver
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params) #, self.sys_dims)
+        Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params) #, self.sys_dims)
         # exercise ilqr solver
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilqr_solver(
             self.model,

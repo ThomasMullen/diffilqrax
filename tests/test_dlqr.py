@@ -178,7 +178,7 @@ class TestDLQR(unittest.TestCase):
 
         @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
         def implicit_solve_lqr(Xs, Us, Lambs, params):
-            gains, Xs, Us, Lambs = solve_lqr(params)
+            Xs, Us, Lambs = solve_lqr(params)
             return Xs, Us, Lambs
 
         def implicit_loss(prms):
@@ -188,7 +188,7 @@ class TestDLQR(unittest.TestCase):
             return jnp.linalg.norm(Us_lqr) ** 2
 
         def direct_loss(prms):
-            gains, Xs, Us, Lambs = solve_lqr(replace_params(prms))
+            Xs, Us, Lambs = solve_lqr(replace_params(prms))
             return jnp.linalg.norm(Us) ** 2
 
         prms = Prms(

@@ -166,15 +166,17 @@ class TestLQR(unittest.TestCase):
         chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         chex.assert_type(Us_lqr, float)
         chex.assert_shape(Us_lqr, self.dims["TM"])
+        chex.assert_type(Ks.K, float)
+        chex.assert_shape(Ks.K, self.dims["TMN"])
+        chex.assert_type(Ks.k, float)
+        chex.assert_shape(Ks.k, self.dims["TM"])
+        assert is_jax_array(Ks.K)
+        assert is_jax_array(Ks.k)
 
     def test_solve_lqr(self):
         """test LQR solution shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
-        chex.assert_type(gains_lqr.K, float)
-        chex.assert_shape(gains_lqr.K, self.dims["TMN"])
-        chex.assert_type(gains_lqr.k, float)
-        chex.assert_shape(gains_lqr.k, self.dims["TM"])
+        Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         chex.assert_type(Xs_lqr, float)
         chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         chex.assert_type(Us_lqr, float)
@@ -182,8 +184,6 @@ class TestLQR(unittest.TestCase):
         chex.assert_type(Lambs_lqr, float)
         chex.assert_shape(Lambs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
         # verify output jax arrays
-        assert is_jax_array(gains_lqr.K)
-        assert is_jax_array(gains_lqr.k)
         assert is_jax_array(Xs_lqr)
         assert is_jax_array(Us_lqr)
         assert is_jax_array(Lambs_lqr)
@@ -191,7 +191,7 @@ class TestLQR(unittest.TestCase):
     def test_solution_output(self):
         """test LQR solution output"""
         params = LQRParams(self.x0, self.lqr)
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
+        Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
         fig_dir.mkdir(exist_ok=True)
         fig, ax = subplots(1,3,figsize=(10,3))
@@ -209,7 +209,7 @@ class TestLQR(unittest.TestCase):
         fig_dir.mkdir(exist_ok=True)
 
         params = LQRParams(self.x0, self.lqr)
-        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=params)
+        Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=params)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(params, Xs_dir, Us_dir, Lambs_dir)
         # Plot the KKT residuals
@@ -289,7 +289,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         fig_dir.mkdir(exist_ok=True)
         print("Make tmp dir")
         # Exercise the LQR solver function
-        _, Xs_dir, Us_dir, _ = solve_lqr(self.params)
+        Xs_dir, Us_dir, _ = solve_lqr(self.params)
         print("Lqr solve")
         Xs_quad, Us_quad = quad_solve(self.params, self.sys_dims, self.x0)
         print("CG solve")
@@ -318,7 +318,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
         fig_dir.mkdir(exist_ok=True)
 
-        _, Xs_dir, Us_dir, Lambs_dir = solve_lqr(self.params)
+        Xs_dir, Us_dir, Lambs_dir = solve_lqr(self.params)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
         # Plot the KKT residuals

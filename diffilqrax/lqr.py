@@ -206,7 +206,7 @@ def kkt(
     return dLdXs, dLdUs, dLdLambs
 
 
-def solve_lqr(params: LQRParams) -> Tuple[Gains, Array, Array, Array]:
+def solve_lqr(params: LQRParams) -> Tuple[Array, Array, Array]:
     "run backward forward sweep to find optimal control"
     # backward
     gains = lqr_backward_pass(params.lqr)[1]
@@ -214,10 +214,10 @@ def solve_lqr(params: LQRParams) -> Tuple[Gains, Array, Array, Array]:
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, params)
-    return gains, Xs, Us, Lambs
+    return Xs, Us, Lambs
 
 
-def solve_lqr_swap_x0(params: LQRParams) -> Tuple[Gains, Array, Array, Array]:
+def solve_lqr_swap_x0(params: LQRParams) -> Tuple[Array, Array, Array]:
     "run backward forward sweep to find optimal control freeze x0 to zero"
     # backward
     gains = lqr_backward_pass(params.lqr)[1]
@@ -225,4 +225,4 @@ def solve_lqr_swap_x0(params: LQRParams) -> Tuple[Gains, Array, Array, Array]:
     Xs, Us = lqr_forward_pass(gains, new_params)
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, new_params)
-    return gains, Xs, Us, Lambs
+    return Xs, Us, Lambs

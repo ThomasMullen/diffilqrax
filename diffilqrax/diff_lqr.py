@@ -72,7 +72,7 @@ def get_qra_bar(
         S=lqr.S,
     )
     swapped_params = LQRParams(params.x0, swapped_lqr)
-    _, q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params)
+    q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params)
     return (
         q_bar,
         jnp.r_[
@@ -134,14 +134,14 @@ def dlqr(dims: ModelDims, params: LQRParams, tau_guess: Array) -> Array:
         Array: Concatenated optimal state and control sequence along axis=1.
     """
     sol = solve_lqr(params)  #  tau_guess)
-    _, Xs_star, Us_star, _ = sol
+    Xs_star, Us_star, _ = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     return tau_star
 
 
 def fwd_dlqr(
     dims: ModelDims, params: LQRParams, tau_guess: Array
-) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array, Array]]]:
+) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]:
     """Solves the forward differential linear quadratic regulator (DLQR) problem.
 
     Args:
@@ -155,7 +155,7 @@ def fwd_dlqr(
     """
     lqr = params.lqr
     sol = solve_lqr(params)
-    _, Xs_star, Us_star, _ = sol
+    Xs_star, Us_star, _ = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     new_params = LQRParams(params.x0, new_lqr)
@@ -185,7 +185,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     Returns : params_bar, i.e tuple with gradients wrt to x0, LQR params, and horizon
     """
     params, sol = res
-    (_, Xs_star, Us_star, Lambs) = sol
+    Xs_star, Us_star, Lambs = sol
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
 
@@ -211,7 +211,7 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
         Array: Concatenated optimal state and control sequence along axis=1.
     """
     # sol = solve_lqr(params, dims)  #  tau_guess)
-    # _, Xs_star, Us_star, _ = sol
+    # Xs_star, Us_star, _ = sol
     # tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     return tau_star  # jnp.nan_to_num(tau_star)*(1 - jnp.isnan(jnp.sum(tau_star)))
     # return tau_star
@@ -219,7 +219,7 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
 
 def fwd_dllqr(
     dims: ModelDims, params: LQRParams, tau_star: Array
-) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array, Array]]]:
+) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]:
     """Solves the forward differential linear quadratic regulator (DLQR) problem.
 
     Args:
@@ -233,7 +233,7 @@ def fwd_dllqr(
     """
     lqr = params.lqr
     sol = solve_lqr(params)
-    gains, Xs_star, Us_star, Lambs = sol
+    Xs_star, Us_star, Lambs = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     new_params = LQRParams(params.x0, new_lqr)
@@ -243,7 +243,7 @@ def fwd_dllqr(
 def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     """reverse mode for DLQR"""
     params, sol = res
-    (_, Xs_star, Us_star, Lambs) = sol
+    Xs_star, Us_star, Lambs = sol
     # isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
