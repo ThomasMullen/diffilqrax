@@ -179,7 +179,7 @@ class TestiLQRStructs(unittest.TestCase):
     def test_ilQR_solver(self):
         """test ilqr solver with integrater dynamics"""
         # setup
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_ilqr")
         fig_dir.mkdir(exist_ok=True)
         (Xs_init, _), initial_cost = ilqr.ilqr_simulate(
             self.model, self.Us_init, self.params
@@ -249,7 +249,7 @@ class TestiLQRExactSolution(unittest.TestCase):
 
     def setUp(self):
         # set fig directory
-        self.fig_dir = Path(Path(getcwd()), "fig_dump")
+        self.fig_dir = Path(Path(getcwd()), "fig_dump", "seq_ilqr")
         self.fig_dir.mkdir(exist_ok=True)
         # load fixtures
         self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")

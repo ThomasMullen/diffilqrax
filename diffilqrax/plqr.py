@@ -11,6 +11,7 @@ from jax.lib import xla_bridge
 
 from diffilqrax.typs import (
     symmetrise_matrix,
+    symmetrise_tensor,
     LQRParams,
     CostToGo,
     LQR,
@@ -65,7 +66,7 @@ def build_associative_riccati_elements(
         C = jnp.zeros((n_dims, n_dims), dtype=float)
         η = -model.lqr.qf
         J = model.lqr.Qf
-        return A, b, C, η, J
+        return A, b, symmetrise_matrix(C), η, symmetrise_matrix(J)
 
     def _generic(model: LQRParams):
         """Generate generic Riccati element.
@@ -87,7 +88,7 @@ def build_associative_riccati_elements(
         # redefines the offset term in the dynamics to include the linear term in input
         # b = model.lqr.a - jax.vmap(jnp.matmul)(B, jnp.einsum("ijk,ik->ij", R_invs, r))
         b = model.lqr.a - jnp.einsum("bij,bjk,bk->bi", B, R_invs, r)
-        return A, b, C, η, J
+        return A, b, symmetrise_tensor(C), η, symmetrise_tensor(J)
 
     generic_elems = _generic(model)
     last_elem = _last(model)
@@ -109,7 +110,7 @@ def associative_riccati_scan(model: LQRParams) -> Tuple[Array, Array]:
     """
     lqr_elements = build_associative_riccati_elements(model)
     _, _, _, etas, Js = associative_scan(riccati_operator, lqr_elements, reverse=True)
-    return etas, Js
+    return etas, symmetrise_tensor(Js)
 
 
 def get_dJs(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> CostToGo:
@@ -200,7 +201,10 @@ def build_associative_lin_dyn_elements(
         offset = -Rinv @ lqr_init.r
         c = lqr_init.a + lqr_init.B @ offset
         # TODO: change to dynamic regularisation
-        pinv = jsc.linalg.inv(lqr_init.B.T @ J0 @ lqr_init.B + lqr_init.R + mu)
+        Huu = symmetrise_matrix(lqr_init.B.T @ J0 @ lqr_init.B + lqr_init.R)
+        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
+        mu = jnp.maximum(1e-12, 1e-12 - min_eval)
+        pinv = jsc.linalg.inv(Huu + mu)
         Kv = pinv @ lqr_init.B.T
         Kc = Kv @ J0
         Kx = Kc @ lqr_init.A
@@ -235,8 +239,11 @@ def build_associative_lin_dyn_elements(
         # ̃n=cn+LnUn Mnrn+Lnsn
         # 0.5(u - s)U(u-s) = 0.ruUu - sUu + 0.5sUs -> r = -sU
         # c_tilde = c - r@U^{-1}
-        P = lqr.B.T @ J @ lqr.B + lqr.R
         Rinv = jsc.linalg.inv(lqr.R + mu)
+        
+        P = symmetrise_matrix(lqr.B.T @ J @ lqr.B + lqr.R)
+        min_eval = jnp.min(jnp.linalg.eigh(P)[0])
+        mu = jnp.maximum(1e-12, 1e-12 - min_eval)
         pinv = jsc.linalg.inv(P + mu)
         Kv = pinv @ lqr.B.T
         # Kv_eta for including eta
