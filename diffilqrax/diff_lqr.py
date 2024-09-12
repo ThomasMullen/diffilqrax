@@ -2,21 +2,37 @@
 Module contains functions for solving the differential linear quadratic regulator (DLQR) problem.
 """
 
-from functools import partial
 from typing import Tuple
+from functools import partial
 from jax import Array, custom_vjp
 import jax.numpy as jnp
 from jax.numpy import matmul as mm
+
 from diffilqrax.lqr import (
     # kkt,
     solve_lqr,
     solve_lqr_swap_x0,
-    symmetrise_tensor,
     bmm,
 )
-from diffilqrax.typs import LQRParams, ModelDims, LQR
+from diffilqrax.typs import LQRParams, ModelDims, LQR, symmetrise_matrix, symmetrise_tensor
 
 # v_outer = jax.vmap(jnp.outer) # vectorized outer product through time i.e. 'ij,ik->ijk'
+
+
+def offset_lqr(lqr: LQR, x_stars: Array, u_stars: Array) -> LQR:
+    """Adjust linear terms of LQR cost along nominal trajectory"""
+    return LQR(
+        A=lqr.A,
+        B=lqr.B,
+        a=jnp.zeros_like(lqr.a),
+        Q=lqr.Q,
+        q=lqr.q - bmm(lqr.Q, x_stars[:-1]) - bmm(lqr.S, u_stars),
+        Qf=lqr.Qf,
+        qf=lqr.qf - mm(lqr.Qf, x_stars[-1]),
+        R=lqr.R,
+        r=lqr.r - bmm(lqr.R, u_stars) - bmm(lqr.S.transpose(0, 2, 1), x_stars[:-1]),
+        S=lqr.S,
+    )
 
 
 def get_qra_bar(
@@ -52,6 +68,35 @@ def get_qra_bar(
     swapped_params = LQRParams(params.x0, swapped_lqr)
     _, q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params)
     return q_bar, jnp.r_[r_bar, jnp.zeros((1,dims.m,))], a_bar
+
+
+def build_ajoint_lqr(dims: ModelDims, params: LQRParams, tau_star: Array, lambs: Array, tau_bar: Array) -> Array:
+    """Helper function to build lqr problem with reverse gradients"""
+    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar[:-1], tau_bar[-1])
+    c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
+    F_bar = jnp.einsum("ij,ik->ijk", a_bar[1:], tau_star[:-1]) + jnp.einsum(
+        "ij,ik->ijk", lambs[1:], c_bar[:-1]
+    )
+    C_bar = symmetrise_tensor(
+        jnp.einsum("ij,ik->ijk", c_bar, tau_star)
+    )  # factor of 2 included in symmetrization
+    Q_bar, R_bar = C_bar[:, :dims.n, :dims.n], C_bar[:, dims.n:, dims.n:]
+    S_bar = 2 * C_bar[:, :dims.n, dims.n:]
+    A_bar, B_bar = F_bar[..., :dims.n], F_bar[..., dims.n:]
+    LQR_bar = LQR(
+        A=A_bar,
+        B=B_bar,
+        a=a_bar[1:],
+        Q=Q_bar[:-1],
+        q=q_bar[:-1],
+        Qf=Q_bar[-1],
+        qf=q_bar[-1],
+        R=R_bar[:-1],
+        r=r_bar[:-1],
+        S=S_bar[:-1],
+    )
+    return LQRParams(x0=a_bar[0], lqr=LQR_bar)
+
 
 
 @partial(custom_vjp, nondiff_argnums=(0,))
@@ -93,18 +138,7 @@ def fwd_dlqr(
     sol = solve_lqr(params)
     gains, Xs_star, Us_star, Lambs = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    new_lqr = LQR(
-        A=lqr.A,
-        B=lqr.B,
-        a=jnp.zeros_like(lqr.a),
-        Q=lqr.Q,
-        q=lqr.q - bmm(lqr.Q, Xs_star[:-1]) - bmm(lqr.S, Us_star),
-        Qf=lqr.Qf,
-        qf=lqr.qf - mm(lqr.Qf, Xs_star[-1]),
-        R=lqr.R,
-        r=lqr.r - bmm(lqr.R, Us_star) - bmm(lqr.S.transpose(0, 2, 1), Xs_star[:-1]),
-        S=lqr.S,
-    )
+    new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     new_params = LQRParams(params.x0, new_lqr)
     return tau_star, (new_params, sol)  # check whether params or new_params
 
@@ -135,32 +169,9 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     (_, Xs_star, Us_star, Lambs) = sol
     tau_bar, tau_bar_f = tau_bar[:-1], tau_bar[-1]
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    n = dims.n
-    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar, tau_bar_f)
-    c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
-    F_bar = jnp.einsum("ij,ik->ijk", a_bar[1:], tau_star[:-1]) + jnp.einsum(
-        "ij,ik->ijk", Lambs[1:], c_bar[:-1]
-    )
-    C_bar = symmetrise_tensor(
-        jnp.einsum("ij,ik->ijk", c_bar, tau_star)
-    )  # factor of 2 included in symmetrization
-    Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
-    S_bar = 2 * C_bar[:, :n, n:]
-    A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
-    LQR_bar = LQR(
-        A=A_bar,
-        B=B_bar,
-        a=a_bar[1:],
-        Q=Q_bar[:-1],
-        q=q_bar[:-1],
-        Qf=Q_bar[-1],
-        qf=q_bar[-1],
-        R=R_bar[:-1],
-        r=r_bar[:-1],
-        S=S_bar[:-1],
-    )
-    x0_bar = a_bar[0]  # Lambs[0] #jnp.zeros_like(params.x0) #Lambs[0]#
-    return LQRParams(x0=x0_bar, lqr=LQR_bar), None
+    lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
+
+    return lqr_bar_problem, None
 
 
 dlqr.defvjp(fwd_dlqr, rev_dlqr)
@@ -206,18 +217,7 @@ def fwd_dllqr(
     sol = solve_lqr(params)
     gains, Xs_star, Us_star, Lambs = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    new_lqr = LQR(
-        A=lqr.A,
-        B=lqr.B,
-        a=jnp.zeros_like(lqr.a),
-        Q=lqr.Q,
-        q=lqr.q - bmm(lqr.Q, Xs_star[:-1]) - bmm(lqr.S, Us_star),
-        Qf=lqr.Qf,
-        qf=lqr.qf - mm(lqr.Qf, Xs_star[-1]),
-        R=lqr.R,
-        r=lqr.r - bmm(lqr.R, Us_star) - bmm(lqr.S.transpose(0, 2, 1), Xs_star[:-1]),
-        S=lqr.S,
-    )
+    new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     new_params = LQRParams(params.x0, new_lqr)
     return tau_star, (new_params, sol)  # check whether params or new_params
 
@@ -229,32 +229,9 @@ def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     tau_bar, tau_bar_f = tau_bar[:-1], tau_bar[-1]
     #isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    n = dims.n
-    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar, tau_bar_f)
-    c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
-    F_bar = jnp.einsum("ij,ik->ijk", a_bar[1:], tau_star[:-1]) + jnp.einsum(
-        "ij,ik->ijk", Lambs[1:], c_bar[:-1]
-    )
-    C_bar = symmetrise_tensor(
-        jnp.einsum("ij,ik->ijk", c_bar, tau_star)
-    )  # factor of 2 included in symmetrization
-    Q_bar, R_bar = C_bar[:, :n, :n], C_bar[:, n:, n:]
-    S_bar = 2 * C_bar[:, :n, n:]
-    A_bar, B_bar = F_bar[..., :n], F_bar[..., n:]
-    LQR_bar = LQR(
-        A=A_bar,
-        B=B_bar,
-        a=a_bar[1:],
-        Q=Q_bar[:-1],
-        q=q_bar[:-1],
-        Qf=Q_bar[-1],
-        qf=q_bar[-1],
-        R=R_bar[:-1],
-        r=r_bar[:-1],
-        S=S_bar[:-1],
-    )
-    x0_bar = a_bar[0]  # Lambs[0] #jnp.zeros_like(params.x0) #Lambs[0]#
-    return LQRParams(x0=x0_bar, lqr=LQR_bar), None
+    lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
+
+    return lqr_bar_problem, None
 
 
 dllqr.defvjp(fwd_dllqr, rev_dllqr)

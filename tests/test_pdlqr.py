@@ -5,11 +5,11 @@ Unit tests for the differentiable LQR solver
 from typing import NamedTuple
 import unittest
 import chex
+import numpy as onp
 import jax
 from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
-import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
 from diffilqrax.typs import LQRParams, ModelDims, LQR
