@@ -124,7 +124,7 @@ def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
 
 def lqr_backward_pass(
     lqr: LQR,
-) -> Gains:
+) -> Tuple[float, Gains]:
     """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
 
     Args:

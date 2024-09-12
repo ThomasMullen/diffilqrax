@@ -27,11 +27,11 @@ def offset_lqr(lqr: LQR, x_stars: Array, u_stars: Array) -> LQR:
         a=jnp.zeros_like(lqr.a),
         Q=lqr.Q,
         q=lqr.q - bmm(lqr.Q, x_stars[:-1]) - bmm(lqr.S, u_stars),
-        Qf=lqr.Qf,
-        qf=lqr.qf - mm(lqr.Qf, x_stars[-1]),
         R=lqr.R,
         r=lqr.r - bmm(lqr.R, u_stars) - bmm(lqr.S.transpose(0, 2, 1), x_stars[:-1]),
         S=lqr.S,
+        Qf=lqr.Qf,
+        qf=lqr.qf - mm(lqr.Qf, x_stars[-1]),
     )
 
 
@@ -136,7 +136,7 @@ def fwd_dlqr(
     """
     lqr = params.lqr
     sol = solve_lqr(params)
-    gains, Xs_star, Us_star, Lambs = sol
+    _, Xs_star, Us_star, _ = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     new_params = LQRParams(params.x0, new_lqr)
@@ -167,7 +167,6 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     """
     params, sol = res
     (_, Xs_star, Us_star, Lambs) = sol
-    tau_bar, tau_bar_f = tau_bar[:-1], tau_bar[-1]
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
 

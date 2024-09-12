@@ -52,7 +52,7 @@ def rev_pdllqr(dims: ModelDims, res:Tuple[LQRParams, Tuple[Array, Array, Array]]
     params, sol = res
     (Xs_star, Us_star, Lambs) = sol
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    return build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
+    return build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar), None
 
 
 pdllqr.defvjp(fwd_pdllqr, rev_pdllqr)
@@ -107,7 +107,7 @@ def rev_pdlqr(dims: ModelDims, res:Tuple[LQRParams, Tuple[Array, Array, Array]],
     params, sol = res
     (Xs_star, Us_star, Lambs) = sol
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    return build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
+    return build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar), None
 
 
 pdlqr.defvjp(fwd_pdlqr, rev_pdlqr)

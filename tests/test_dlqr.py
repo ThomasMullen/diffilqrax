@@ -154,7 +154,7 @@ class TestDLQR(unittest.TestCase):
         test dlqr struct, shapes and solutions compared to direct gradients,
         and implicit gradients
         """
-        def replace_params(p):
+        def replace_params(p:Prms)->LQRParams:
             lqr = LQR(
                 A=p.A,
                 B=self.params.lqr.B,
