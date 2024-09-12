@@ -10,7 +10,7 @@ from jax.numpy import matmul as mm
 from diffilqrax.plqr import (
     # kkt,
     solve_plqr,
-    solve_plqr_swap_x0
+    solve_plqr_swap_x0,
 )
 from diffilqrax.lqr import bmm
 from diffilqrax.diff_lqr import build_ajoint_lqr, offset_lqr
@@ -47,7 +47,9 @@ def fwd_pdllqr(
     return tau_star, (new_params, sol)  # check whether params or new_params
 
 
-def rev_pdllqr(dims: ModelDims, res:Tuple[LQRParams, Tuple[Array, Array, Array]], tau_bar:Array) -> LQRParams:
+def rev_pdllqr(
+    dims: ModelDims, res: Tuple[LQRParams, Tuple[Array, Array, Array]], tau_bar: Array
+) -> LQRParams:
     """reverse mode for DLQR"""
     params, sol = res
     (Xs_star, Us_star, Lambs) = sol
@@ -56,7 +58,6 @@ def rev_pdllqr(dims: ModelDims, res:Tuple[LQRParams, Tuple[Array, Array, Array]]
 
 
 pdllqr.defvjp(fwd_pdllqr, rev_pdllqr)
-
 
 
 @partial(custom_vjp, nondiff_argnums=(0,))
@@ -103,7 +104,9 @@ def fwd_pdlqr(
     return tau_star, (new_params, sol)  # check whether params or new_params
 
 
-def rev_pdlqr(dims: ModelDims, res:Tuple[LQRParams, Tuple[Array, Array, Array]], tau_bar:Array) -> LQRParams:
+def rev_pdlqr(
+    dims: ModelDims, res: Tuple[LQRParams, Tuple[Array, Array, Array]], tau_bar: Array
+) -> LQRParams:
     params, sol = res
     (Xs_star, Us_star, Lambs) = sol
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]

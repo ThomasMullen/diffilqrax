@@ -187,7 +187,7 @@ def build_associative_lin_dyn_elements(
                 to k term in δu = Kx + αk
 
         Returns:
-            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]: 
+            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]:
                 (Efective state dynamics initialised with 0,
                 effective bias initialised with initial state), Ks, offset
         """
@@ -230,7 +230,7 @@ def build_associative_lin_dyn_elements(
             alpha (float): lineasearch step parameter.
 
         Returns:
-            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]: 
+            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]:
                 (Efective state dynamics,
                 effective bias), Ks, offset
         """
@@ -240,7 +240,7 @@ def build_associative_lin_dyn_elements(
         # 0.5(u - s)U(u-s) = 0.ruUu - sUu + 0.5sUs -> r = -sU
         # c_tilde = c - r@U^{-1}
         Rinv = jsc.linalg.inv(lqr.R + mu)
-        
+
         P = symmetrise_matrix(lqr.B.T @ J @ lqr.B + lqr.R)
         min_eval = jnp.min(jnp.linalg.eigh(P)[0])
         mu = jnp.maximum(1e-12, 1e-12 - min_eval)
@@ -290,7 +290,7 @@ def associative_opt_traj_scan(
         alpha (float, optional): linesearch step parameter. Defaults to 1.0.
 
     Returns:
-        Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]: 
+        Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]:
             Effective state dynamics, effective bias, Ks, offset
     """
     # need to add vmaps
@@ -322,24 +322,6 @@ def solve_plqr(model: LQRParams) -> Tuple[Array, Array, Array]:
     Us = ks - jnp.einsum("bij,bj->bi", Ks, Xs[:-1]) + offsets
     Lambdas = jnp.einsum("bij,bj->bi", Vs, Xs) - vs
     return (Xs, Us, Lambdas)
-
-
-# TODO: Validation tests
-# TEST 1:
-# new_Lambdas = parallel_reverse_lin_integration(model, new_Xs, updated_Us)
-# TEST 2:
-# NOTE: new_xs already found new_model redundant - could be useful for testing though
-# new_model = LQRParams(
-#     model.x0, LQR(
-#                 model.lqr.A - Kx, model.lqr.B, 0*model.lqr.a,
-#                 model.lqr.Q, model.lqr.q,
-#                 model.lqr.R, model.lqr.r,
-#                 model.lqr.S,
-#                 model.lqr.Qf, model.lqr.qf
-#                 ))
-# new_Us = Ks[-1] + offsets + model.lqr.a ##not entirely sure if this is the right way to handle a -- 
-# it seems to work and think it makes sense to offset what we pass in the parallel_lin_scan, but need to double check
-# new_Xs = parallel_forward_lin_integration(new_model, new_Us)
 
 
 def solve_plqr_swap_x0(model: LQRParams):

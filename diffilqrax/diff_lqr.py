@@ -14,7 +14,13 @@ from diffilqrax.lqr import (
     solve_lqr_swap_x0,
     bmm,
 )
-from diffilqrax.typs import LQRParams, ModelDims, LQR, symmetrise_matrix, symmetrise_tensor
+from diffilqrax.typs import (
+    LQRParams,
+    ModelDims,
+    LQR,
+    symmetrise_matrix,
+    symmetrise_tensor,
+)
 
 # v_outer = jax.vmap(jnp.outer) # vectorized outer product through time i.e. 'ij,ik->ijk'
 
@@ -67,10 +73,24 @@ def get_qra_bar(
     )
     swapped_params = LQRParams(params.x0, swapped_lqr)
     _, q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params)
-    return q_bar, jnp.r_[r_bar, jnp.zeros((1,dims.m,))], a_bar
+    return (
+        q_bar,
+        jnp.r_[
+            r_bar,
+            jnp.zeros(
+                (
+                    1,
+                    dims.m,
+                )
+            ),
+        ],
+        a_bar,
+    )
 
 
-def build_ajoint_lqr(dims: ModelDims, params: LQRParams, tau_star: Array, lambs: Array, tau_bar: Array) -> Array:
+def build_ajoint_lqr(
+    dims: ModelDims, params: LQRParams, tau_star: Array, lambs: Array, tau_bar: Array
+) -> Array:
     """Helper function to build lqr problem with reverse gradients"""
     q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar[:-1], tau_bar[-1])
     c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
@@ -80,9 +100,9 @@ def build_ajoint_lqr(dims: ModelDims, params: LQRParams, tau_star: Array, lambs:
     C_bar = symmetrise_tensor(
         jnp.einsum("ij,ik->ijk", c_bar, tau_star)
     )  # factor of 2 included in symmetrization
-    Q_bar, R_bar = C_bar[:, :dims.n, :dims.n], C_bar[:, dims.n:, dims.n:]
-    S_bar = 2 * C_bar[:, :dims.n, dims.n:]
-    A_bar, B_bar = F_bar[..., :dims.n], F_bar[..., dims.n:]
+    Q_bar, R_bar = C_bar[:, : dims.n, : dims.n], C_bar[:, dims.n :, dims.n :]
+    S_bar = 2 * C_bar[:, : dims.n, dims.n :]
+    A_bar, B_bar = F_bar[..., : dims.n], F_bar[..., dims.n :]
     LQR_bar = LQR(
         A=A_bar,
         B=B_bar,
@@ -96,7 +116,6 @@ def build_ajoint_lqr(dims: ModelDims, params: LQRParams, tau_star: Array, lambs:
         S=S_bar[:-1],
     )
     return LQRParams(x0=a_bar[0], lqr=LQR_bar)
-
 
 
 @partial(custom_vjp, nondiff_argnums=(0,))
@@ -194,8 +213,8 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
     # sol = solve_lqr(params, dims)  #  tau_guess)
     # _, Xs_star, Us_star, _ = sol
     # tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    return tau_star #jnp.nan_to_num(tau_star)*(1 - jnp.isnan(jnp.sum(tau_star)))
-    #return tau_star
+    return tau_star  # jnp.nan_to_num(tau_star)*(1 - jnp.isnan(jnp.sum(tau_star)))
+    # return tau_star
 
 
 def fwd_dllqr(
@@ -225,7 +244,7 @@ def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     """reverse mode for DLQR"""
     params, sol = res
     (_, Xs_star, Us_star, Lambs) = sol
-    #isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
+    # isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
 
