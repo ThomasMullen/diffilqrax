@@ -225,7 +225,6 @@ def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     """reverse mode for DLQR"""
     params, sol = res
     (_, Xs_star, Us_star, Lambs) = sol
-    tau_bar, tau_bar_f = tau_bar[:-1], tau_bar[-1]
     #isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
