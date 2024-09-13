@@ -1,10 +1,12 @@
 """Define data structures and types"""
 
 from typing import NamedTuple, Callable, Any, Union, Tuple, Optional
-from jax import Array
+from functools import partial
+from jax import lax, Array
 from jax.typing import ArrayLike
 from flax import struct
 from diffilqrax.utils import linearise, quadratise
+
 
 def symmetrise_tensor(x: Array) -> Array:
     """Symmetrise tensor"""
@@ -39,8 +41,48 @@ class CostToGo(NamedTuple):
 
     V: ArrayLike
     v: ArrayLike
-    
-    
+
+
+CostFn = Callable[[int, Array, Array, Optional[Any]], Array]
+FCostFn = Callable[[Array, Optional[Any]], Array]
+DynFn = Callable[[int, Array, Array, Optional[Any]], Array]
+LinDynFn = Callable[[int, Array, Array, Optional[Any]], Tuple[Array, Array]]
+LinCostFn = Callable[[int, Array, Array, Optional[Any]], Tuple[Array, Array]]
+QuadCostFn = Callable[
+    [int, Array, Array, Optional[Any]], Tuple[Tuple[Array, Array], Tuple[Array, Array]]
+]
+
+
+# @partial(struct.dataclass, frozen=True, slots=True)
+# class SystemDC:
+#     """iLQR System (Dataclass structure)
+
+#     cost : Callable
+#         running cost l(t, x, u, params)
+#     costf : Callable
+#         final state cost lf(xf, params)
+#     dynamics : Callable
+#         dynamical update f(t, x, u, params)
+#     dims : ModelDims
+#         ilQR evaluate time horizon, dt, state and input dimension
+#     """
+
+#     cost: CostFn
+#     costf: FCostFn
+#     dynamics: DynFn
+#     dims: ModelDims
+#     lin_dyn: LinDynFn
+#     lin_cost: LinCostFn
+#     quad_cost: QuadCostFn
+
+#     def __post_init__(self):
+#         if self.lin_dyn is None:
+#             self.lin_dyn = linearise(self.dynamics)
+#         if self.quad_cost is None:
+#             self.quad_cost = quadratise(self.cost)
+#         if self.lin_cost is None:
+#             self.lin_cost = linearise(self.cost)
+
 
 class System:
     """iLQR System
@@ -54,23 +96,43 @@ class System:
     dims : ModelDims
         ilQR evaluate time horizon, dt, state and input dimension
     """
-    def __init__(self, cost: Callable, costf: Callable, dynamics: Callable, dims: ModelDims, lin_dyn: Optional[Callable] = None, lin_cost: Optional[Callable] = None, quad_cost: Optional[Callable] = None):
+
+    def __init__(
+        self,
+        cost: CostFn,
+        costf: FCostFn,
+        dynamics: DynFn,
+        dims: ModelDims,
+        lin_dyn: Optional[LinDynFn] = None,
+        lin_cost: Optional[LinCostFn] = None,
+        quad_cost: Optional[QuadCostFn] = None,
+    ):
+        """System constructor
+
+        Args:
+            cost (CostFn): Non-linear cost function (t, x, u, params)
+            costf (FCostFn): non-linear terminal cost function (xf, params)
+            dynamics (DynFn): non-linear dynamics function (t, x, u, params)
+            dims (ModelDims): system dimensions e.g. n, m, horizon, dt
+            lin_dyn (Optional[LinDynFn], optional): first order derivative of non-linear dynamics 
+                    w.r.t. x. Defaults to None explicitly take fwd jac of dynamics.
+            lin_cost (Optional[LinCostFn], optional): first order derivative of non-linear cost fn
+                    w.r.t x and u. Defaults to None, take fwd jac of cost.
+            quad_cost (Optional[QuadCostFn], optional): second order derivative of cost fn
+                    w.r.t (xx, xu), (ux, uu). Defaults to None take hessian of cost fn.
+        """
         self.cost = cost
         self.costf = costf
         self.dynamics = dynamics
         self.dims = dims
+        # self.lin_dyn = lax.cond(lin_dyn is None, lambda _: linearise(self.dynamics), lambda x: x)
+        # self.lin_cost = lax.cond(lin_cost is None, lambda _: linearise(self.cost), lambda x: x)
+        # self.quad_cost = lax.cond(quad_cost is None, lambda _: quadratise(self.cost), lambda x: x)
         self.lin_dyn = linearise(self.dynamics) if lin_dyn is None else lin_dyn
         self.lin_cost = linearise(self.cost) if lin_cost is None else lin_cost
-        self.quad_cost = quadratise(self.cost) if quad_cost is None else quad_cost
-    # cost: Callable[[int, Array, Array, Optional[Any]], Array]
-    # costf: Callable[[Array, Optional[Any]], Array]
-    # dynamics: Callable[[int, ArrayLike, ArrayLike, Optional[Any]], Array]
-    # dims: ModelDims
-    # lin_dyn: Callable = linearise(dynamics) #Callable 
-    # lin_cost: Callable = linearise(cost)
-    # quad_cost: Callable  = quadratise(dynamics)
+        self.quad_cost =  quadratise(self.cost) if quad_cost is None else quad_cost
 
-    
+
 class LQR(NamedTuple):
     """LQR params
 
@@ -106,13 +168,22 @@ class LQR(NamedTuple):
 
 
 RiccatiStepParams = Tuple[
-    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike,
-    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
+    ArrayLike,
 ]
 
 
 class LQRParams(NamedTuple):
     """Contains initial states and LQR parameters"""
+
     x0: ArrayLike
     lqr: Union[LQR, Tuple[ArrayLike]]
 
@@ -152,7 +223,15 @@ class PendulumParams(NamedTuple):
 
 
 class ParallelSystem(NamedTuple):
+    """Overloaded ilqr system for parallel dynamics
+
+    Args:
+        model (System): iLQR problem with non-linear cost, costf, dynamics, dims
+        parallel_dynamics (Callable): Take ilqr System, iLQRParams, Us, Xs and return Xs
+        parallel_dynamics_feedback (Callable): Take ilqr System, iLQRParams, Us, Xs, Kx and return Xs
+    """
     model: System
-    parallel_dynamics: Callable[[System, iLQRParams,  Array, Array], Array]
-    parallel_dynamics_feedback: Callable[[System, iLQRParams,  Array, Array, Array], Array]
-    
+    parallel_dynamics: Callable[[System, iLQRParams, Array, Array], Array]
+    parallel_dynamics_feedback: Callable[
+        [System, iLQRParams, Array, Array, Array], Array
+    ]

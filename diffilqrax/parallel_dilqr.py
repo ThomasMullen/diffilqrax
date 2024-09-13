@@ -29,13 +29,15 @@ def make_local_lqr(model, Xs_star, Us_star, params):
         r=lqr.r - bmm(lqr.R, Us_star) - bmm(lqr.S.transpose(0, 2, 1), Xs_star[:-1]),
         S=lqr.S,
     )
-    #get the local LQR like that, and then gradients wrt to that from the function,
+    # get the local LQR like that, and then gradients wrt to that from the function,
     # but still outputting the right Us_star
     return new_lqr
 
 
 # so do need the custom ilqr
-def parallel_dilqr(parallel_model: ParallelSystem, params: iLQRParams, Us_init: Array, **kwargs) -> Array:
+def parallel_dilqr(
+    parallel_model: ParallelSystem, params: iLQRParams, Us_init: Array, **kwargs
+) -> Array:
     """Solves the differential iLQR problem.
 
     Args:

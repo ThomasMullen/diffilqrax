@@ -640,9 +640,7 @@ class TestiLQRStructs(unittest.TestCase):
             self.model, self.Us_init, self.params
         )
         lqr_params = ilqr.approx_lqr(self.model, old_Xs, self.Us_init, self.params)
-        exp_cost_red, gains = lqr.lqr_backward_pass(
-            lqr_params, expected_change=False
-        )
+        exp_cost_red, gains = lqr.lqr_backward_pass(lqr_params)
         exp_change_J0 = lqr.calc_expected_change(exp_cost_red, alpha=1.0)
         # exercise
         (new_Xs, new_Us), new_total_cost = ilqr.ilqr_forward_pass(
@@ -661,7 +659,7 @@ class TestiLQRStructs(unittest.TestCase):
     def test_ilQR_solver(self):
         """test ilqr solver with integrater dynamics"""
         # setup
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_ilqr")
         fig_dir.mkdir(exist_ok=True)
         (Xs_init, _), initial_cost = ilqr.ilqr_simulate(
             self.model, self.Us_init, self.params
@@ -731,7 +729,7 @@ class TestiLQRExactSolution(unittest.TestCase):
 
     def setUp(self):
         # set fig directory
-        self.fig_dir = Path(Path(getcwd()), "fig_dump")
+        self.fig_dir = Path(Path(getcwd()), "fig_dump", "seq_ilqr")
         self.fig_dir.mkdir(exist_ok=True)
         # load fixtures
         self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")
@@ -742,7 +740,11 @@ class TestiLQRExactSolution(unittest.TestCase):
         # set-up model
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 5)
+<<<<<<< HEAD
         Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], 0.2)[0]
+=======
+        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], .6)[0]
+>>>>>>> 0b222e2e5e57af6014bcb637c5b8a5005a8d8204
         Wh = jr.normal(next(skeys), self.dims["NM"])
         # chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
         # chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
@@ -767,7 +769,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             return jnp.sum((x - jnp.ones_like(x))**2) + 0.1*jnp.sum(jnp.log(1 + u**2))
 
         def costf(x: Array, theta: Theta):
-            return 0*jnp.sum(x**2)
+            return 1.0*jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return  theta.Uh @ x + theta.Wh @ u
@@ -854,6 +856,8 @@ class TestiLQRExactSolution(unittest.TestCase):
         lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_approx_params = LQRParams(Xs_stars[0], lqr_tilde)
         # verify
+        print(jnp.linalg.eigvals(self.params.theta.Uh))
+        print(jnp.linalg.eigvals(lqr_tilde.A[0]))
         dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
         # plot kkt
         fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
@@ -878,6 +882,9 @@ class TestiLQRExactSolution(unittest.TestCase):
         fig.savefig(f"{self.fig_dir}/ilqr_ls_cost_log.png")
         close()
 
+        print(jnp.mean(jnp.abs(dLdXs)))
+        print(jnp.mean(jnp.abs(dLdUs)))
+        print(jnp.mean(jnp.abs(dLdLambs)))
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-04, atol=1e-05)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-04, atol=1e-05)
@@ -956,7 +963,7 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         chex.assert_trees_all_close(Xs_init, lqr_Xs_sim)
 
         # setup: lqr solver
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params) #, self.sys_dims)
+        Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params) #, self.sys_dims)
         # exercise ilqr solver
         (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilqr_solver(
             self.model,

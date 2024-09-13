@@ -81,7 +81,7 @@ class TestiLQRStructs(unittest.TestCase):
     def test_pilQR_solver(self):
         """test ilqr solver with integrater dynamics"""
         # setup
-        fig_dir = Path(Path(getcwd()), "fig_dump")
+        fig_dir = Path(Path(getcwd()), "fig_dump", "para_ilqr")
         fig_dir.mkdir(exist_ok=True)
         # exercise
         (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = parallel_ilqr.pilqr_solver(

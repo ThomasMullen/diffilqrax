@@ -5,11 +5,11 @@ Unit tests for the differentiable LQR solver
 from typing import NamedTuple
 import unittest
 import chex
+import numpy as onp
 import jax
 from jax import Array
 import jax.random as jr
 import jax.numpy as jnp
-import numpy as onp
 from jaxopt import linear_solve, implicit_diff
 
 from diffilqrax.typs import LQRParams, ModelDims, LQR
@@ -154,7 +154,7 @@ class TestDLQR(unittest.TestCase):
         test dlqr struct, shapes and solutions compared to direct gradients,
         and implicit gradients
         """
-        def replace_params(p):
+        def replace_params(p:Prms)->LQRParams:
             lqr = LQR(
                 A=p.A,
                 B=self.params.lqr.B,
