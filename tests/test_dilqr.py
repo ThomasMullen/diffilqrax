@@ -137,9 +137,9 @@ class TestDILQR(unittest.TestCase):
             )
 
         direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
-        # chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
-        # chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
-        # chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
+        chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
+        chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
+        chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
 
     def tearDown(self):
         """Destruct test class"""
