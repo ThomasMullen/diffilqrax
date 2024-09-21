@@ -40,22 +40,20 @@ class TestDILQR(unittest.TestCase):
     def setUp(self):
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 3)
-        n = 20
-        m = 5
+        n = 2
+        m = 2
         self.n = n
         self.m = m
         dt = 0.1
-        Uh = (
-            jax.random.normal(key, (n, n)) * 0.5 / jnp.sqrt(n)
-        )  # jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
-        Wh = (
-            jax.random.normal(key, (n, m)) * 0.5 / jnp.sqrt(m)
-        )  # jnp.array([[0, 0], [1, 0]]) * dt
+        Uh = jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
+            #jax.random.normal(key, (n, n)) * 0.5 / jnp.sqrt(n)
+  
+        Wh =  jnp.array([[0, 1], [1, 0]]) * dt
         L = jax.random.normal(key, (n, n)) * 0.5 / jnp.sqrt(n)
         Q = L @ L.T
         # initialise params
         self.theta = Thetax0(x0=jnp.zeros(n), Q=Q, Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)))
-        self.params = iLQRParams(x0=jnp.array([0.3, 0.0]), theta=self.theta)
+        self.params = iLQRParams(x0=jnp.array([0.0, 0.0]), theta=self.theta)
 
         # define model
         def cost(t: int, x: Array, u: Array, theta: Theta):
@@ -63,24 +61,24 @@ class TestDILQR(unittest.TestCase):
             return (
                 jnp.sum(
                     (x.squeeze() - x_tgt.squeeze())
-                    @ Q
+                    @ theta.Q
                     @ (x.squeeze() - x_tgt.squeeze()).T
                 )
-                + jnp.sum(jnp.log(1 + u**2))
+                + jnp.sum(u**2) #jnp.sum(jnp.log(1 + u**2))
             ) #+ 0.3 * jnp.sum(x**4)
 
         def costf(x: Array, theta: Theta):
             # return jnp.sum(jnp.abs(x))
-            return jnp.sum(x**2)
+            return 0*jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+            return jnp.tanh(theta.Uh @ x + theta.Wh @ u) #jnp.tanh(
 
         self.model = System(
             cost, costf, dynamics, ModelDims(horizon=50, n=n, m=m, dt=dt)
         )
         self.dims = chex.Dimensions(T=50, N=n, M=m, X=1)
-        self.Us_init = 0.1 * jr.normal(
+        self.Us_init = 0. * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )
         # define linesearch parameters
@@ -96,13 +94,13 @@ class TestDILQR(unittest.TestCase):
         # @jax.jit
         def implicit_loss(p):
             theta = Theta(Q=p.Q, Uh=p.Uh, Wh=p.Wh, sigma=jnp.zeros((self.n)))
-            params = iLQRParams(x0=p.x0, theta=theta)
+            params = iLQRParams(x0=0*p.x0, theta=theta)
             tau_star = dilqr(
                 self.model,
                 params,
                 self.Us_init,
                 max_iter=70,
-                convergence_thresh=1e-8,
+                convergence_thresh=1e-5,
                 alpha_init=1.0,
                 use_linesearch=True,
                 verbose=True,
@@ -119,13 +117,13 @@ class TestDILQR(unittest.TestCase):
         def direct_loss(prms):
             theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
             x_tgt = jnp.ones(self.n).squeeze()
-            params = iLQRParams(x0=prms.x0, theta=theta)
+            params = iLQRParams(x0=0*prms.x0, theta=theta)
             (Xs_stars, Us_stars, Lambs_stars), total_cost, costs = ilqr_solver(
                 self.model,
                 params,
                 self.Us_init,
                 max_iter=70,
-                convergence_thresh=1e-8,
+                convergence_thresh=1e-5,
                 alpha_init=1.0,
                 use_linesearch=True,
                 verbose=False,
@@ -137,9 +135,18 @@ class TestDILQR(unittest.TestCase):
             )
 
         direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
-        # chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
-        # chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
-        # chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
+        direct_g_flat = jax.tree.flatten(direct_g)[0]
+        implicit_g_flat =  jax.tree.flatten(implicit_g)[0]
+        from matplotlib import pyplot as plt
+        for i, x in enumerate(direct_g_flat):
+            plt.figure()
+            plt.scatter(direct_g_flat[i].reshape(-1,1), implicit_g_flat[i].reshape(-1,1))
+            plt.xlabel("direct")
+            plt.ylabel("implicit")
+            plt.savefig(f"grads_{i}.png")
+        chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
+        chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
+        chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
 
     def tearDown(self):
         """Destruct test class"""

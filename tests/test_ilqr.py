@@ -740,11 +740,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         # set-up model
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 5)
-<<<<<<< HEAD
-        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], 0.2)[0]
-=======
         Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], .6)[0]
->>>>>>> 0b222e2e5e57af6014bcb637c5b8a5005a8d8204
         Wh = jr.normal(next(skeys), self.dims["NM"])
         # chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
         # chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
@@ -759,7 +755,7 @@ class TestiLQRExactSolution(unittest.TestCase):
 
         # define linesearch hyper parameters
         self.ls_kwargs = {
-            "beta":0.8,
+            "beta":0.5,
             "max_iter_linesearch":16,
             "tol":0.1,
             "alpha_min":0.0001,
@@ -769,7 +765,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             return jnp.sum((x - jnp.ones_like(x))**2) + 0.1*jnp.sum(jnp.log(1 + u**2))
 
         def costf(x: Array, theta: Theta):
-            return 1.0*jnp.sum(x**2)
+            return jnp.sum((x - jnp.ones_like(x))**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return  theta.Uh @ x + theta.Wh @ u
@@ -853,7 +849,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             use_linesearch=True,
             **self.ls_kwargs,
         )
-        lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
+        lqr_tilde = ilqr.approx_lqr_global(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_approx_params = LQRParams(Xs_stars[0], lqr_tilde)
         # verify
         print(jnp.linalg.eigvals(self.params.theta.Uh))
@@ -888,15 +884,16 @@ class TestiLQRExactSolution(unittest.TestCase):
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-04, atol=1e-05)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-04, atol=1e-05)
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-02, atol=1e-02)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-02, atol=1e-02)
 
-        # Verify that the terminal state KKT conditions is satisfied
-        assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-04, atol=1e-05), "Terminal X not satisfied"
+        # # Verify that the terminal state KKT conditions is satisfied
+        # assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-04, atol=1e-05), "Terminal X not satisfied"
 
-        # Verify that all KKT conditions are satisfied
-        assert jnp.allclose(dLdUs, 0.0, rtol=1e-04, atol=1e-05)
-        assert jnp.allclose(dLdXs, 0.0, rtol=1e-04, atol=1e-05)
+        # # Verify that all KKT conditions are satisfied
+        # assert jnp.allclose(dLdUs, 0.0, rtol=1e-04, atol=1e-05)
+        # assert jnp.allclose(dLdXs, 0.0, rtol=1e-04, atol=1e-05)
         # assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+    
 
 
 

@@ -7,17 +7,16 @@ import jax.numpy as jnp
 from jax.numpy import matmul as mm
 
 from diffilqrax.typs import iLQRParams, System, LQR, LQRParams
-from diffilqrax.ilqr import ilqr_solver, approx_lqr_dyn
+from diffilqrax.ilqr import ilqr_solver, approx_lqr_dyn, approx_lqr, approx_lqr_global
 from diffilqrax.diff_lqr import dllqr, offset_lqr
 from diffilqrax.lqr import bmm
 
 
 def make_local_lqr(model, Xs_star, Us_star, params):
     """Approximate the local LQR around the given trajectory"""
-    lqr = approx_lqr_dyn(model, Xs_star, Us_star, params)
+    #ew_lqr = approx_lqr_global(model, Xs_star, Us_star, params)
+    lqr = approx_lqr(model, Xs_star, Us_star, params)
     new_lqr = offset_lqr(lqr, Xs_star, Us_star)
-    # get the local LQR like that, and then gradients wrt to that from the function,
-    # but still outputting the right Us_star
     return new_lqr
 
 

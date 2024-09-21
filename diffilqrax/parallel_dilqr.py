@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from jax.numpy import matmul as mm
 
 from diffilqrax.typs import iLQRParams, System, LQR, LQRParams, ParallelSystem
-from diffilqrax.ilqr import ilqr_solver, approx_lqr_dyn
+from diffilqrax.ilqr import ilqr_solver, approx_lqr_global
 from diffilqrax.parallel_ilqr import pilqr_solver
 from diffilqrax.diff_lqr import dllqr
 from diffilqrax.lqr import bmm
@@ -16,19 +16,19 @@ from diffilqrax.parallel_dlqr import pdlqr
 
 def make_local_lqr(model, Xs_star, Us_star, params):
     """Approximate the local LQR around the given trajectory"""
-    lqr = approx_lqr_dyn(model, Xs_star, Us_star, params)
-    new_lqr = LQR(
-        A=lqr.A,
-        B=lqr.B,
-        a=lqr.a,
-        Q=lqr.Q,
-        q=lqr.q - bmm(lqr.Q, Xs_star[:-1]) - bmm(lqr.S, Us_star),
-        Qf=lqr.Qf,
-        qf=lqr.qf - mm(lqr.Qf, Xs_star[-1]),
-        R=lqr.R,
-        r=lqr.r - bmm(lqr.R, Us_star) - bmm(lqr.S.transpose(0, 2, 1), Xs_star[:-1]),
-        S=lqr.S,
-    )
+    new_lqr = approx_lqr_global(model, Xs_star, Us_star, params)
+    # new_lqr = LQR(
+    #     A=lqr.A,
+    #     B=lqr.B,
+    #     a=lqr.a,
+    #     Q=lqr.Q,
+    #     q=lqr.q - bmm(lqr.Q, Xs_star[:-1]) - bmm(lqr.S, Us_star),
+    #     Qf=lqr.Qf,
+    #     qf=lqr.qf - mm(lqr.Qf, Xs_star[-1]),
+    #     R=lqr.R,
+    #     r=lqr.r - bmm(lqr.R, Us_star) - bmm(lqr.S.transpose(0, 2, 1), Xs_star[:-1]),
+    #     S=lqr.S,
+    # )
     # get the local LQR like that, and then gradients wrt to that from the function,
     # but still outputting the right Us_star
     return new_lqr

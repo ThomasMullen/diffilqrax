@@ -60,7 +60,7 @@ def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
         a=jnp.zeros((model.dims.horizon, model.dims.n)),
         Q=Cxx,
         q=Cx,
-        R=Cuu,
+        R=Cuu, #+ 1e-6 * jnp.eye(model.dims.m)[None],
         r=Cu,
         S=Cxu,
         Qf=fCxx,
@@ -69,6 +69,42 @@ def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
 
     return lqr_params
 
+
+def approx_lqr_global(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
+    """Calls linearisation and quadratisation function
+
+    Returns:
+        LQR: return the LQR structure
+    """
+    theta = params.theta
+    tps = jnp.arange(model.dims.horizon)
+
+    def get_diff_dyn(t, x, u, theta):
+        (Fx, Fu) = model.lin_dyn(t, x, u, theta)
+        return model.dynamics(t, x, u, theta) - Fx @ x - Fu @ u
+
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    f = jax.vmap(get_diff_dyn, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, theta)
+    (Cx, Cu) = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(model.quad_cost)(tps, Xs[:-1], Us, theta)
+    fCx = jax.jacrev(model.costf)(Xs[-1], theta)
+    fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
+
+    # set-up LQR
+    lqr_params = LQR(
+        A=Fx,
+        B=Fu,
+        a=f,  # jnp.zeros((model.dims.horizon, model.dims.n)),
+        Q=Cxx,
+        q=Cx- bmm(Cxx,Xs[:-1]) - bmm(Cxu, Us),
+        r=Cu- bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
+        R=Cuu,
+        S=Cxu,
+        Qf=fCxx,
+        qf=fCx- jnp.matmul(fCxx, Xs[-1]),
+    )()
+
+    return lqr_params
 
 def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """Calls linearisation and quadratisation function
@@ -96,12 +132,12 @@ def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> L
         B=Fu,
         a=f,  # jnp.zeros((model.dims.horizon, model.dims.n)),
         Q=Cxx,
-        q=Cx,  # - bmm(Cxx,Xs[:-1]) - bmm(Cxu, Us),
-        r=Cu,  # - bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
+        q=Cx,
+        r=Cu,
         R=Cuu,
         S=Cxu,
         Qf=fCxx,
-        qf=fCx,  # - mm(fCxx, Xs[-1]),
+        qf=fCx,
     )()
 
     return lqr_params
@@ -280,7 +316,7 @@ def ilqr_solver(
     if verbose:
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
-    lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
+    lqr_params_stars = approx_lqr_global(model, Xs_star, Us_star, params)
     Lambs_star = lqr.lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
     )
@@ -296,7 +332,7 @@ def linesearch(
     cost_init: float,
     expected_dJ: CostToGo,
     beta: float = 0.5,
-    max_iter_linesearch: int = 12,
+    max_iter_linesearch: int = 10,
     tol: float = 0.1,
     alpha_min=1e-6,
 ) -> Tuple[Tuple[Array, Array], float, float, Array]:
@@ -339,6 +375,7 @@ def linesearch(
         # calc expected cost reduction
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         # calc z-value
+        new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         z = (old_cost - new_cost) / jnp.abs(expected_delta_j) 
         ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and 
         #so that will be positive hopefully, and we want to check that the magnitude of the change is larger than some scaled version of the expected change 
@@ -350,7 +387,7 @@ def linesearch(
         # )
 
         # ensure to keep Xs and Us that reduce z-value
-        new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
+        #new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         # add control flow to carry on or not
         above_threshold = z > tol
         carry_on = lax.bitwise_not(jnp.logical_or(alpha < alpha_min, above_threshold))

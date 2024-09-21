@@ -156,7 +156,7 @@ class TestPLQR(unittest.TestCase):
     def test_lqr_adjoint(self):
         """test LQR adjoint solution"""
         params = LQRParams(self.x0, self.lqr)
-        _, _, _, Lambs_lqr = solve_lqr(params)
+        _, _ Lambs_lqr = solve_lqr(params)
         # test
         _, _, lmda = solve_plqr(params)
         # visualise 01

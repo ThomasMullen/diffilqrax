@@ -6,7 +6,8 @@ from jax import lax, Array
 from jax.typing import ArrayLike
 from flax import struct
 from diffilqrax.utils import linearise, quadratise
-
+import jax
+jax.config.update("jax_enable_x64", True)
 
 def symmetrise_tensor(x: Array) -> Array:
     """Symmetrise tensor"""

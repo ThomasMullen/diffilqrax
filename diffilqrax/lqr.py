@@ -84,12 +84,12 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
     lambf = lqr.Qf @ Xs[-1] + lqr.qf
 
     def adjoint_step(lamb, inputs):
-        x, u, aT, Q, q, S = inputs
-        nlamb = aT @ lamb + Q @ x + q + S @ u
+        x, u, AT, Q, q, S, a = inputs
+        nlamb = AT @ lamb + Q @ x + q + S @ u #+ a
         return nlamb, nlamb
 
     lambs = lax.scan(
-        adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
+        adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S, lqr.a), reverse=True
     )[1]
     return jnp.vstack([lambs, lambf[None]])
 
@@ -143,17 +143,17 @@ def lqr_backward_pass(
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         Huu = symmetrise_matrix(R + BT @ V @ B)  # .reshape(m_dim, m_dim)
-        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        mu = jnp.maximum(1e-12, 1e-12 - min_eval)
+        #min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
+        #mu = 0*jnp.maximum(0, 1e-8 - min_eval)
         Hxx = symmetrise_matrix(Q + AT @ V @ A)  # .reshape(n_dim, n_dim)
         Hxu = S + AT @ (V) @ B
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
-        I_mu = mu * BT @ B  # jnp.eye(m_dim)
-        Hxu_reg = S + AT @ (V + mu * jnp.eye(n_dim)) @ B
-        Huu_reg = Huu + I_mu
+        #I_mu = mu * BT @ B  # jnp.eye(m_dim)
+        #Hxu_reg = S + AT @ (V + mu * jnp.eye(n_dim)) @ B
+        Huu_reg = Huu #+ I_mu
         K, k = jnp.hsplit(
-            -solve(Huu_reg, jnp.c_[Hxu_reg.T, hu], assume_a="her"), [n_dim]
+            -solve(Huu_reg, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim]
         )
         k = k.reshape(
             -1,
@@ -196,7 +196,7 @@ def kkt(
     dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
     dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
     dLdUs = (
-        bmm(ST, Xs[:-1]) + bmm(params.lqr.R, Us[:]) + params.lqr.r + bmm(BT, Lambs[1:])
+     bmm(params.lqr.R, Us)  + bmm(BT, Lambs[1:]) + params.lqr.r +   bmm(ST, Xs[:-1])
     )
     dLdLambs = (
         bmm(params.lqr.A, Xs[:-1]) + bmm(params.lqr.B, Us[:]) + params.lqr.a - Xs[1:]
