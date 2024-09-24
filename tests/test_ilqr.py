@@ -740,11 +740,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         # set-up model
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 5)
-<<<<<<< HEAD
-        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], 0.2)[0]
-=======
         Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], .6)[0]
->>>>>>> 0b222e2e5e57af6014bcb637c5b8a5005a8d8204
         Wh = jr.normal(next(skeys), self.dims["NM"])
         # chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
         # chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
@@ -766,13 +762,13 @@ class TestiLQRExactSolution(unittest.TestCase):
             }
 
         def cost(t: int, x: Array, u: Array, theta: Any):
-            return jnp.sum((x - jnp.ones_like(x))**2) + 0.1*jnp.sum(jnp.log(1 + u**2))
+            return jnp.sum((x)**2) + 0.1*jnp.sum((1 + u**2))
 
         def costf(x: Array, theta: Theta):
             return 1.0*jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return  theta.Uh @ x + theta.Wh @ u
+            return  theta.Uh @ x + theta.Wh @ u + jnp.ones_like(x)
 
         self.model = System(
             cost, costf, dynamics, ModelDims(*self.dims["NMT"], dt=0.1)
@@ -888,7 +884,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-04, atol=1e-05)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-04, atol=1e-05)
-        # assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-02, atol=1e-02)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-02, atol=1e-02)
 
         # Verify that the terminal state KKT conditions is satisfied
         assert jnp.allclose(dLdXs[-1], 0.0, rtol=1e-04, atol=1e-05), "Terminal X not satisfied"

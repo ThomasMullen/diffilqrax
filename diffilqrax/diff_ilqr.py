@@ -17,7 +17,6 @@ def make_local_lqr(model, Xs_star, Us_star, params):
     lqr = approx_lqr_dyn(model, Xs_star, Us_star, params)
     new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     # get the local LQR like that, and then gradients wrt to that from the function,
-    # but still outputting the right Us_star
     return new_lqr
 
 

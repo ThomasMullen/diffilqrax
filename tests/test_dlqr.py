@@ -174,7 +174,7 @@ class TestDLQR(unittest.TestCase):
             tau_lqr = dlqr(self.sys_dims, replace_params(prms), self.x0)
             Us_lqr = tau_lqr[:, self.sys_dims.n :]
             Xs_lqr = tau_lqr[:, : self.sys_dims.n]
-            return jnp.linalg.norm(Us_lqr) ** 2
+            return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
         def implicit_solve_lqr(Xs, Us, Lambs, params):
@@ -185,11 +185,12 @@ class TestDLQR(unittest.TestCase):
             Xs_lqr, Us_lqr, _Us_lqr = implicit_solve_lqr(
                 None, None, None, replace_params(prms)
             )
-            return jnp.linalg.norm(Us_lqr) ** 2
+            print(Xs_lqr.shape)
+            return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         def direct_loss(prms):
             Xs, Us, Lambs = solve_lqr(replace_params(prms))
-            return jnp.linalg.norm(Us) ** 2
+            return jnp.linalg.norm(Us) ** 2 + jnp.linalg.norm(Xs - 1) ** 2
 
         prms = Prms(
             a=self.params.lqr.a,
@@ -206,10 +207,10 @@ class TestDLQR(unittest.TestCase):
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
         if PRINTING_ON:
             print("\n || Printing grads || \n ")
-            print("\n || Printing  q || \n ")
-            print(implicit_g.q[:4])
-            print(direct_g.q[:4])
-            print(lqr_g.q[:4])
+            print("\n || Printing  a || \n ")
+            print(implicit_g.a[:4])
+            print(direct_g.a[:4])
+            print(lqr_g.a[:4])
             print("\n || Printing  Q || \n ")
             print(direct_g.Q[:4])
             print(lqr_g.Q[:4])
@@ -220,11 +221,12 @@ class TestDLQR(unittest.TestCase):
             print("\n || Printing  x0 || \n ")
             print(direct_g.x0)
             print(lqr_g.x0)
-        # assert jnp.allclose(lqr_g.q, direct_g.q)
-        # assert jnp.allclose(lqr_g.r[:-1], direct_g.r)
-        # assert jnp.allclose(lqr_g.Q, direct_g.Q)
-        # assert jnp.allclose(lqr_g.R[:-1], direct_g.R)
-        # assert jnp.allclose(lqr_g.A, direct_g.A)
+        assert jnp.allclose(lqr_g.a, direct_g.a)
+        assert jnp.allclose(lqr_g.q, direct_g.q)
+        assert jnp.allclose(lqr_g.r, direct_g.r)
+        assert jnp.allclose(lqr_g.Q, direct_g.Q)
+        assert jnp.allclose(lqr_g.R, direct_g.R)
+        assert jnp.allclose(lqr_g.A, direct_g.A)
         # verify shapes and dtypes
         chex.assert_trees_all_equal_shapes_and_dtypes(lqr_val, direct_val)
         chex.assert_trees_all_equal_shapes_and_dtypes(lqr_g, direct_g)
@@ -233,7 +235,7 @@ class TestDLQR(unittest.TestCase):
         # verify numerics
         chex.assert_trees_all_close(lqr_val, direct_val, rtol=1e-3)
         chex.assert_trees_all_close(lqr_g, direct_g, rtol=1e-3)
-        # chex.assert_trees_all_close(implicit_val, direct_val, rtol = 1e-3)
+        chex.assert_trees_all_close(implicit_val, direct_val, rtol = 1e-3)
 
     # chex.assert_trees_all_close(implicit_g, direct_g, rtol = 1e-3)
 

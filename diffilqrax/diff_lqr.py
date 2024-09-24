@@ -30,7 +30,7 @@ def offset_lqr(lqr: LQR, x_stars: Array, u_stars: Array) -> LQR:
     return LQR(
         A=lqr.A,
         B=lqr.B,
-        a=jnp.zeros_like(lqr.a),
+        a=lqr.a,
         Q=lqr.Q,
         q=lqr.q - bmm(lqr.Q, x_stars[:-1]) - bmm(lqr.S, u_stars),
         R=lqr.R,
