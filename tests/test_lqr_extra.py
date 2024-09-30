@@ -36,10 +36,6 @@ jax.config.update("jax_enable_x64", True)  # double precision
 
 
 # helper functions
-def _trim_horizon(lqr_params: LQRParams, horizon: int) -> LQRParams:
-    _pop_horizon = partial(jax.tree_map, lambda x: x[:horizon])
-    return LQRParams(lqr_params.x0, LQR(_pop_horizon(lqr_params.lqr[:-2]), lqr_params.lqr[-2:]))
-
 def _tile_lqr_params(lqr_params: LQRParams, T: int) -> LQRParams:
     
     _tile_mat = lambda x: jnp.tile(x, (T, 1, 1))
@@ -75,7 +71,7 @@ def _init_lqr_params(n: int, m: int, seed:int=234) -> LQRParams:
     qf = 1e-1 * jnp.ones(n)
     
     x0 = jr.normal(next(skeys), (n,))
-    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
+    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
     return LQRParams(x0, lqr)
 
 
@@ -86,7 +82,32 @@ def _abs_mean_val(x: Array) -> float:
     return np.float64(round(jnp.mean(jnp.abs(x)),3))
 
 
-def compute_kkt_val(lqr_params: LQRParams, horizon: int) -> Tuple[[Array, Array, Array]]:
+def high_dim_integrator(n: int, m: int, dt:float=0.01, seed:int=234) -> LQRParams:
+    key = jr.PRNGKey(seed=seed)
+    key, skeys = keygen(key, 4)
+    # A=initialise_stable_dynamics(next(skeys),n,1,radii=0.1)
+    A = jnp.kron(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), jnp.eye(n//2))
+    # B = jnp.kron(jnp.array([[0, dt]]).T, jnp.eye(m))
+    # B = jnp.flip(jnp.eye(m,n//2)).T
+    B = jnp.kron(jnp.array([[0, dt]]).T, jnp.eye(m))
+    a = jr.normal(next(skeys), (n,)) # NOTE: might be causing dLdu to be always non-zero as it's fixed
+    # a = 0. * jr.normal(next(skeys), (n,))
+    
+    Q = 1. * jnp.eye(n)
+    q = 1e-1 * jnp.ones(n)
+    R = 1. *jnp.eye(m)
+    r = 1e-1 * jnp.ones(m)
+    S = 0.2 * jnp.ones((n,m))
+    Qf = 1. * jnp.eye(n)
+    qf = 1e-1 * jnp.ones(n)
+    
+    x0 = jr.normal(next(skeys), (n,))
+    lqr = LQR(A, B, a, Q[jnp.newaxis], q, R[jnp.newaxis], r, S[jnp.newaxis], Qf, qf)
+    
+    return LQRParams(x0, lqr())
+
+
+def compute_kkt_val(lqr_params: LQRParams, horizon: int) -> Tuple[Array, Array, Array]:
     lqr_params = _tile_lqr_params(lqr_params, horizon)
     state = solve_lqr(lqr_params)
     return kkt(lqr_params, *state)
@@ -96,39 +117,51 @@ def plot_kkt_val(lqr_ps, T, ax):
     dLs = compute_kkt_val(lqr_ps, T)
     print(f"n:{n}, T:{T}, (<|DLDX|>, <|DLDU|>, <|DLDΛ|>):{tuple(_abs_mean_val(x) for x in dLs)}")
     ax.plot(dLs[1])
+    ax.set(ylim=[-10,10])
 
 
 if __name__ == "__main__":
-    horizon_iterations = [40,800,1600, 2000, 3000]
+    # horizon_iterations = [100,800]
+    horizon_iterations = [100,800,2000]
     n_iterations = [2,8,20,80,160]
-    n_dim = 60
-    m_dim = n_dim
+    # n_dim = 60
+    # m_dim = n_dim
+
+    # # (Q,R,q,r,A,B,a)
+    # print("(Q,R,q,r,A,B,a)")
+    # fig, axes = subplots(5,52figsize=(12,12),sharey=True, sharex=True)
+    # for i, n in enumerate(n_iterations):
+    #     m_dim = n
+    #     lqr_ps = _init_lqr_params(n, m_dim, seed=1000)
+    #     for j, T in enumerate(horizon_iterations):
+    #         # horizon = horizon_iterations[i]
+    #         dLs = compute_kkt_val(lqr_ps, T)
+    #         print(f"n:{n}, T:{T}, (<|DLDX|>, <|DLDU|>, <|DLDΛ|>):{tuple(_abs_mean_val(x) for x in dLs)}")
+    #         axes[i, j].plot(dLs[1])
+    
     
     # (Q, R, q, r, A, B, a)
     print("(Q, R, q, r, A, B, a)")
-    fig, axes = subplots(5, 5, figsize=(12, 12), sharey=True, sharex=True)
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
         lqr_ps = _init_lqr_params(n, m_dim, seed=100)
         plot_partial = partial(plot_kkt_val, lqr_ps)
         list(map(plot_partial, horizon_iterations, axes[i, :]))
     
-    # (Q,R,q,r,A,B,a)
-    print("(Q,R,q,r,A,B,a)")
-    fig, axes = subplots(5,5, figsize=(12,12),sharey=True, sharex=True)
+    
+    print("(Q, R, q, r, A, B, a) integrator dynamics")
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
-        lqr_ps = _init_lqr_params(n, m_dim, seed=1000)
-        for j, T in enumerate(horizon_iterations):
-            # horizon = horizon_iterations[i]
-            dLs = compute_kkt_val(lqr_ps, T)
-            print(f"n:{n}, T:{T}, (<|DLDX|>, <|DLDU|>, <|DLDΛ|>):{tuple(_abs_mean_val(x) for x in dLs)}")
-            axes[i, j].plot(dLs[1])
+        lqr_ps = high_dim_integrator(n, m_dim//2, seed=200)
+        plot_partial = partial(plot_kkt_val, lqr_ps)
+        list(map(plot_partial, horizon_iterations, axes[i, :]))
     
     
     # (Q,R,q,A,B,a)
     print("(Q,R,q,A,B,a)")
-    fig, axes = subplots(5, 5, figsize=(12, 12), sharey=True, sharex=True)
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
         lqr_ps = _init_lqr_params(n, m_dim, seed=100)
@@ -139,7 +172,7 @@ if __name__ == "__main__":
     
     # (Q,R,A,B,a)
     print("(Q,R,A,B,a)")
-    fig, axes = subplots(5, 5, figsize=(12, 12), sharey=True, sharex=True)
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
         lqr_ps = _init_lqr_params(n, m_dim, seed=100)
@@ -151,7 +184,7 @@ if __name__ == "__main__":
     
     # (Q,R,A,B)
     print("(Q,R,A,B)")
-    fig, axes = subplots(5, 5, figsize=(12, 12), sharey=True, sharex=True)
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
         lqr_ps = _init_lqr_params(n, m_dim, seed=100)
@@ -164,7 +197,7 @@ if __name__ == "__main__":
     
     # (Q,R,r,A,B,a)
     print("(Q,R,r,A,B,a)")
-    fig, axes = subplots(5, 5, figsize=(12, 12), sharey=True, sharex=True)
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
         lqr_ps = _init_lqr_params(n, m_dim, seed=100)
@@ -175,7 +208,7 @@ if __name__ == "__main__":
     
     # (Q,R,r,A,B)
     print("(Q,R,r,A,B)")
-    fig, axes = subplots(5, 5, figsize=(12, 12), sharey=True, sharex=True)
+    fig, axes = subplots(5,len(horizon_iterations), figsize=(12, 12), sharey=True, sharex=True)
     for i, n in enumerate(n_iterations):
         m_dim = n
         lqr_ps = _init_lqr_params(n, m_dim, seed=100)
