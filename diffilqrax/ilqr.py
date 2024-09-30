@@ -173,7 +173,7 @@ def ilqr_forward_pass(
 
         delta_x = x_hat - x
         delta_u = K @ delta_x + alpha * k 
-        u_hat = u + delta_u
+        u_hat = u + delta_u.squeeze()
         nx_hat = model.dynamics(t, x_hat, u_hat, theta)
         nx_cost = nx_cost + model.cost(t, x_hat, u_hat, theta)
         return (nx_hat, nx_cost), (nx_hat, u_hat)
@@ -282,7 +282,7 @@ def ilqr_solver(
         jax.debug.print(f"old_cost: {total_cost}")
     lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
     Lambs_star = lqr.lqr_adjoint_pass(
-        Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
+        Xs_star.reshape(-1,model.dims.n), Us_star.reshape(-1,model.dims.m), LQRParams(Xs_star[0], lqr_params_stars)
     )
     return (Xs_star, Us_star, Lambs_star), total_cost, jnp.concatenate([jnp.array([c_init]),  costs])
 
