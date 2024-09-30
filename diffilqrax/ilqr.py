@@ -55,16 +55,16 @@ def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
 
     # set-up LQR
     lqr_params = LQR(
-        A=Fx,
-        B=Fu,
+        A=Fx.reshape(-1, model.dims.n, model.dims.n),
+        B=Fu.reshape(-1, model.dims.n, model.dims.m),
         a=jnp.zeros((model.dims.horizon, model.dims.n)),
-        Q=Cxx,
-        q=Cx,
-        R=Cuu,
-        r=Cu,
-        S=Cxu,
-        Qf=fCxx,
-        qf=fCx,
+        Q=Cxx.reshape(-1, model.dims.n, model.dims.n),
+        q=Cx.reshape(-1, model.dims.n),
+        R=Cuu.reshape(-1, model.dims.m, model.dims.m),
+        r=Cu.reshape(-1, model.dims.m),
+        S=Cxu.reshape(-1, model.dims.n, model.dims.m),
+        Qf=fCxx.reshape(model.dims.n, model.dims.n),
+        qf=fCx.reshape(model.dims.n),
     )()
 
     return lqr_params
