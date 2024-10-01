@@ -735,7 +735,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")
 
         # dimensions
-        self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
+        self.dims = chex.Dimensions(T=50, N=2, M=2, X=1)
 
         # set-up model
         key = jr.PRNGKey(seed=234)
@@ -760,12 +760,14 @@ class TestiLQRExactSolution(unittest.TestCase):
             "tol":0.1,
             "alpha_min":0.0001,
             }
-
+        x_targ = jnp.sin(jnp.linspace(0,2,self.dims["T"][0]+1))
+        x_targ = jnp.tile(x_targ, (self.dims["N"][0], 1)).T
+        self.x_targ = x_targ
         def cost(t: int, x: Array, u: Array, theta: Any):
-            return jnp.sum((x)**2) + 0.1*jnp.sum((1 + u**2))
+            return jnp.sum((x-x_targ[t])**2) + 0.1*jnp.sum((u**2))
 
         def costf(x: Array, theta: Theta):
-            return 1.0*jnp.sum(x**2)
+            return 1.0*jnp.sum((x-x_targ[-1])**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
             return  theta.Uh @ x + theta.Wh @ u + jnp.ones_like(x)
@@ -835,6 +837,59 @@ class TestiLQRExactSolution(unittest.TestCase):
     #           f"\nOther solver cost:\t{self.fixtures['obj']:.6f}")
     #     assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
 
+    def test_lqr_on_ilqr(self):
+        T = self.model.dims.horizon
+        # set up lqr
+        print(T, self.x_targ.shape)
+        lqr_thetas = LQR(
+                        A=jnp.tile(self.theta.Uh,(T,1,1)),
+                        B=jnp.tile(self.theta.Wh,(T,1,1)),
+                        a=jnp.ones((T,self.model.dims.n)),
+                        q=self.x_targ[:-1],
+                        qf=self.x_targ[-1],
+                        Qf=0.5*jnp.eye(self.model.dims.n),
+                        Q=0.5*jnp.tile(jnp.eye(self.model.dims.n),(T,1,1)),
+                        R=0.5*0.1*jnp.tile(jnp.eye(self.model.dims.m),(T,1,1)),
+                        r=jnp.zeros((T,self.model.dims.m)),
+                        S=jnp.zeros((T,self.model.dims.n, self.model.dims.m))
+                        )
+        lqr_params = LQRParams(self.params.x0, lqr_thetas)
+        # run lqr
+        Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(lqr_params)
+        
+        # run ilqr
+        (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilqr.ilqr_solver(
+            self.model,
+            self.params,
+            self.Us,
+            max_iter=80,
+            convergence_thresh=1e-13,
+            alpha_init=1.,
+            verbose=True,
+            use_linesearch=False,
+            **self.ls_kwargs,
+        )
+        fig, ax = subplots()
+        ax.plot(Xs_stars,c='b')
+        ax.plot(Xs_lqr,c='k')
+        fig.savefig(f"{self.fig_dir}/ilqr_vs_lqr_xs.png")
+        
+        fig, ax = subplots()
+        ax.plot(Us_stars,c='b')
+        ax.plot(Us_lqr,c='k')
+        fig.savefig(f"{self.fig_dir}/ilqr_vs_lqr_us.png")
+        
+        fig, ax = subplots()
+        ax.plot(Lambs_stars,c='b')
+        ax.plot(Lambs_lqr,c='k')
+        fig.savefig(f"{self.fig_dir}/ilqr_vs_lqr_lambs.png")
+        
+        # test
+        chex.assert_trees_all_close(Xs_stars, Xs_lqr, rtol=1e-04, atol=1e-04)
+        chex.assert_trees_all_close(Us_stars, Us_lqr, rtol=1e-04, atol=1e-04)
+        chex.assert_trees_all_close(Lambs_stars, Lambs_lqr, rtol=1e-04, atol=1e-04)
+        
+
     def test_ilqr_kkt_solution(self):
         """test ilqr solver with kkt optimality conditions"""
         # exercise ilqr solver
@@ -846,10 +901,11 @@ class TestiLQRExactSolution(unittest.TestCase):
             convergence_thresh=1e-13,
             alpha_init=1.,
             verbose=True,
-            use_linesearch=True,
+            use_linesearch=False,
             **self.ls_kwargs,
         )
-        lqr_tilde = ilqr.approx_lqr(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
+        # lqr_tilde = ilqr.approx_lqr_dyn(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
+        lqr_tilde = ilqr.approx_lqr_dyn(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_approx_params = LQRParams(Xs_stars[0], lqr_tilde)
         # verify
         print(jnp.linalg.eigvals(self.params.theta.Uh))
@@ -870,8 +926,12 @@ class TestiLQRExactSolution(unittest.TestCase):
         ax[1, 2].plot(dLdLambs)
         ax[1, 2].set(title="dLdλ")
         fig.tight_layout()
-        fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt.png")
-
+        fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt_sin_2_short_nl.png")
+        
+        fig, ax = subplots()
+        ax.plot(lqr_tilde.r)
+        fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt_sin_2_r_short_nl.png")
+        
         fig, ax = subplots()
         ax.scatter(jnp.arange(cost_log.size), cost_log)
         ax.set(xlabel="Iteration", ylabel="Total cost")

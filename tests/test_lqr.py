@@ -264,13 +264,17 @@ class TestLQRSolutionExact(unittest.TestCase):
 
         A = jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"])
         B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
-        a = jnp.zeros(self.dims["TN"])
+        a = jnp.ones(self.dims["TN"])
         Qf = 0. *jnp.eye(self.dims["N"][0])
         qf = 0.   * jnp.ones(self.dims["N"])
         Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
         q = 0. * jnp.tile(jnp.ones(self.dims["N"]), self.dims["TX"])
+        x_targ = jnp.sin(jnp.linspace(0,2,self.dims["T"][0]))
+        # x_targ = jnp.tile(x_targ, (self.dims["N"][0], 1)).T
+        # q = x_targ*0.
         R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
-        r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
+        # r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
+        r = 0.5* jnp.tile(x_targ, (self.dims["M"][0], 1)).T
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
         self.lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
@@ -303,7 +307,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         ax[2].plot(Us_exact.squeeze())
         ax[2].set(title="Inv solve")
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/seq_u_star_solvers.png")
+        fig.savefig(f"{fig_dir}/seq_u_star_solvers_sin_r2.png")
         close()
         print("Plot u solutions")
         # Verify that the two solutions are close
@@ -336,7 +340,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         ax[1,2].plot(dLdLambs.squeeze())
         ax[1,2].set(title="dLdλ")
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/seq_lqr_kkt.png")
+        fig.savefig(f"{fig_dir}/seq_lqr_kkt_sin_r2.png")
         close()
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
