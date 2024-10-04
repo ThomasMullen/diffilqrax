@@ -23,7 +23,7 @@ from diffilqrax.utils import time_map
 
 
 jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
+jax.config.update("jax_disable_jit", True)  # uncomment for debugging purposes
 
 
 def sum_cost_to_go(x: CostToGo) -> Array:
@@ -31,6 +31,50 @@ def sum_cost_to_go(x: CostToGo) -> Array:
     return x.V + x.v
 
 
+
+def approx_lqr_offset(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
+    """Approximate non-linear model as LQR by taylor expanding about state and
+    control trajectories.
+
+    Args:
+        model (System or Parallel Sytem): The system model
+        Xs (Array): The state trajectory
+        Us (Array): The control trajectory
+        params (iLQRParams): The iLQR parameters
+
+    Returns:
+        LQR: The LQR parameters.
+    """
+    theta = params.theta
+    tps = jnp.arange(model.dims.horizon)
+
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    (Cx, Cu) = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(model.quad_cost)(tps, Xs[:-1], Us, theta)
+    fCx = jax.jacrev(model.costf)(Xs[-1], theta)
+    fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
+    def get_diff_dyn(t, x, u, theta):
+        (Fx, Fu) = model.lin_dyn(t, x, u, theta)
+        return model.dynamics(t, x, u, theta) - Fx @ x - Fu @ u
+
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    f = jax.vmap(get_diff_dyn, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, theta)
+
+    # set-up LQR
+    lqr_params = LQR(
+        A=Fx,
+        B=Fu,
+        a=f,
+        Q=Cxx,
+        q=Cx - bmm(Cxx, Xs[:-1]) - bmm(Cxu, Us),
+        R=Cuu,
+        r=Cu - bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
+        S=Cxu,
+        Qf=fCxx,
+        qf=fCx - jnp.matmul(fCxx, Xs[-1]),
+    )()
+
+    return lqr_params
 def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """Approximate non-linear model as LQR by taylor expanding about state and
     control trajectories.
@@ -227,8 +271,8 @@ def ilqr_solver(
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
     initial_carry = (Xs_init, Us_init, c_init, 0, True)
 
+    # with jax.disable_jit():
     rollout = partial(ilqr_forward_pass, model, params)
-
     # define body_fun(carry_tuple)
     def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
         """lqr iteration update function"""
@@ -280,7 +324,7 @@ def ilqr_solver(
     if verbose:
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
-    lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
+    lqr_params_stars = approx_lqr_offset(model, Xs_star, Us_star, params)
     Lambs_star = lqr.lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
     )

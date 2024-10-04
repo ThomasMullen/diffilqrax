@@ -156,14 +156,14 @@ class TestDILQR(unittest.TestCase):
         
         
         direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
-        direct_g_flat = jax.tree.flatten(direct_g)[0]
-        implicit_g_flat =  jax.tree.flatten(implicit_g)[0]
-        for i, x in enumerate(direct_g_flat):
-            plt.figure()
-            plt.scatter(direct_g_flat[i].reshape(-1,1), implicit_g_flat[i].reshape(-1,1))
-            plt.xlabel("direct")
-            plt.ylabel("implicit")
-            plt.savefig(f"grads_{i}.png")
+        # direct_g_flat = jax.tree.flatten(direct_g)[0]
+        # implicit_g_flat =  jax.tree.flatten(implicit_g)[0]
+        # for i, x in enumerate(direct_g_flat):
+        #     plt.figure()
+        #     plt.scatter(direct_g_flat[i].reshape(-1,1), implicit_g_flat[i].reshape(-1,1))
+        #     plt.xlabel("direct")
+        #     plt.ylabel("implicit")
+        #     plt.savefig(f"grads_{i}.png")
         chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
         chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
         chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)

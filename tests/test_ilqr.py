@@ -504,7 +504,7 @@ from diffilqrax.typs import (
 )
 
 #jax.config.update('jax_default_device', jax.devices('cpu')[0])
-#jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_disable_jit", True)  # double precision
 
 PLOT_URL = ("https://gist.githubusercontent.com/"
        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
@@ -751,7 +751,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         self.params = iLQRParams(
             x0=jr.normal(next(skeys), self.dims["N"]), theta=theta
         )
-        self.Us = jnp.zeros(self.dims["TM"])
+        self.Us = jnp.ones(self.dims["TM"])
 
         # define linesearch hyper parameters
         self.ls_kwargs = {
@@ -845,12 +845,12 @@ class TestiLQRExactSolution(unittest.TestCase):
                         A=jnp.tile(self.theta.Uh,(T,1,1)),
                         B=jnp.tile(self.theta.Wh,(T,1,1)),
                         a=jnp.ones((T,self.model.dims.n)),
-                        q=self.x_targ[:-1],
-                        qf=self.x_targ[-1],
-                        Qf=0.5*jnp.eye(self.model.dims.n),
-                        Q=0.5*jnp.tile(jnp.eye(self.model.dims.n),(T,1,1)),
-                        R=0.5*0.1*jnp.tile(jnp.eye(self.model.dims.m),(T,1,1)),
-                        r=jnp.zeros((T,self.model.dims.m)),
+                        q=2*-self.x_targ[:-1],
+                        qf=2*-self.x_targ[-1],
+                        Qf=2*jnp.eye(self.model.dims.n),
+                        Q=2*jnp.tile(jnp.eye(self.model.dims.n),(T,1,1)),
+                        R=2*0.1*jnp.tile(jnp.eye(self.model.dims.m),(T,1,1)),
+                        r=2*0.1*jnp.zeros((T,self.model.dims.m)),
                         S=jnp.zeros((T,self.model.dims.n, self.model.dims.m))
                         )
         lqr_params = LQRParams(self.params.x0, lqr_thetas)
@@ -905,7 +905,7 @@ class TestiLQRExactSolution(unittest.TestCase):
             **self.ls_kwargs,
         )
         # lqr_tilde = ilqr.approx_lqr_dyn(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
-        lqr_tilde = ilqr.approx_lqr_dyn(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
+        lqr_tilde = ilqr.approx_lqr_offset(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_approx_params = LQRParams(Xs_stars[0], lqr_tilde)
         # verify
         print(jnp.linalg.eigvals(self.params.theta.Uh))
