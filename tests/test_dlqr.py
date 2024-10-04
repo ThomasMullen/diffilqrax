@@ -34,7 +34,7 @@ def setup_lqr_time_varying(
 ) -> LQR:
     """Setup LQR problem"""
     key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
+    key, skeys = keygen(key, 4)
     # initialise dynamics
     span_time_m = dims["TXX"]
     span_time_v = dims["TX"]
@@ -46,7 +46,7 @@ def setup_lqr_time_varying(
     q = 2 * 1e-1 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
     R = pen_weight["R"] * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
     r = 1e-6 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = pen_weight["S"] * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
+    S = pen_weight["S"] * jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
     Qf = pen_weight["Q"] * jnp.eye(dims["N"][0])
     qf = 2 * 1e-1 * jnp.ones(dims["N"])
     # construct LQR
@@ -65,14 +65,14 @@ def setup_lqr(
     span_time_v = dims["TX"]
     A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
     B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
-    a = jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
+    a = 0*jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
     Qf = 1.0 * jnp.eye(dims["N"][0])
     qf = 1.0 * jnp.ones(dims["N"])
     Q = 1.0 * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
-    q = 0.0 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
+    q = 1.0 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
     R = 1.0 * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
-    r = 0.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = 0.0 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
+    r = 1.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
+    S = 0.5 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
     return LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
 
@@ -206,11 +206,16 @@ class TestDLQR(unittest.TestCase):
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
         if PRINTING_ON:
-            print("\n || Printing grads || \n ")
-            print("\n || Printing  a || \n ")
-            print(implicit_g.a[:4])
-            print(direct_g.a[:4])
+            print("\n || Printing grads S || \n ")
+            print("\n || Implicit || \n ")
+            print(lqr_g.S[:4])
+            print("\n || Direct || \n ")
+            print(direct_g.S[:4])
+            print("\n || Printing grads a || \n ")
+            print("\n || Implicit || \n ")
             print(lqr_g.a[:4])
+            print("\n || Direct || \n ")
+            print(direct_g.a[:4])
             print("\n || Printing  Q || \n ")
             print(direct_g.Q[:4])
             print(lqr_g.Q[:4])

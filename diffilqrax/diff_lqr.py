@@ -101,7 +101,7 @@ def build_ajoint_lqr(
         jnp.einsum("ij,ik->ijk", c_bar, tau_star)
     )  # factor of 2 included in symmetrization
     Q_bar, R_bar = C_bar[:, : dims.n, : dims.n], C_bar[:, dims.n :, dims.n :]
-    S_bar = 2 * C_bar[:, : dims.n, dims.n :]
+    S_bar = 2*C_bar[:, : dims.n, dims.n :]# + C_bar[:, dims.n :, : dims.n].transpose(0, 2, 1))
     A_bar, B_bar = F_bar[..., : dims.n], F_bar[..., dims.n :]
     LQR_bar = LQR(
         A=A_bar,

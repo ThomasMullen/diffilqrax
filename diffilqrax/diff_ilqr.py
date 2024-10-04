@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from jax.numpy import matmul as mm
 
 from diffilqrax.typs import iLQRParams, System, LQR, LQRParams
-from diffilqrax.ilqr import ilqr_solver, approx_lqr_dyn
+from diffilqrax.ilqr import ilqr_solver, approx_lqr_dyn, approx_lqr_offset
 from diffilqrax.diff_lqr import dllqr, offset_lqr
 from diffilqrax.lqr import bmm
 
@@ -17,7 +17,7 @@ def make_local_lqr(model, Xs_star, Us_star, params):
     lqr = approx_lqr_dyn(model, Xs_star, Us_star, params)
     new_lqr = offset_lqr(lqr, Xs_star, Us_star)
     # get the local LQR like that, and then gradients wrt to that from the function,
-    return new_lqr
+    return new_lqr #new_lqr
 
 
 # so do need the custom ilqr
