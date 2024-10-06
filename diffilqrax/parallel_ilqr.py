@@ -115,7 +115,7 @@ def pilqr_forward_pass(
     Kxxs = bmm(Ks, Xs[:-1]) + ks + offsets
     # NOTE: in the case of a linear system, equivalent to `parallel_feedback_lin_dyn_ilqr`
     new_Xs = parallel_model.parallel_dynamics_feedback(
-        model, params, Us + Kxxs, dyn_bias, Ks
+        model, params, Us + Kxxs, dyn_bias, Ks, Xs
     )
     # this should define the dynamics incorporating the feedback term that says how to handle delta_X (current state - initial traj)
     # we assume Ks@initial_traj is already passed as input so only care about the current state and the parallel_dynamics_feedback
@@ -146,6 +146,7 @@ def pilqr_solver(
     Xs_init = parallel_model.parallel_dynamics(
         model, params, Us_init, jnp.zeros_like(Us_init[..., 0])
     )
+    
     a_term = approx_lqr_dyn(parallel_model.model, Xs_init, Us_init, params).a
     Xs_init = parallel_model.parallel_dynamics(model, params, Us_init, a_term)
     c_init = jnp.sum(

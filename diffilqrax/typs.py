@@ -233,5 +233,5 @@ class ParallelSystem(NamedTuple):
     model: System
     parallel_dynamics: Callable[[System, iLQRParams, Array, Array], Array]
     parallel_dynamics_feedback: Callable[
-        [System, iLQRParams, Array, Array, Array], Array
+        [System, iLQRParams, Array, Array, Array, Array], Array
     ]

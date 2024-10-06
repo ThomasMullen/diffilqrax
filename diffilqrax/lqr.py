@@ -144,7 +144,7 @@ def lqr_backward_pass(
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         Huu = symmetrise_matrix(R + BT @ V @ B)  # .reshape(m_dim, m_dim)
         min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        mu = jnp.maximum(1e-12, 1e-12 - min_eval)
+        mu = 0*jnp.maximum(1e-12, 1e-12 - min_eval)
         Hxx = symmetrise_matrix(Q + AT @ V @ A)  # .reshape(n_dim, n_dim)
         Hxu = S + AT @ (V) @ B
         hx = q + AT @ (v + V @ a)

@@ -41,7 +41,7 @@ class TestDILQR(unittest.TestCase):
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 3)
         n = 10
-        m = 10
+        m = 2
         self.n = n
         self.m = m
         dt = 0.1
@@ -62,7 +62,7 @@ class TestDILQR(unittest.TestCase):
                     (x.squeeze() - x_tgt.squeeze())
                     @ theta.Q @ (x.squeeze() - x_tgt.squeeze()).T
                 )
-                + jnp.sum(jnp.log(1 + u**2))
+                + jnp.sum(u**2) + jnp.sum(u**4)
             ) + 0.3 * jnp.sum(x**4)
 
         def costf(x: Array, theta: Theta):
@@ -70,12 +70,12 @@ class TestDILQR(unittest.TestCase):
             return 0*jnp.sum(x**2)
 
         def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return (theta.Uh @ jax.nn.sigmoid(x))*jnp.tanh(x) + theta.Wh @ u + jnp.sum(theta.Uh)*jnp.ones_like(x)
+            return (theta.Uh @ jnp.tanh(x)) + theta.Wh @ jnp.tanh(u) + jnp.sum(theta.Uh)*jnp.ones_like(x)
 
         self.model = System(
-            cost, costf, dynamics, ModelDims(horizon=50, n=n, m=m, dt=dt)
+            cost, costf, dynamics, ModelDims(horizon=10, n=n, m=m, dt=dt)
         )
-        self.dims = chex.Dimensions(T=50, N=n, M=m, X=1)
+        self.dims = chex.Dimensions(T=10, N=n, M=m, X=1)
         self.Us_init = 0. * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
         )
@@ -90,82 +90,70 @@ class TestDILQR(unittest.TestCase):
     def test_dilqr(self):
         """test grads and values of dilqr with implicit and direct differentiation"""
         # @jax.jit
-        def implicit_loss(p):
-            theta = Theta(Q=p.Q, Uh=p.Uh, Wh=p.Wh, sigma=jnp.zeros((self.n)))
-            params = iLQRParams(x0=0*p.x0, theta=theta)
-            tau_star = dilqr(
-                self.model,
-                params,
-                self.Us_init,
-                max_iter=70,
-                convergence_thresh=1e-5,
-                alpha_init=1.0,
-                use_linesearch=True,
-                verbose=True,
-                **self.ls_kwargs,
-            )
-            Us_lqr = tau_star[:, self.model.dims.n :]
-            x_tgt = jnp.ones(self.n).squeeze()
-            Xs_lqr = tau_star[:, : self.model.dims.n].squeeze() - x_tgt
-            return jnp.linalg.norm(Xs_lqr) ** 2 + jnp.linalg.norm(Us_lqr) ** 2
+        linesearch = True
+        alpha_init = 1.0
+        with jax.disable_jit():
+            def implicit_loss(p):
+                theta = Theta(Q=p.Q, Uh=p.Uh, Wh=p.Wh, sigma=jnp.zeros((self.n)))
+                params = iLQRParams(x0=0*p.x0, theta=theta)
+                tau_star = dilqr(
+                    self.model,
+                    params,
+                    self.Us_init,
+                    max_iter=70,
+                    convergence_thresh=1e-8,
+                    alpha_init=alpha_init,
+                    use_linesearch=linesearch,
+                    verbose=True,
+                    **self.ls_kwargs,
+                )
+                Us_lqr = tau_star[:, self.model.dims.n :]
+                x_tgt = jnp.ones(self.n).squeeze()
+                Xs_lqr = tau_star[:, : self.model.dims.n].squeeze() - x_tgt
+                print(Xs_lqr[:10])
+                return jnp.linalg.norm(tau_star) ** 2 #+ jnp.linalg.norm(Us_lqr) ** 2
 
-        implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(self.theta)
-        chex.assert_trees_all_equal_shapes_and_dtypes(implicit_g, self.theta)
+            implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(self.theta)
+            chex.assert_trees_all_equal_shapes_and_dtypes(implicit_g, self.theta)
 
-        def direct_loss(prms):
+            def direct_loss(prms):
+                theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
+                x_tgt = jnp.ones(self.n).squeeze()
+                params = iLQRParams(x0=0*prms.x0, theta=theta)
+                (Xs_stars, Us_stars, Lambs_stars), total_cost, costs = ilqr_solver(
+                    self.model,
+                    params,
+                    self.Us_init,
+                    max_iter=70,
+                    convergence_thresh=1e-8,
+                    alpha_init=alpha_init,
+                    use_linesearch=linesearch,
+                    verbose=False,
+                    **self.ls_kwargs,
+                )
+                print(total_cost, Xs_stars[:10])
+                return (
+                    jnp.linalg.norm(Us_stars) ** 2
+                    + jnp.linalg.norm(Xs_stars.squeeze())**2)# - x_tgt.squeeze()) ** 2
+                
+            prms = self.theta
             theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
             x_tgt = jnp.ones(self.n).squeeze()
             params = iLQRParams(x0=0*prms.x0, theta=theta)
-            (Xs_stars, Us_stars, Lambs_stars), total_cost, costs = ilqr_solver(
-                self.model,
-                params,
-                self.Us_init,
-                max_iter=70,
-                convergence_thresh=1e-5,
-                alpha_init=1.0,
-                use_linesearch=True,
-                verbose=False,
-                **self.ls_kwargs,
-            )
-            return (
-                jnp.linalg.norm(Us_stars) ** 2
-                + jnp.linalg.norm(Xs_stars.squeeze() - x_tgt.squeeze()) ** 2
-            )
-        prms = self.theta
-        theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
-        x_tgt = jnp.ones(self.n).squeeze()
-        params = iLQRParams(x0=0*prms.x0, theta=theta)
-        (Xs_stars, Us_stars, Lambs_stars), total_cost, costs = ilqr_solver(
-                self.model,
-                params,
-                self.Us_init,
-                max_iter=70,
-                convergence_thresh=1e-5,
-                alpha_init=1.0,
-                use_linesearch=True,
-                verbose=True,
-                **self.ls_kwargs,
-            ) 
-        fig, ax = plt.subplots(1, 2, figsize=(10, 3), sharey=False)
-        ax[0].plot(onp.asarray(Xs_stars.squeeze()))
-        ax[0].set(title="X")
-        ax[1].plot(onp.asarray(Us_stars.squeeze()))
-        ax[1].set(title="U")
-        fig.savefig(f"dilqr_trajs.png")
-        
-        
-        direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
-        direct_g_flat = jax.tree.flatten(direct_g)[0]
-        implicit_g_flat =  jax.tree.flatten(implicit_g)[0]
-        for i, x in enumerate(direct_g_flat):
-            plt.figure()
-            plt.scatter(direct_g_flat[i].reshape(-1,1), implicit_g_flat[i].reshape(-1,1))
-            plt.xlabel("direct")
-            plt.ylabel("implicit")
-            plt.savefig(f"grads_{i}.png")
-        chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
-        chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
-        chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
+            
+            direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
+            print(direct_val, implicit_val)
+            direct_g_flat = jax.tree.flatten(direct_g)[0]
+            implicit_g_flat =  jax.tree.flatten(implicit_g)[0]
+            for i, x in enumerate(direct_g_flat):
+                plt.figure()
+                plt.scatter(direct_g_flat[i].reshape(-1,1), implicit_g_flat[i].reshape(-1,1))
+                plt.xlabel("direct")
+                plt.ylabel("implicit")
+                plt.savefig(f"grads_{i}.png")
+            chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
+            chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
+            chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
         
 
     def tearDown(self):

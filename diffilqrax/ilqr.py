@@ -404,6 +404,7 @@ def linesearch(
         new_cost = jnp.where(above_threshold, new_cost, old_cost)
         # update alpha
         alpha *= beta
+
         return (
             new_Xs,
             new_Us,
