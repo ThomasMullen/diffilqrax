@@ -160,8 +160,6 @@
 
 #     def test_ilQR_solver(self):
 #         # setup
-#         fig_dir = Path(Path(getcwd()), "fig_dump")
-#         fig_dir.mkdir(exist_ok=True)
 #         (Xs_init, _), initial_cost = ilqr.ilqr_simulate(
 #             self.model, self.Us_init, self.params
 #         )
@@ -185,33 +183,21 @@
 #         ax[1, 0].plot(Xs_stars)
 #         ax[1, 1].plot(Us_stars)
 #         fig.tight_layout()
-#         fig.savefig(f"{fig_dir}/ilqr_solver.png")
+#         fig.savefig(f"{FIG_DIR}/ilqr_solver.png")
 #         close()
 #         lqr_params_stars = ilqr.approx_lqr(self.model, Xs_stars, Us_stars, self.params)
 #         lqr_tilde_params = LQRParams(Xs_stars[0], lqr_params_stars)
 #         dLdXs, dLdUs, dLdLambs = lqr.kkt(
 #             lqr_tilde_params, Xs_stars, Us_stars, Lambs_stars
 #         )
-#         fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
-#         ax[0, 0].plot(Xs_stars)
-#         ax[0, 0].set(title="X")
-#         ax[0, 1].plot(Us_stars)
-#         ax[0, 1].set(title="U")
-#         ax[0, 2].plot(Lambs_stars)
-#         ax[0, 2].set(title="λ")
-#         ax[1, 0].plot(dLdXs)
-#         ax[1, 0].set(title="dLdX")
-#         ax[1, 1].plot(dLdUs)
-#         ax[1, 1].set(title="dLdUs")
-#         ax[1, 2].plot(dLdLambs)
-#         ax[1, 2].set(title="dLdλ")
-#         fig.tight_layout()
-#         fig.savefig(f"{fig_dir}/ilqr_kkt.png")
-#         close()
+        # if PLOTTING_ON:
+        #     fig = _plot_kkt(Xs_stars, Us_stars, Lambs_stars, dLdXs, dLdUs, dLdLambs)
+        #     fig.savefig(f"{FIG_DIR}/ilqr_kkt.png")
+        #     close()
 #         fig, ax = subplots()
 #         ax.scatter(jnp.arange(cost_log.size), cost_log)
 #         ax.set(xlabel="Iteration", ylabel="Total cost")
-#         fig.savefig(f"{fig_dir}/ilqr_cost_log.png")
+#         fig.savefig(f"{FIG_DIR}/ilqr_cost_log.png")
 #         close()
 
 #         # verify
@@ -229,9 +215,6 @@
 #     """Test iLQR solver with exact solution"""
 
 #     def setUp(self):
-#         # set fig directory
-#         self.fig_dir = Path(Path(getcwd()), "fig_dump")
-#         self.fig_dir.mkdir(exist_ok=True)
 #         # load fixtures
 #         self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")
 
@@ -301,7 +284,7 @@
 #         ax[1, 0].plot(Xs_stars)
 #         ax[1, 1].plot(Us_stars)
 #         fig.tight_layout()
-#         fig.savefig(f"{self.fig_dir}/ilqr_ls_solver.png")
+#         fig.savefig(f"{FIG_DIR}/ilqr_ls_solver.png")
 #         close()
         
 #         # verify
@@ -348,26 +331,15 @@
 #         dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
 #         print(jnp.mean(jnp.abs(dLdXs)), jnp.mean(jnp.abs(dLdUs)), jnp.mean(jnp.abs(dLdLambs)))
 #         # plot kkt
-#         fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
-#         ax[0, 0].plot(Xs_stars)
-#         ax[0, 0].set(title="X")
-#         ax[0, 1].plot(Us_stars)
-#         ax[0, 1].set(title="U")
-#         ax[0, 2].plot(Lambs_stars)
-#         ax[0, 2].set(title="λ")
-#         ax[1, 0].plot(dLdXs)
-#         ax[1, 0].set(title="dLdX")
-#         ax[1, 1].plot(dLdUs)
-#         ax[1, 1].set(title="dLdUs")
-#         ax[1, 2].plot(dLdLambs)
-#         ax[1, 2].set(title="dLdλ")
-#         fig.tight_layout()
-#         fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt.png")
+        # if PLOTTING_ON:
+        #     fig = _plot_kkt(Xs_stars, Us_stars, Lambs_stars, dLdXs, dLdUs, dLdLambs)
+        #     fig.savefig(f"{FIG_DIR}/ilqr_ls_kkt.png")
+        #     close()
         
 #         fig, ax = subplots()
 #         ax.scatter(jnp.arange(cost_log.size), cost_log)
 #         ax.set(xlabel="Iteration", ylabel="Total cost")
-#         fig.savefig(f"{self.fig_dir}/ilqr_ls_cost_log.png")
+#         fig.savefig(f"{FIG_DIR}/ilqr_ls_cost_log.png")
 #         close()
         
 #         # Verify that the average KKT conditions are satisfied
@@ -504,13 +476,38 @@ from diffilqrax.typs import (
 )
 
 #jax.config.update('jax_default_device', jax.devices('cpu')[0])
-jax.config.update("jax_disable_jit", True)  # double precision
+jax.config.update("jax_disable_jit", False)  # double precision
 
 PLOT_URL = ("https://gist.githubusercontent.com/"
        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
        "figure_style.mplstyle")
-style.use(PLOT_URL)
+PRINTING_ON = True
+PLOTTING_ON = True
+if PLOTTING_ON:
+    style.use(PLOT_URL)
+    FIG_DIR = Path(getcwd(), "fig_dump", "seq_ilqr")
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
+print(FIG_DIR)
+
+def _plot_kkt(*args):
+    """plot KKT conditions and state trajectories"""
+    x, u, lamb, dl_dx, dl_du, dl_dlamb = args
+    fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
+    ax[0,0].plot(x.squeeze())
+    ax[0,0].set(title="X")
+    ax[0,1].plot(u.squeeze())
+    ax[0,1].set(title="U")
+    ax[0,2].plot(lamb.squeeze())
+    ax[0,2].set(title="λ")
+    ax[1,0].plot(dl_dx.squeeze())
+    ax[1,0].set(title="dLdX")
+    ax[1,1].plot(dl_du.squeeze())
+    ax[1,1].set(title="dLdUs")
+    ax[1,2].plot(dl_dlamb.squeeze())
+    ax[1,2].set(title="dLdλ")
+    fig.tight_layout()
+    return fig
 
 
 class TestiLQRStructs(unittest.TestCase):
@@ -659,8 +656,6 @@ class TestiLQRStructs(unittest.TestCase):
     def test_ilQR_solver(self):
         """test ilqr solver with integrater dynamics"""
         # setup
-        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_ilqr")
-        fig_dir.mkdir(exist_ok=True)
         (Xs_init, _), initial_cost = ilqr.ilqr_simulate(
             self.model, self.Us_init, self.params
         )
@@ -672,46 +667,36 @@ class TestiLQRStructs(unittest.TestCase):
             max_iter=70,
             convergence_thresh=1e-8,
             alpha_init=1.0,
-            verbose=True,
+            verbose=False,
             use_linesearch=True,
             **self.ls_kwargs,
         )
-        fig, ax = subplots(2, 2, sharey=True)
-        ax[0, 0].plot(Xs_init)
-        ax[0, 0].set(title="X")
-        ax[0, 1].plot(self.Us_init)
-        ax[0, 1].set(title="U")
-        ax[1, 0].plot(Xs_stars)
-        ax[1, 1].plot(Us_stars)
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/ilqr_solver.png")
-        close()
         lqr_params_stars = ilqr.approx_lqr(self.model, Xs_stars, Us_stars, self.params)
         lqr_tilde_params = LQRParams(Xs_stars[0], lqr_params_stars)
         dLdXs, dLdUs, dLdLambs = lqr.kkt(
             lqr_tilde_params, Xs_stars, Us_stars, Lambs_stars
-        )
-        fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
-        ax[0, 0].plot(Xs_stars)
-        ax[0, 0].set(title="X")
-        ax[0, 1].plot(Us_stars)
-        ax[0, 1].set(title="U")
-        ax[0, 2].plot(Lambs_stars)
-        ax[0, 2].set(title="λ")
-        ax[1, 0].plot(dLdXs)
-        ax[1, 0].set(title="dLdX")
-        ax[1, 1].plot(dLdUs)
-        ax[1, 1].set(title="dLdUs")
-        ax[1, 2].plot(dLdLambs)
-        ax[1, 2].set(title="dLdλ")
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/ilqr_kkt.png")
-        close()
-        fig, ax = subplots()
-        ax.scatter(jnp.arange(cost_log.size), cost_log)
-        ax.set(xlabel="Iteration", ylabel="Total cost")
-        fig.savefig(f"{fig_dir}/ilqr_cost_log.png")
-        close()
+        )        
+        if PLOTTING_ON:
+            fig, ax = subplots(2, 2, sharey=True)
+            ax[0, 0].plot(Xs_init)
+            ax[0, 0].set(title="X")
+            ax[0, 1].plot(self.Us_init)
+            ax[0, 1].set(title="U")
+            ax[1, 0].plot(Xs_stars)
+            ax[1, 1].plot(Us_stars)
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/ilqr_solver.png")
+            close()
+        
+            fig = _plot_kkt(Xs_stars, Us_stars, Lambs_stars, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{FIG_DIR}/ilqr_kkt.png")
+            close()
+        
+            fig, ax = subplots()
+            ax.scatter(jnp.arange(cost_log.size), cost_log)
+            ax.set(xlabel="Iteration", ylabel="Total cost")
+            fig.savefig(f"{FIG_DIR}/ilqr_cost_log.png")
+            close()
 
         # verify
         assert converged_cost < initial_cost
@@ -728,9 +713,6 @@ class TestiLQRExactSolution(unittest.TestCase):
     """Test iLQR solver with exact solution"""
 
     def setUp(self):
-        # set fig directory
-        self.fig_dir = Path(Path(getcwd()), "fig_dump", "seq_ilqr")
-        self.fig_dir.mkdir(exist_ok=True)
         # load fixtures
         self.fixtures = onp.load("tests/fixtures/ilqr_exact_solution.npz")
 
@@ -806,7 +788,7 @@ class TestiLQRExactSolution(unittest.TestCase):
     #     ax[1, 0].plot(Xs_stars)
     #     ax[1, 1].plot(Us_stars)
     #     fig.tight_layout()
-    #     fig.savefig(f"{self.fig_dir}/ilqr_ls_solver.png")
+    #     fig.savefig(f"{FIG_DIR}/ilqr_ls_solver.png")
     #     close()
 
     #     # verify
@@ -869,20 +851,17 @@ class TestiLQRExactSolution(unittest.TestCase):
             use_linesearch=False,
             **self.ls_kwargs,
         )
-        fig, ax = subplots()
-        ax.plot(Xs_stars,c='b')
-        ax.plot(Xs_lqr,c='k')
-        fig.savefig(f"{self.fig_dir}/ilqr_vs_lqr_xs.png")
-        
-        fig, ax = subplots()
-        ax.plot(Us_stars,c='b')
-        ax.plot(Us_lqr,c='k')
-        fig.savefig(f"{self.fig_dir}/ilqr_vs_lqr_us.png")
-        
-        fig, ax = subplots()
-        ax.plot(Lambs_stars,c='b')
-        ax.plot(Lambs_lqr,c='k')
-        fig.savefig(f"{self.fig_dir}/ilqr_vs_lqr_lambs.png")
+        if PLOTTING_ON:
+            fig, ax = subplots(1,3)
+            ax[0].plot(Xs_stars,c='b', linestyle=":",alpha=.6)
+            ax[0].plot(Xs_lqr,c='k', linestyle="--",alpha=.6)
+            ax[1].plot(Us_stars,c='b', linestyle=":",alpha=.6)
+            ax[1].plot(Us_lqr,c='k', linestyle="--",alpha=.6)
+            ax[2].plot(Lambs_stars,c='b', linestyle=":",alpha=.6)
+            ax[2].plot(Lambs_lqr,c='k', linestyle="--",alpha=.6)
+            [a_.set(title=l_) for a_,l_ in zip(ax.flatten(), ["x","u","λ"])]
+            fig.savefig(f"{FIG_DIR}/ilqr_vs_lqr.png")
+            close(fig)
         
         # test
         chex.assert_trees_all_close(Xs_stars, Xs_lqr, rtol=1e-04, atol=1e-04)
@@ -912,31 +891,21 @@ class TestiLQRExactSolution(unittest.TestCase):
         print(jnp.linalg.eigvals(lqr_tilde.A[0]))
         dLdXs, dLdUs, dLdLambs = lqr.kkt(lqr_approx_params, Xs_stars, Us_stars, Lambs_stars)
         # plot kkt
-        fig, ax = subplots(2, 3, figsize=(10, 3), sharey=False)
-        ax[0, 0].plot(Xs_stars)
-        ax[0, 0].set(title="X")
-        ax[0, 1].plot(Us_stars)
-        ax[0, 1].set(title="U")
-        ax[0, 2].plot(Lambs_stars)
-        ax[0, 2].set(title="λ")
-        ax[1, 0].plot(dLdXs)
-        ax[1, 0].set(title="dLdX")
-        ax[1, 1].plot(dLdUs)
-        ax[1, 1].set(title="dLdUs")
-        ax[1, 2].plot(dLdLambs)
-        ax[1, 2].set(title="dLdλ")
-        fig.tight_layout()
-        fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt_sin_2_short_nl.png")
+        if PLOTTING_ON:
+            fig = _plot_kkt(Xs_stars, Us_stars, Lambs_stars, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{FIG_DIR}/ilqr_ls_kkt_sin_2_short_nl.png")
+            close()
         
-        fig, ax = subplots()
-        ax.plot(lqr_tilde.r)
-        fig.savefig(f"{self.fig_dir}/ilqr_ls_kkt_sin_2_r_short_nl.png")
+            fig, ax = subplots()
+            ax.plot(lqr_tilde.r)
+            fig.savefig(f"{FIG_DIR}/ilqr_ls_kkt_sin_2_r_short_nl.png")
+            close()
         
-        fig, ax = subplots()
-        ax.scatter(jnp.arange(cost_log.size), cost_log)
-        ax.set(xlabel="Iteration", ylabel="Total cost")
-        fig.savefig(f"{self.fig_dir}/ilqr_ls_cost_log.png")
-        close()
+            fig, ax = subplots()
+            ax.scatter(jnp.arange(cost_log.size), cost_log)
+            ax.set(xlabel="Iteration", ylabel="Total cost")
+            fig.savefig(f"{FIG_DIR}/ilqr_ls_cost_log.png")
+            close()
 
         print(jnp.mean(jnp.abs(dLdXs)))
         print(jnp.mean(jnp.abs(dLdUs)))

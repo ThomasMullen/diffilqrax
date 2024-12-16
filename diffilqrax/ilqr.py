@@ -20,7 +20,7 @@ from diffilqrax.typs import (
     ParallelSystem
 )
 from diffilqrax.utils import time_map
-
+from chex import assert_scalar_negative, assert_scalar_positive 
 
 jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
@@ -310,6 +310,7 @@ def ilqr_solver(
         z = (old_cost - new_total_cost) / jnp.abs(old_cost)
         # determine cond: Δold_cost > threshold
         carry_on = z > convergence_thresh  # n_iter < 70 #
+        # print("lqr iter", n_iter + 1)
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
@@ -342,7 +343,8 @@ def linesearch(
     beta: float = 0.5,
     max_iter_linesearch: int = 12,
     tol: float = 0.1,
-    alpha_min=1e-6,
+    alpha_min: float=1e-6,
+    verbose: bool = False,
 ) -> Tuple[Tuple[Array, Array], float, float, Array]:
     """
     Implementation of the line search backtracking algorithm for ilqr algorithm.
@@ -377,6 +379,7 @@ def linesearch(
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
         Xs, Us, new_cost, old_cost, alpha, n_iter, _, _, carry_on = carry
+        # print(alpha)
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
@@ -387,17 +390,22 @@ def linesearch(
         ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and 
         #so that will be positive hopefully, and we want to check that the magnitude of the change is larger than some scaled version of the expected change 
  
-        # if verbose:
-        # jax.debug.print(
-        # f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f}",
-        # f"nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
-        # )
+        if verbose:
+            jax.debug.print(
+            f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f}",
+            f"nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
+            )
+            jax.debug.print(f"{alpha} < {alpha_min} {jnp.float64(alpha-alpha_min)}")
 
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         # add control flow to carry on or not
         above_threshold = z > tol
         carry_on = lax.bitwise_not(jnp.logical_or(alpha < alpha_min, above_threshold))
+        
+        # print(f"{alpha} < {alpha_min} {jnp.float64(alpha-alpha_min)}")
+        # assert_scalar_positive(alpha-alpha_min)
+        # assert_scalar_positive(max_iter_linesearch-1-n_iter)
         # Only return new trajs if leads to a strict cost decrease
         new_Xs = jnp.where(above_threshold, new_Xs, Xs)
         new_Us = jnp.where(above_threshold, new_Us, Us)
