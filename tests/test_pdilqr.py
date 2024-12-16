@@ -22,7 +22,7 @@ from diffilqrax.typs import (
     Thetax0,
     Theta,
 )
-from diffilqrax.parallel_ilqr import parallel_forward_lin_integration_ilqr
+from diffilqrax.parallel_ilqr import parallel_forward_lin_integration_ilqr, parallel_feedback_lin_dyn_ilqr
 
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
@@ -82,7 +82,7 @@ class TestPDILQR(unittest.TestCase):
         self.model = System(
             cost, costf, dynamics, ModelDims(horizon=50, n=n, m=m, dt=dt)
         )
-        self.parallel_model = ParallelSystem(self.model, parallel_forward_lin_integration_ilqr)
+        self.parallel_model = ParallelSystem(self.model, parallel_forward_lin_integration_ilqr, parallel_feedback_lin_dyn_ilqr)
         self.dims = chex.Dimensions(T=50, N=n, M=m, X=1)
         self.Us_init = 0.1 * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)

@@ -12,7 +12,8 @@ import numpy as onp
 from matplotlib.pyplot import subplots, close, style
 
 from diffilqrax.utils import keygen, initialise_stable_dynamics
-from diffilqrax import ilqr, pilqr
+from diffilqrax import ilqr
+from diffilqrax import parallel_ilqr as pilqr
 from diffilqrax import lqr
 from diffilqrax.typs import (
     iLQRParams,
@@ -26,6 +27,17 @@ from diffilqrax.typs import (
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
+PLOT_URL = ("https://gist.githubusercontent.com/"
+       "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
+       "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
+       "figure_style.mplstyle")
+PRINTING_ON = True
+PLOTTING_ON = True
+if PLOTTING_ON:
+    style.use(PLOT_URL)
+    FIG_DIR = Path(getcwd(), "fig_dump", "para_ilqr")
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
+print(FIG_DIR)
 
 class TestiLQRStructs(unittest.TestCase):
     """Test LQR dimensions and data structures"""
@@ -57,6 +69,11 @@ class TestiLQRStructs(unittest.TestCase):
         self.model = System(
             cost, costf, dynamics, ModelDims(horizon=100, n=3, m=2, dt=dt)
         )
+        self.parallel_model =  pilqr.ParallelSystem(
+            self.model,
+            pilqr.parallel_forward_lin_integration_ilqr,
+            pilqr.parallel_feedback_lin_dyn_ilqr
+            )
         self.dims = chex.Dimensions(T=100, N=3, M=2, X=1)
         self.Us_init = 0.1 * jr.normal(
             next(skeys), (self.model.dims.horizon, self.model.dims.m)
@@ -73,10 +90,8 @@ class TestiLQRStructs(unittest.TestCase):
     def test_pilQR_solver(self):
         """test ilqr solver with integrater dynamics"""
         # setup
-        fig_dir = Path(Path(getcwd()), "fig_dump")
-        fig_dir.mkdir(exist_ok=True)
-        # exercise
-        (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = pilqr.pilqr_solver(
+        #difference when Us_init is not 0...
+        (Xs_stars_ilqr, Us_stars_ilqr, _), converged_cost, cost_log = ilqr.ilqr_solver(
             self.model,
             self.params,
             self.Us_init,
@@ -87,9 +102,9 @@ class TestiLQRStructs(unittest.TestCase):
             use_linesearch=True,
             **self.ls_kwargs,
         )
-        #difference when Us_init is not 0...
-        (Xs_stars_ilqr, Us_stars_ilqr, _), converged_cost, cost_log = ilqr.ilqr_solver(
-            self.model,
+        # exercise
+        (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = pilqr.pilqr_solver(
+            self.parallel_model,
             self.params,
             self.Us_init,
             max_iter=70,
@@ -109,7 +124,7 @@ class TestiLQRStructs(unittest.TestCase):
         ax[1, 1].set(title="U (normal)")
         ax[1, 0].set(title="X (normal)")
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/pilqr_solver.png")
+        fig.savefig(f"{FIG_DIR}/pilqr_solver01.png")
         chex.assert_trees_all_close(Xs_stars, Xs_stars_ilqr, rtol=1e-03, atol=1e-02)
         
      ##TODO : add more thorough tests including possible offset in dynamics

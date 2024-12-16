@@ -178,7 +178,7 @@ class TestDLQR(unittest.TestCase):
 
         @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
         def implicit_solve_lqr(Xs, Us, Lambs, params):
-            gains, Xs, Us, Lambs = solve_lqr(params)
+            Xs, Us, Lambs = solve_lqr(params)
             return Xs, Us, Lambs
 
         def implicit_loss(prms):
@@ -188,7 +188,7 @@ class TestDLQR(unittest.TestCase):
             return jnp.linalg.norm(Us_lqr) ** 2
 
         def direct_loss(prms):
-            gains, Xs, Us, Lambs = solve_lqr(replace_params(prms))
+            Xs, Us, Lambs = solve_lqr(replace_params(prms))
             return jnp.linalg.norm(Us) ** 2
 
         prms = Prms(
@@ -205,21 +205,28 @@ class TestDLQR(unittest.TestCase):
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
         if PRINTING_ON:
-            print("\n || Printing grads || \n ")
-            print("\n || Printing  q || \n ")
-            print(implicit_g.q[:4])
-            print(direct_g.q[:4])
-            print(lqr_g.q[:4])
-            print("\n || Printing  Q || \n ")
-            print(direct_g.Q[:4])
-            print(lqr_g.Q[:4])
-            print(implicit_g.Q[:4])
-            print("\n || Printing  a || \n ")
-            print(direct_g.a)
-            print(lqr_g.a)
-            print("\n || Printing  x0 || \n ")
-            print(direct_g.x0)
-            print(lqr_g.x0)
+            jax.debug.print(
+                (
+                    "\n|| Printing grads ||\n "
+                    "\n|| Printing  q ||\n"
+                    "implicit: {ig}\t direct: {dg}\t lqr: {lg}\n"
+                ),
+                ig=implicit_g.q[:4], dg=direct_g.q[:4], lg=lqr_g.q[:4]
+                )
+            jax.debug.print(
+                (
+                    "\n|| Printing  Q ||\n"
+                    "implicit: {ig}\t direct: {dg}\t lqr: {lg}\n"
+                ),
+                ig=implicit_g.Q[0,:2], dg=direct_g.Q[0,:2], lg=lqr_g.Q[0,:2]
+                )
+            jax.debug.print(
+                (
+                    "\n|| Printing  a ||\n"
+                    "implicit: {ig}\t direct: {dg}\t lqr: {lg}\n"
+                ),
+                ig=implicit_g.a[:2], dg=direct_g.a[:2], lg=lqr_g.a[:2]
+                )
         chex.assert_trees_all_equal_shapes_and_dtypes(lqr_val, direct_val)
         chex.assert_trees_all_equal_shapes_and_dtypes(lqr_g, direct_g)
         chex.assert_trees_all_equal_shapes_and_dtypes(implicit_val, direct_val)
