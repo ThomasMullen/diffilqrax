@@ -33,12 +33,62 @@ from diffilqrax.utils import keygen, initialise_stable_dynamics
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
+OUTPUT_FIGS=True # save figures of tests
 PLOT_URL = ("https://gist.githubusercontent.com/"
        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
        "figure_style.mplstyle")
 style.use(PLOT_URL)
 
+def _plot_trajs(*args):
+    x, u, lamb = args
+    fig, ax = subplots(1,3,figsize=(10,3))
+    ax[0].plot(x)
+    ax[0].set(ylabel="x")
+    ax[1].plot(u)
+    ax[1].set(ylabel="u")
+    ax[2].plot(lamb)
+    ax[2].set(ylabel="lamb")
+    fig.tight_layout()
+    return fig
+
+def _plot_kkt(*args):
+    """plot KKT conditions and state trajectories"""
+    x, u, lamb, dl_dx, dl_du, dl_dlamb = args
+    fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
+    ax[0,0].plot(x.squeeze())
+    ax[0,0].set(title="X")
+    ax[0,1].plot(u.squeeze())
+    ax[0,1].set(title="U")
+    ax[0,2].plot(lamb.squeeze())
+    ax[0,2].set(title="λ")
+    ax[1,0].plot(dl_dx.squeeze())
+    ax[1,0].set(title="dLdX")
+    ax[1,1].plot(dl_du.squeeze())
+    ax[1,1].set(title="dLdUs")
+    ax[1,2].plot(dl_dlamb.squeeze())
+    ax[1,2].set(title="dLdλ")
+    fig.tight_layout()
+    return fig
+
+def _plot_lqr_sols(*args):
+    """plot optimal state trajectories for diff sols"""
+    x_dir, u_dir, x_cg, u_cg, x_inv, u_inv = args
+    fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
+    ax[0,0].set(title="LQR solve", ylabel="X")
+    ax[0,0].plot(x_dir.squeeze())
+    ax[1,0].set(ylabel="U")
+    ax[1,0].plot(u_dir.squeeze())
+    ax[0,1].set(title="CG solve", ylabel="X")
+    ax[0,1].plot(x_cg.squeeze())
+    ax[1,1].set(ylabel="U")
+    ax[1,1].plot(u_cg.squeeze())
+    ax[0,2].set(title="Inv solve",ylabel="X")
+    ax[0,2].plot(x_inv.squeeze())
+    ax[1,2].set(ylabel="U")
+    ax[1,2].plot(u_inv.squeeze())
+    fig.tight_layout()
+    return fig
 
 def is_jax_array(arr: Array)->bool:
     """validate jax array type"""
@@ -74,6 +124,9 @@ class TestLQR(unittest.TestCase):
 
     def setUp(self):
         """Instantiate dummy LQR"""
+        if OUTPUT_FIGS:
+            self.fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
+            self.fig_dir.mkdir(exist_ok=True)
         print("\nRunning setUp method...")
         n = 30
         self.dims = chex.Dimensions(T=60, N=n, M=15, X=1)
@@ -187,49 +240,29 @@ class TestLQR(unittest.TestCase):
         assert is_jax_array(Xs_lqr)
         assert is_jax_array(Us_lqr)
         assert is_jax_array(Lambs_lqr)
-
+    
     def test_solution_output(self):
         """test LQR solution output"""
         params = LQRParams(self.x0, self.lqr)
         Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
-        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
-        fig_dir.mkdir(exist_ok=True)
-        fig, ax = subplots(1,3,figsize=(10,3))
-        ax[0].plot(Xs_lqr)
-        ax[1].plot(Us_lqr)
-        ax[2].plot(Lambs_lqr)
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/seq_lqr_solution_TestLQR.png")
-        close()
+        if OUTPUT_FIGS:
+            fig = _plot_trajs(Xs_lqr, Us_lqr, Lambs_lqr)
+            fig.savefig(f"{self.fig_dir}/seq_lqr_sol{self.sys_dims.n:03}_{self.sys_dims.m:03}.png")
+            close()
 
     def test_kkt_optimal(self):
         """test KKT conditions for LQR optimality"""
         # Setup the LQR problem
-        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
-        fig_dir.mkdir(exist_ok=True)
-
         params = LQRParams(self.x0, self.lqr)
         Xs_dir, Us_dir, Lambs_dir = solve_lqr(params=params)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(params, Xs_dir, Us_dir, Lambs_dir)
-        # Plot the KKT residuals
-        fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
-        ax[0,0].plot(Xs_dir)
-        ax[0,0].set(title="X")
-        ax[0,1].plot(Us_dir)
-        ax[0,1].set(title="U")
-        ax[0,2].plot(Lambs_dir)
-        ax[0,2].set(title="λ")
-        ax[1,0].plot(dLdXs)
-        ax[1,0].set(title="dLdX")
-        ax[1,1].plot(dLdUs)
-        ax[1,1].set(title="dLdUs")
-        ax[1,2].plot(dLdLambs)
-        ax[1,2].set(title="dLdλ")
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/seq_lqr_kkt_TestLQR.png")
-        close()
-        print(jnp.mean(jnp.abs(dLdUs)))
+        if OUTPUT_FIGS:
+            # Plot the KKT residuals
+            fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{self.fig_dir}/seq_lqr_kkt_{self.sys_dims.n:03}_{self.sys_dims.m:03}.png")
+            close()
+            
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
@@ -258,39 +291,38 @@ class TestLQRSolutionExact(unittest.TestCase):
     def setUp(self):
         """Instantiate LQR example using the pendulum example to compare against Ocaml"""
         print("\nRunning setUp method...")
+        if OUTPUT_FIGS:
+            fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
+            fig_dir.mkdir(exist_ok=True)
+            self.fig_dir = fig_dir
         self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
         self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         dt = self.sys_dims.dt
+        self.x_targ = jnp.sin(jnp.linspace(0,2,self.dims["T"][0]+1))
 
         A = jnp.tile(jnp.array([[1,dt],[-1*dt,1-0.5*dt]]), self.dims["TXX"])
         B = jnp.tile(jnp.array([[0,0],[1,0]]), self.dims["TXX"])*dt
-        a = jnp.ones(self.dims["TN"])
-        Qf = 0. *jnp.eye(self.dims["N"][0])
-        qf = 0.   * jnp.ones(self.dims["N"])
+        a = jnp.zeros(self.dims["TN"], dtype=float)
         Q = 2. * jnp.tile(jnp.eye(self.dims["N"][0]), self.dims["TXX"])
         q = 0. * jnp.tile(jnp.ones(self.dims["N"]), self.dims["TX"])
-        x_targ = jnp.sin(jnp.linspace(0,2,self.dims["T"][0]))
-        # x_targ = jnp.tile(x_targ, (self.dims["N"][0], 1)).T
-        # q = x_targ*0.
         R = 0.5 * jnp.tile(jnp.eye(self.dims["M"][0]), self.dims["TXX"])
-        # r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
-        r = 0.5* jnp.tile(x_targ, (self.dims["M"][0], 1)).T
+        r = 0. * jnp.tile(jnp.ones(self.dims["M"]), self.dims["TX"])
         S = 0. * jnp.tile(jnp.ones(self.dims["NM"]), self.dims["TXX"])
+        Qf = 0. * jnp.eye(self.dims["N"][0])
+        qf = 0.   * jnp.ones(self.dims["N"])
+        
         self.lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
         print("\nMake initial state x0 and input U")
         self.x0 = jnp.array([0.3, 0.])
         Us = jnp.zeros(self.dims["TM"]) * 1.0
-        Us = Us.at[2].set(1.0)
-        self.Us = Us
+        self.Us = Us.at[2].set(1.0)
         self.params = LQRParams(self.x0, self.lqr)
 
     def test_lqr_solution(self):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # setup
         params = LQRParams(self.x0, self.lqr)
-        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
-        fig_dir.mkdir(exist_ok=True)
         print("Make tmp dir")
         # Exercise the LQR solver function
         Xs_dir, Us_dir, _ = solve_lqr(self.params)
@@ -299,17 +331,11 @@ class TestLQRSolutionExact(unittest.TestCase):
         print("CG solve")
         Xs_exact, Us_exact = exact_solve(self.params, self.sys_dims, self.x0)
         print("Mat inversion solve")
-        fig, ax = subplots(1,3, figsize=(10,3), sharey=True)
-        ax[0].plot(Us_dir.squeeze())
-        ax[0].set(title="LQR solve")
-        ax[1].plot(Us_quad.squeeze())
-        ax[1].set(title="CG solve")
-        ax[2].plot(Us_exact.squeeze())
-        ax[2].set(title="Inv solve")
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/seq_u_star_solvers_sin_r2.png")
-        close()
-        print("Plot u solutions")
+        if OUTPUT_FIGS:
+            print("Plot u solutions")
+            fig = _plot_lqr_sols(Xs_dir, Us_dir, Xs_quad, Us_quad, Xs_exact, Us_exact)
+            fig.savefig(f"{self.fig_dir}/compare_tiv_lqr_solver.png")
+            close()
         # Verify that the two solutions are close
         assert jnp.allclose(Us_dir[:-1], Us_exact, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(Xs_dir[:-1], Xs_exact, rtol=1e-05, atol=1e-08)
@@ -319,29 +345,15 @@ class TestLQRSolutionExact(unittest.TestCase):
     def test_kkt_optimal(self):
         """test KKT conditions for LQR optimality"""
         # Setup the LQR problem
-        fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
-        fig_dir.mkdir(exist_ok=True)
-
         Xs_dir, Us_dir, Lambs_dir = solve_lqr(self.params)
         # Exercise the KKT function
         dLdXs, dLdUs, dLdLambs = kkt(self.params, Xs_dir, Us_dir, Lambs_dir)
         # Plot the KKT residuals
-        fig, ax = subplots(2,3, figsize=(10,3), sharey=False)
-        ax[0,0].plot(Xs_dir.squeeze())
-        ax[0,0].set(title="X")
-        ax[0,1].plot(Us_dir.squeeze())
-        ax[0,1].set(title="U")
-        ax[0,2].plot(Lambs_dir.squeeze())
-        ax[0,2].set(title="λ")
-        ax[1,0].plot(dLdXs.squeeze())
-        ax[1,0].set(title="dLdX")
-        ax[1,1].plot(dLdUs.squeeze())
-        ax[1,1].set(title="dLdUs")
-        ax[1,2].plot(dLdLambs.squeeze())
-        ax[1,2].set(title="dLdλ")
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/seq_lqr_kkt_sin_r2.png")
-        close()
+        if OUTPUT_FIGS:
+            fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{self.fig_dir}/seq_tiv_lqr_kkt.png")
+            close()
+            
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
@@ -355,6 +367,95 @@ class TestLQRSolutionExact(unittest.TestCase):
         assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
         assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+
+    def test_kkt_optimal_bias(self):
+        """test KKT conditions for LQR optimality"""
+        # Setup the LQR problem
+        lqr = self.lqr._replace(a=jnp.ones(self.dims["TN"]))
+        Xs_dir, Us_dir, Lambs_dir = solve_lqr(LQRParams(self.x0, lqr))
+        # Exercise the KKT function
+        dLdXs, dLdUs, dLdLambs = kkt(LQRParams(self.x0, lqr), Xs_dir, Us_dir, Lambs_dir)
+        # Plot the KKT residuals
+        if OUTPUT_FIGS:
+            fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{self.fig_dir}/seq_tivb_lqr_kkt.png")
+            close()
+            
+        # Verify that the average KKT conditions are satisfied
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
+
+        # Verify that the terminal state KKT conditions is satisfied
+        assert jnp.allclose(dLdXs[-1], 0.0,
+                            rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+
+        # Verify that all KKT conditions are satisfied
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+
+    def test_kkt_optimal_tvq(self):
+        """test KKT conditions for LQR optimality"""
+        # Setup the LQR problem
+        lqr = self.lqr._replace(a=jnp.ones(self.dims["TN"]),
+                                q=jnp.tile(self.x_targ[:-1], (self.dims["N"][0], 1)).T,
+                                qf=jnp.tile(self.x_targ[-1], (self.dims["N"][0])),
+                                )
+        Xs_dir, Us_dir, Lambs_dir = solve_lqr(LQRParams(self.x0, lqr))
+        # Exercise the KKT function
+        dLdXs, dLdUs, dLdLambs = kkt(LQRParams(self.x0, lqr), Xs_dir, Us_dir, Lambs_dir)
+        # Plot the KKT residuals
+        if OUTPUT_FIGS:
+            fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{self.fig_dir}/seq_tvq_lqr_kkt.png")
+            close()            
+        # Verify that the average KKT conditions are satisfied
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
+
+        # Verify that the terminal state KKT conditions is satisfied
+        assert jnp.allclose(dLdXs[-1], 0.0,
+                            rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+
+        # Verify that all KKT conditions are satisfied
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+    
+    def test_kkt_optimal_tvr(self):
+        """test KKT conditions for LQR optimality"""
+        # Setup the LQR problem
+        lqr = self.lqr._replace(
+            a=jnp.ones(self.dims["TN"]), 
+            r=0.5*jnp.tile(self.x_targ, (self.dims["N"][0], 1)).T[:-1],
+                                )
+        Xs_dir, Us_dir, Lambs_dir = solve_lqr(LQRParams(self.x0, lqr))
+        # Exercise the KKT function
+        dLdXs, dLdUs, dLdLambs = kkt(LQRParams(self.x0, lqr), Xs_dir, Us_dir, Lambs_dir)
+        # Plot the KKT residuals
+        if OUTPUT_FIGS:
+            fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
+            fig.savefig(f"{self.fig_dir}/seq_tvr_lqr_kkt.png")
+            close()            
+        # Verify that the average KKT conditions are satisfied
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdXs)), 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(jnp.mean(jnp.abs(dLdLambs)), 0.0, rtol=1e-05, atol=1e-08)
+
+        # Verify that the terminal state KKT conditions is satisfied
+        assert jnp.allclose(dLdXs[-1], 0.0,
+                            rtol=1e-05, atol=1e-08), "Terminal X state not satisfied"
+
+        # Verify that all KKT conditions are satisfied
+        assert jnp.allclose(dLdUs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdXs, 0.0, rtol=1e-05, atol=1e-08)
+        assert jnp.allclose(dLdLambs, 0.0, rtol=1e-05, atol=1e-08)
+    
+    def tearDown(self):
+        """Destruct test class"""
+        print("Running tearDown method...")
 
 
 if __name__ == "__main__":
