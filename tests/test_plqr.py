@@ -301,8 +301,8 @@ class TestPLQR(unittest.TestCase):
         if PLOTTING_ON:
             fig, ax = subplots(1, figsize=(5, 3), sharex=True)
             colors = ["r", "b", "g", "magenta"]
-            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in n_dims]
-            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in n_dims]
+            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in range(n_dims.size)]
+            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in range(n_dims.size)]
             ax.legend(loc=(1, 0.2))
             ax.set(xlabel="N tps", ylabel="Clock Time (s)",title="cpu")
             fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_cpu_time.png")
@@ -314,8 +314,8 @@ class TestPLQR(unittest.TestCase):
         
         gpu = jax.devices("gpu")[0]
         n_reps = 2
-        n_dims = onp.array([32,33])
-        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
+        n_dims = onp.array([12,20])
+        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000,])
         gpu_lqr = jax.jit(solve_lqr, backend="gpu")
         gpu_plqr = jax.jit(solve_plqr, backend="gpu")
         
@@ -360,8 +360,8 @@ class TestPLQR(unittest.TestCase):
         if PLOTTING_ON:
             fig, ax = subplots(1, figsize=(5, 3), sharex=True)
             colors = ["r", "b", "g", "magenta"]
-            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in n_dims]
-            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in n_dims]
+            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in range(n_dims.size)]
+            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in range(n_dims.size)]
             ax.legend(loc=(1, 0.2))
             ax.set(xlabel="N tps", ylabel="Clock Time (s)",title="gpu")
             fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_gpu_time.png")
