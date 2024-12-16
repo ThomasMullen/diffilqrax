@@ -5,6 +5,8 @@ Unit test for the parallel LQR module
 from pathlib import Path
 import unittest
 from os import getcwd
+from itertools import product
+from tqdm import trange
 import time
 import logging
 import chex
@@ -41,13 +43,31 @@ PLOT_URL = (
     "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
     "figure_style.mplstyle"
 )
-# style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
+PLOTTING_ON = True
+if PLOTTING_ON:
+    # style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
+    style.use(PLOT_URL)
+    FIG_DIR = Path(getcwd(), "fig_dump", "para_lqr")
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def is_jax_array(arr: Array) -> bool:
     """validate jax array type"""
     return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
 
+
+def _gpu_available()->bool:
+    try:
+        _ = jax.device_put(jax.numpy.ones(1), device=jax.devices('gpu')[0])
+        return True
+    except:
+        return False
+
+def _tuple_block_until_ready(x_tuple):
+    """Apply block for leaves in a pytree struct"""
+    def block_each_element(x):
+        return x.block_until_ready()
+    return jax.tree_util.tree_map(block_each_element, x_tuple)
 
 def setup_lqr(
     dims: chex.Dimensions,
@@ -128,55 +148,53 @@ class TestPLQR(unittest.TestCase):
     def test_solve_lqr(self):
         """test LQR solution shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
-        gains_lqr, Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
+        Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         # print(Xs_lqr)
         ##for this we might need to define the LQRParams class with everything of size T x ...
         xs, us, _ = solve_plqr(params)
-        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
-        fig_dir.mkdir(exist_ok=True)
-        # Plot the KKT residuals
-        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
-        fig_dir.mkdir(exist_ok=True)
-        fig, ax = subplots(1, 2, figsize=(8, 3), sharex=True, sharey=True)
-        ax[0].plot(Xs_lqr)
-        ax[1].plot(xs)
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs.png")
-        close()
-        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
-        fig_dir.mkdir(exist_ok=True)
-        fig, ax = subplots(1, 3, figsize=(8, 3), sharex=True, sharey=True)
-        ax[0].plot(Us_lqr)
-        ax[1].plot(us)
-        ax[2].plot(Us_lqr - us)
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/TestPLQR_lqr_us.png")
+        # verify
         chex.assert_trees_all_close(xs, Xs_lqr, rtol=1e-5, atol=1e-5)
+        # Plot the KKT residuals
+        if PLOTTING_ON:
+            fig, ax = subplots(1, 2, figsize=(8, 3), sharex=True, sharey=True)
+            ax[0].plot(Xs_lqr)
+            ax[1].plot(xs)
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_xs.png")
+            close()
+            
+            fig, ax = subplots(1, 3, figsize=(8, 3), sharex=True, sharey=True)
+            ax[0].plot(Us_lqr)
+            ax[1].plot(us)
+            ax[2].plot(Us_lqr - us)
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_us.png")
+            close()
 
     def test_lqr_adjoint(self):
         """test LQR adjoint solution"""
         params = LQRParams(self.x0, self.lqr)
-        _, _, _, Lambs_lqr = solve_lqr(params)
+        _, _, Lambs_lqr = solve_lqr(params)
         # test
         _, _, lmda = solve_plqr(params)
-        # visualise 01
-        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
-        fig_dir.mkdir(exist_ok=True)
-        fig, axes = subplots(1, 3, figsize=(12, 3), sharey=False)
-        for i, ax in enumerate(axes.flatten()):
-            ax.plot(Lambs_lqr[:, i], linestyle="-")
-            ax.plot(lmda[:, i], linestyle=":")
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/TestPLQR_adjoint01.png")
-        close()
-        # visualise 02
+        
+        # validate
+        chex.assert_trees_all_close(lmda, Lambs_lqr, rtol=1e-5, atol=1e-5)
+
+        if PLOTTING_ON:
+            fig, axes = subplots(1, 3, figsize=(12, 3), sharey=False)
+            for i, ax in enumerate(axes.flatten()):
+                ax.plot(Lambs_lqr[:, i], linestyle="-")
+                ax.plot(lmda[:, i], linestyle=":")
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint01.png")
+            close()
+
         fig, ax = subplots(1, 2, sharey=True)
         ax[0].plot(Lambs_lqr)
         ax[1].plot(lmda)
         fig.tight_layout()
-        fig.savefig(f"{fig_dir}/TestPLQR_adjoint02.png")
-        # validate
-        chex.assert_trees_all_close(lmda, Lambs_lqr, rtol=1e-5, atol=1e-5)
+        fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint02.png")
 
     def test_adjoint_via_rev_integration(self):
         """Test adjoint via reverse integration and v-funs"""
@@ -193,12 +211,9 @@ class TestPLQR(unittest.TestCase):
         lmbdas_rev = parallel_reverse_lin_integration(model, opt_xs, opt_us)
         # validate
         chex.assert_trees_all_close(lmbdas_rev, lmbdas_vfns, rtol=1e-5, atol=1e-5)
-        pass
 
     def test_lqr_direct_solve(self):
         """Test optimal u and x obtained from gains equivalent as an effective problem"""
-        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
-        fig_dir.mkdir(exist_ok=True)
         # construct LQR and value functions
         model = LQRParams(self.x0, self.lqr)
         v_lins, v_quads = associative_riccati_scan(model)
@@ -228,12 +243,14 @@ class TestPLQR(unittest.TestCase):
         new_xs = parallel_forward_lin_integration(new_model, new_us, new_model.lqr.a)
 
         # verify
-        fig, ax = subplots(1, 2, figsize=(8, 3), sharex=True, sharey=True)
-        ax[0].plot(opt_xs)
-        ax[1].plot(new_xs)
-        fig.tight_layout()
-        fig.savefig(f"{fig_dir}/TestPLQR_dual_method.png")
         chex.assert_trees_all_close(opt_xs, new_xs, rtol=1e-5, atol=1e-5)
+        if PLOTTING_ON:
+            fig, ax = subplots(1, 2, figsize=(8, 3), sharex=True, sharey=True)
+            ax[0].plot(opt_xs)
+            ax[1].plot(new_xs)
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/TestPLQR_dual_method.png")
+            close()
 
     def test_time(self):
         from jax.lib import xla_bridge
@@ -286,8 +303,7 @@ class TestPLQR(unittest.TestCase):
             normal_lqr_times.append(ls)
             parallel_lqr_times_0.append(p0s)
             normal_lqr_times_0.append(l0s)
-        fig_dir = Path(Path(getcwd()), "fig_dump", "para_lqr")
-        fig_dir.mkdir(exist_ok=True)
+
         fig, axes = subplots(2, 1, figsize=(5, 3), sharex=True)
         colors = ["r", "b", "g", "magenta"]
         for i, n in enumerate(ns):
@@ -323,9 +339,124 @@ class TestPLQR(unittest.TestCase):
         axes[1].set_title("Second run time")
         axes[1].set_xlabel("Number of timesteps")
         fig.text(-0.01, 0.5, "Time (s)", va="center", rotation="vertical")
-        fig.savefig(f"{fig_dir}/TestPLQR_lqr_xs_time_comp_jitting2.png")
+        fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_xs_time_comp_jitting2.png")
         close()
 
+    def test_plqr_cpu_profile(self):
+        cpu = jax.devices("cpu")[0]
+        n_reps = 2
+        n_dims = onp.array([32,33])
+        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
+        cpu_lqr = jax.jit(solve_lqr, backend="cpu")
+        cpu_plqr = jax.jit(solve_plqr, backend="cpu")
+        
+        clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
+        print(clock_times.shape)
+        
+        for ix, (n, T) in enumerate(product(n_dims, horizon_dims)):
+            dims = chex.Dimensions(T=T, N=n, M=n, X=1)
+            sys_dims = ModelDims(*dims["NMT"], dt=0.01)
+            # dims = ModelDims(n=n, m=n, horizon=T, dt=0.1)
+            lqr_model = setup_lqr_time(dims=dims)
+            cpu_lqr_prms = LQR(*(jax.device_put(jnp.asarray(val), cpu) for val in lqr_model))
+            x0 = jax.device_put(jnp.ones(sys_dims.n), cpu)
+            # time profile linear lqr
+            res = cpu_lqr(LQRParams(x0, cpu_lqr_prms))
+            # skip jit compile time
+            for e in res:
+                _ = _tuple_block_until_ready(e)
+            tic = time.time()
+            for _ in trange(n_reps, leave=False):
+                # res = cpu_lqr(LQRParams(x0, cpu_lqr_prms))
+                for e in res:
+                    _ = _tuple_block_until_ready(e)
+            print(0, ix, (n, T))
+            clock_times[0,ix] = (time.time() - tic) / n_reps
+
+            # time profile parallel lqr
+            res = cpu_plqr(LQRParams(x0, cpu_lqr_prms))
+            # skip jit compile time
+            for e in res:
+                _ = _tuple_block_until_ready(e)
+            tic = time.time()
+            for _ in trange(n_reps, leave=False):
+                # res = cpu_plqr(LQRParams(x0, cpu_lqr_prms))
+                for e in res:
+                    _ = _tuple_block_until_ready(e)
+            print(1, ix, (n, T))
+            clock_times[1,ix] = (time.time() - tic) / n_reps
+            
+        clock_times = clock_times.reshape(2, n_dims.size, horizon_dims.size)
+        
+        if PLOTTING_ON:
+            fig, ax = subplots(1, figsize=(5, 3), sharex=True)
+            colors = ["r", "b", "g", "magenta"]
+            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in n_dims]
+            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in n_dims]
+            ax.legend(loc=(1, 0.2))
+            ax.set(xlabel="N tps", ylabel="Clock Time (s)",title="cpu")
+            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_cpu_time.png")
+            close()
+            
+    def test_plqr_gpu_profile(self):
+        if not _gpu_available():
+            return
+        
+        gpu = jax.devices("gpu")[0]
+        n_reps = 2
+        n_dims = onp.array([32,33])
+        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
+        gpu_lqr = jax.jit(solve_lqr, backend="gpu")
+        gpu_plqr = jax.jit(solve_plqr, backend="gpu")
+        
+        clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
+        print(clock_times.shape)
+        
+        for ix, (n, T) in enumerate(product(n_dims, horizon_dims)):
+            dims = chex.Dimensions(T=T, N=n, M=n, X=1)
+            sys_dims = ModelDims(*dims["NMT"], dt=0.01)
+            # dims = ModelDims(n=n, m=n, horizon=T, dt=0.1)
+            lqr_model = setup_lqr_time(dims=dims)
+            gpu_lqr_prms = LQR(*(jax.device_put(jnp.asarray(val), gpu) for val in lqr_model))
+            x0 = jax.device_put(jnp.ones(sys_dims.n), gpu)
+            # time profile linear lqr
+            res = gpu_lqr(LQRParams(x0, gpu_lqr_prms))
+            # skip jit compile time
+            for e in res:
+                _ = _tuple_block_until_ready(e)
+            tic = time.time()
+            for _ in trange(n_reps, leave=False):
+                # res = cpu_lqr(LQRParams(x0, cpu_lqr_prms))
+                for e in res:
+                    _ = _tuple_block_until_ready(e)
+            print(0, ix, (n, T))
+            clock_times[0,ix] = (time.time() - tic) / n_reps
+
+            # time profile parallel lqr
+            res = gpu_plqr(LQRParams(x0, gpu_lqr_prms))
+            # skip jit compile time
+            for e in res:
+                _ = _tuple_block_until_ready(e)
+            tic = time.time()
+            for _ in trange(n_reps, leave=False):
+                # res = cpu_plqr(LQRParams(x0, cpu_lqr_prms))
+                for e in res:
+                    _ = _tuple_block_until_ready(e)
+            print(1, ix, (n, T))
+            clock_times[1,ix] = (time.time() - tic) / n_reps
+            
+        clock_times = clock_times.reshape(2, n_dims.size, horizon_dims.size)
+        
+        if PLOTTING_ON:
+            fig, ax = subplots(1, figsize=(5, 3), sharex=True)
+            colors = ["r", "b", "g", "magenta"]
+            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in n_dims]
+            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in n_dims]
+            ax.legend(loc=(1, 0.2))
+            ax.set(xlabel="N tps", ylabel="Clock Time (s)",title="gpu")
+            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_gpu_time.png")
+            close()
+        
 
 if __name__ == "__main__":
     unittest.main()
