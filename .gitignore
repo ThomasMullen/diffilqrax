@@ -5,6 +5,7 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+*/__pycache__
 # C extensions
 *.so
 .idea/

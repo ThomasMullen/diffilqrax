@@ -1,11 +1,12 @@
 """iterative LQR solver"""
 
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 from functools import partial
 from jax import Array
 import jax
 from jax import lax
 import jax.numpy as jnp
+import chex
 
 from diffilqrax import lqr
 from diffilqrax.lqr import bmm
@@ -16,10 +17,12 @@ from diffilqrax.typs import (
     Gains,
     CostToGo,
     LQRParams,
+    ParallelSystem
 )
+from diffilqrax.utils import time_map
+from chex import assert_scalar_negative, assert_scalar_positive 
 
-
-#jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 
@@ -28,50 +31,13 @@ def sum_cost_to_go(x: CostToGo) -> Array:
     return x.V + x.v
 
 
-def linearise(fun: Callable) -> Callable:
-    """Function that finds jacobian w.r.t to x and u inputs.
 
-    Args:
-        fun (Callable): args (t, x, u, params)
-
-    Returns:
-        Callable[[Callable], Callable]): Jacobian tuple evaluated at args 1 and 2
-    """
-    return jax.jacrev(fun, argnums=(1, 2))
-
-
-def quadratise(fun: Callable) -> Callable:
-    """Function that finds Hessian w.r.t to x and u inputs.
-
-    Args:
-        fun (Callable): args (t, x, u, params)
-
-    Returns:
-        Tuple([NDARRAY, NDARRAY]): Hessian tuple cross evaluated with args 1 and 2
-    """
-    return jax.jacfwd(jax.jacrev(fun, argnums=(1, 2)), argnums=(1, 2))
-
-
-def time_map(fun: Callable) -> Callable:
-    """Vectorise function in time. Assumes 0th-axis is time for x and u args of fun, the last
-    arg (theta) of Callable function assumed to be time-invariant.
-
-    Args:
-        fun (Callable): function that takes args (t, x[Txn], u[Txm], theta)
-
-    Returns:
-        Callable: vectorised function along args 1 and 2 0th-axis
-    """
-    return jax.vmap(fun, in_axes=(0, 0, 0, None))
-    # return jax.vmap(fun, in_axes=(None, 0, 0, None))
-
-
-def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
+def approx_lqr_offset(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """Approximate non-linear model as LQR by taylor expanding about state and
     control trajectories.
 
     Args:
-        model (System): The system model
+        model (System or Parallel Sytem): The system model
         Xs (Array): The state trajectory
         Us (Array): The control trajectory
         params (iLQRParams): The iLQR parameters
@@ -82,9 +48,52 @@ def approx_lqr(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     theta = params.theta
     tps = jnp.arange(model.dims.horizon)
 
-    (Fx, Fu) = time_map(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
-    (Cx, Cu) = time_map(linearise(model.cost))(tps, Xs[:-1], Us, theta)
-    (Cxx, Cxu), (_, Cuu) = time_map(quadratise(model.cost))(tps, Xs[:-1], Us, theta)
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    (Cx, Cu) = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(model.quad_cost)(tps, Xs[:-1], Us, theta)
+    fCx = jax.jacrev(model.costf)(Xs[-1], theta)
+    fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
+    def get_diff_dyn(t, x, u, theta):
+        (Fx, Fu) = model.lin_dyn(t, x, u, theta)
+        return model.dynamics(t, x, u, theta) - Fx @ x - Fu @ u
+
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    f = jax.vmap(get_diff_dyn, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, theta)
+
+    # set-up LQR
+    lqr_params = LQR(
+        A=Fx,
+        B=Fu,
+        a=f,
+        Q=Cxx,
+        q=Cx - bmm(Cxx, Xs[:-1]) - bmm(Cxu, Us),
+        R=Cuu,
+        r=Cu - bmm(Cuu, Us) - bmm(Cxu.transpose(0, 2, 1), Xs[:-1]),
+        S=Cxu,
+        Qf=fCxx,
+        qf=fCx - jnp.matmul(fCxx, Xs[-1]),
+    )()
+
+    return lqr_params
+def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
+    """Approximate non-linear model as LQR by taylor expanding about state and
+    control trajectories.
+
+    Args:
+        model (System or Parallel Sytem): The system model
+        Xs (Array): The state trajectory
+        Us (Array): The control trajectory
+        params (iLQRParams): The iLQR parameters
+
+    Returns:
+        LQR: The LQR parameters.
+    """
+    theta = params.theta
+    tps = jnp.arange(model.dims.horizon)
+
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    (Cx, Cu) = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(model.quad_cost)(tps, Xs[:-1], Us, theta)
     fCx = jax.jacrev(model.costf)(Xs[-1], theta)
     fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
 
@@ -115,13 +124,13 @@ def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> L
     tps = jnp.arange(model.dims.horizon)
 
     def get_diff_dyn(t, x, u, theta):
-        (Fx, Fu) = linearise(model.dynamics)(t, x, u, theta)
+        (Fx, Fu) = model.lin_dyn(t, x, u, theta)
         return model.dynamics(t, x, u, theta) - Fx @ x - Fu @ u
 
-    (Fx, Fu) = time_map(linearise(model.dynamics))(tps, Xs[:-1], Us, theta)
+    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
     f = jax.vmap(get_diff_dyn, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, theta)
-    (Cx, Cu) = time_map(linearise(model.cost))(tps, Xs[:-1], Us, theta)
-    (Cxx, Cxu), (_, Cuu) = time_map(quadratise(model.cost))(tps, Xs[:-1], Us, theta)
+    (Cx, Cu) = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
+    (Cxx, Cxu), (_, Cuu) = time_map(model.quad_cost)(tps, Xs[:-1], Us, theta)
     fCx = jax.jacrev(model.costf)(Xs[-1], theta)
     fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
 
@@ -169,7 +178,6 @@ def ilqr_simulate(
     (xf, nx_cost), (new_Xs, new_Us) = lax.scan(fwd_step, init=(x0, 0.0), xs=(tps, Us))
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
-
     return (new_Xs, new_Us), total_cost
 
 
@@ -208,7 +216,7 @@ def ilqr_forward_pass(
         t, x, u, K, k = inputs
 
         delta_x = x_hat - x
-        delta_u = K @ delta_x + alpha * k
+        delta_u = K @ delta_x + alpha * k 
         u_hat = u + delta_u
         nx_hat = model.dynamics(t, x_hat, u_hat, theta)
         nx_cost = nx_cost + model.cost(t, x_hat, u_hat, theta)
@@ -219,7 +227,6 @@ def ilqr_forward_pass(
     )
     total_cost = nx_cost + model.costf(xf, theta)
     new_Xs = jnp.vstack([x0[None], new_Xs])
-
     return (new_Xs, new_Us), total_cost
 
 
@@ -261,12 +268,11 @@ def ilqr_solver(
     """
     # simulate initial cost
     (Xs_init, _), c_init = ilqr_simulate(model, Us_init, params)
-
     # define initial carry tuple: (Xs, Us, Total cost (old), iteration, cond)
     initial_carry = (Xs_init, Us_init, c_init, 0, True)
 
+    # with jax.disable_jit():
     rollout = partial(ilqr_forward_pass, model, params)
-
     # define body_fun(carry_tuple)
     def lqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
         """lqr iteration update function"""
@@ -275,10 +281,7 @@ def ilqr_solver(
         # approximate dyn and loss to LQR with initial {u} and {x}
         lqr_params = approx_lqr(model, old_Xs, old_Us, params)
         # calc gains and expected dold_cost
-        (exp_cost_red, gains) = lqr.lqr_backward_pass(
-            lqr_params, expected_change=False
-        )
-
+        exp_cost_red, gains = lqr.lqr_backward_pass(lqr_params)
         # rollout with non-linear dynamics, α=1. (dJ, Ks), calc_expected_change(dJ=dJ)
         # wrap linesearch with rollout
         def linesearch_wrapped(*args):
@@ -304,12 +307,10 @@ def ilqr_solver(
             old_Us,
             alpha_init,
         )
-
-        # calc change in dold_cost w.r.t old dold_cost
-        z = (old_cost - new_total_cost) / old_cost
-
+        z = (old_cost - new_total_cost) / jnp.abs(old_cost)
         # determine cond: Δold_cost > threshold
-        carry_on = jnp.abs(z) > convergence_thresh  # n_iter < 70 #
+        carry_on = z > convergence_thresh  # n_iter < 70 #
+        # print("lqr iter", n_iter + 1)
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
@@ -324,11 +325,11 @@ def ilqr_solver(
     if verbose:
         jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
         jax.debug.print(f"old_cost: {total_cost}")
-    lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
+    lqr_params_stars = approx_lqr_offset(model, Xs_star, Us_star, params)
     Lambs_star = lqr.lqr_adjoint_pass(
         Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
     )
-    return (Xs_star, Us_star, Lambs_star), total_cost, costs
+    return (Xs_star, Us_star, Lambs_star), total_cost, jnp.concatenate([jnp.array([c_init]),  costs])
 
 
 def linesearch(
@@ -340,9 +341,10 @@ def linesearch(
     cost_init: float,
     expected_dJ: CostToGo,
     beta: float = 0.5,
-    max_iter_linesearch: int = 20,
+    max_iter_linesearch: int = 12,
     tol: float = 0.1,
-    alpha_min=1e-8,
+    alpha_min: float=1e-6,
+    verbose: bool = False,
 ) -> Tuple[Tuple[Array, Array], float, float, Array]:
     """
     Implementation of the line search backtracking algorithm for ilqr algorithm.
@@ -377,25 +379,33 @@ def linesearch(
         """Rollout with new alpha and update alpha if z-value is above threshold"""
         # parse out carry
         Xs, Us, new_cost, old_cost, alpha, n_iter, _, _, carry_on = carry
+        # print(alpha)
         # rollout with alpha
         (new_Xs, new_Us), new_cost = update(Ks, Xs, Us, alpha=alpha)
 
         # calc expected cost reduction
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         # calc z-value
-        z = (old_cost - new_cost) / expected_delta_j
-
-        # if verbose:
-        # jax.debug.print(
-        # f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f}",
-        # f"nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
-        # )
+        z = (old_cost - new_cost) / jnp.abs(expected_delta_j) 
+        ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and 
+        #so that will be positive hopefully, and we want to check that the magnitude of the change is larger than some scaled version of the expected change 
+ 
+        if verbose:
+            jax.debug.print(
+            f"it={1+n_iter:02} α={alpha:.03f} z:{z:.03f} pJ:{old_cost:.03f}",
+            f"nJ:{new_cost:.03f} ΔJ:{old_cost-new_cost:.03f} <ΔJ>:{expected_delta_j:.03f}"
+            )
+            jax.debug.print(f"{alpha} < {alpha_min} {jnp.float64(alpha-alpha_min)}")
 
         # ensure to keep Xs and Us that reduce z-value
         new_cost = jnp.where(jnp.isnan(new_cost), cost_init, new_cost)
         # add control flow to carry on or not
         above_threshold = z > tol
         carry_on = lax.bitwise_not(jnp.logical_or(alpha < alpha_min, above_threshold))
+        
+        # print(f"{alpha} < {alpha_min} {jnp.float64(alpha-alpha_min)}")
+        # assert_scalar_positive(alpha-alpha_min)
+        # assert_scalar_positive(max_iter_linesearch-1-n_iter)
         # Only return new trajs if leads to a strict cost decrease
         new_Xs = jnp.where(above_threshold, new_Xs, Xs)
         new_Us = jnp.where(above_threshold, new_Us, Us)
@@ -432,4 +442,8 @@ def linesearch(
     # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f}",
     # f"ΔJ:{cost_init-cost_opt:.03f} <ΔJ>:{exp_dj:.03f}"
     # )
+    #assert old_cost < cost_opt
+    #assert jax.device_get(old_cost) < jax.device_get(cost_opt)
+    #lax.cond(old_cost > cost_opt, lambda : True, lambda : False)
+    #chex.assert_scalar_negative(jax.device_get(old_cost) - jax.device_get(cost_opt))#, "Cost did not decrease"
     return (Xs_star, Us_star), cost_opt
