@@ -13,7 +13,7 @@ from diffilqrax.plqr import (
     associative_opt_traj_scan,
     associative_riccati_scan,
     build_fwd_lin_dyn_elements,
-    get_dJs,
+    get_dcosts,
     dynamic_operator,
 )
 from diffilqrax.ilqr import approx_lqr, linesearch, approx_lqr_dyn
@@ -167,7 +167,7 @@ def pilqr_solver(
         etas, Js = associative_riccati_scan(
             lqr_params
         )  ##need to make a parallel v of that
-        exp_dJ = get_dJs(lqr_params, etas, Js)
+        exp_dJ = get_dcosts(lqr_params, etas, Js)
 
         def linesearch_wrapped(*args):
             value_fns, Xs_init, Us_init, alpha_init = args

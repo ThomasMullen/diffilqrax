@@ -9,7 +9,6 @@ import jax.numpy as jnp
 from jax.numpy import matmul as mm
 
 from diffilqrax.lqr import (
-    # kkt,
     solve_lqr,
     solve_lqr_swap_x0,
     bmm,
@@ -26,7 +25,23 @@ from diffilqrax.typs import (
 
 
 def offset_lqr(lqr: LQR, x_stars: Array, u_stars: Array) -> LQR:
-    """Adjust linear terms of LQR cost along nominal trajectory"""
+    """
+    Adjust linear terms of LQR cost along nominal trajectory.
+
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
+    x_stars : Array
+        Nominal state trajectory.
+    u_stars : Array
+        Nominal control trajectory.
+
+    Returns
+    -------
+    LQR
+        Adjusted LQR parameters.
+    """
     return LQR(
         A=lqr.A,
         B=lqr.B,
@@ -41,20 +56,28 @@ def offset_lqr(lqr: LQR, x_stars: Array, u_stars: Array) -> LQR:
     )
 
 
-def get_qra_bar(
+def _get_qra_bar(
     dims: ModelDims, params: LQRParams, tau_bar: Array, tau_bar_f: Array
 ) -> Tuple[Array, Array, Array]:
     """
     Helper function to get gradients wrt to q, r, a. Variables q_bar, r_bar, a_bar from solving the
-    rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here)
-    Args:
-        dims (ModelDims): The dimensions of the model.
-        params (LQRParams): The parameters of the model.
-        tau_bar (Array): The tau_bar array.
-        tau_bar_f (Array): The tau_bar_f array.
+    rev LQR problem where q_rev = x_bar, r_rev = u_bar, a_rev = lambda_bar (set to 0 here).
 
-    Returns:
-        Tuple[Array, Array, Array]: The q_bar, r_bar, and a_bar arrays.
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    params : LQRParams
+        The parameters of the model.
+    tau_bar : Array
+        The tau_bar array.
+    tau_bar_f : Array
+        The tau_bar_f array.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        The q_bar, r_bar, and a_bar arrays.
     """
     lqr = params.lqr
     n = dims.n
@@ -91,8 +114,28 @@ def get_qra_bar(
 def build_ajoint_lqr(
     dims: ModelDims, params: LQRParams, tau_star: Array, lambs: Array, tau_bar: Array
 ) -> Array:
-    """Helper function to build lqr problem with reverse gradients"""
-    q_bar, r_bar, a_bar = get_qra_bar(dims, params, tau_bar[:-1], tau_bar[-1])
+    """
+    Helper function to build LQR problem with reverse gradients.
+
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    params : LQRParams
+        The parameters of the model.
+    tau_star : Array
+        The optimal state-control trajectory.
+    lambs : Array
+        The adjoint variables.
+    tau_bar : Array
+        The gradients with respect to tau.
+
+    Returns
+    -------
+    LQRParams
+        The LQR parameters with reverse gradients.
+    """
+    q_bar, r_bar, a_bar = _get_qra_bar(dims, params, tau_bar[:-1], tau_bar[-1])
     c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
     F_bar = jnp.einsum("ij,ik->ijk", a_bar[1:], tau_star[:-1]) + jnp.einsum(
         "ij,ik->ijk", lambs[1:], c_bar[:-1]
@@ -125,13 +168,19 @@ def dlqr(dims: ModelDims, params: LQRParams, tau_guess: Array) -> Array:
     Reverse mode uses an LQR solver to solve the reverse LQR problem of the gradients on state and
     input trajectory gradients.
 
-    Args:
-        dims (ModelDims): The dimensions of the model.
-        params (LQRParams): The parameters of the model.
-        tau_guess (Array): The initial guess for the optimal control sequence.
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    params : LQRParams
+        The parameters of the model.
+    tau_guess : Array
+        The initial guess for the optimal control sequence.
 
-    Returns:
-        Array: Concatenated optimal state and control sequence along axis=1.
+    Returns
+    -------
+    Array
+        Concatenated optimal state and control sequence along axis=1.
     """
     sol = solve_lqr(params)  #  tau_guess)
     Xs_star, Us_star, _ = sol
@@ -142,15 +191,22 @@ def dlqr(dims: ModelDims, params: LQRParams, tau_guess: Array) -> Array:
 def fwd_dlqr(
     dims: ModelDims, params: LQRParams, tau_guess: Array
 ) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]:
-    """Solves the forward differential linear quadratic regulator (DLQR) problem.
+    """
+    Solves the forward differential linear quadratic regulator (DLQR) problem.
 
-    Args:
-        dims (ModelDims): The dimensions of the model.
-        params (LQRParams): The parameters of the DLQR problem.
-        tau_guess (Array): The initial guess for the state-control trajectory.
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    params : LQRParams
+        The parameters of the DLQR problem.
+    tau_guess : Array
+        The initial guess for the state-control trajectory.
 
-    Returns:
-        Tuple: A tuple containing the optimal state-control trajectory and the updated parameters
+    Returns
+    -------
+    Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]
+        A tuple containing the optimal state-control trajectory and the updated parameters
         and solution.
     """
     lqr = params.lqr
@@ -163,26 +219,39 @@ def fwd_dlqr(
 
 
 def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
-    """
-    Inputs : params (contains lqr parameters, x0), tau_star_bar (gradients wrt to tau at tau_star)
-    params : LQR(A, B, a, Q, q, Qf, qf, R, r, S)
-    A : T x N x N
-    B : T x N x M
-    a : T x N x 1
-    q : T x N x 1
-    Q : T x N x N
-    R : T x M x M
-    r : T x M x 1
-    S : T x N x M
+    r"""
+    Reverse mode for DLQR. Find the reverse gradient by solving LQR problem on the optimal
+    trajectory and the gradients wrt to tau_star.
+    
+    Notes
+    -----
+    :math:`\overline{q}`, :math:`\overline{r}`, :math:`\overline{a}` from solving the reverse LQR 
+    problem where :math:`q_{\text{rev}} = \overline{x}`, :math:`r_{\text{rev}} = \overline{u}`, 
+    :math:`a_{\text{rev}} = \overline{\lambda}` which is set to 0.
+    
+    Use :func:`build_ajoint_lqr` to build the reverse LQR problem with gradients. Where 
+    :math:`\overline{c} = [\overline{q}, \overline{r}]`, :math:`\overline{F}`, 
+    where :math:`F = [A, B]`, and :math:`\overline{C}` (where :math:`C = [Q, R]`) as:
+        :math:`\overline{C} = 0.5 \left( \overline{c} \tau_{\star}^T + \tau_{\star} 
+        \overline{c}^T \right)`
+        :math:`\overline{F}_t = \lambda_{\star_{t+1}} \overline{c}^T + f_{t+1} 
+        \tau_{\star_t}^T`
 
-    - q_bar, r_bar, a_bar from solving the rev LQR problem where q_rev = x_bar, r_rev = u_bar,
-      a_rev = lambda_bar (set to 0 here)
-    - define c_bar = [q_bar, r_bar]
-    - define F_bar (where F = [A, B] and C_bar (where C = [Q,R]) as
-      C_bar 0.5*(c_bar tau_star.T + tau_star c_bar.T))
-    - F_bar_t = lambda_star_{t+1}c_bar.T + f_{t+1} tau_star_t.T
 
-    Returns : params_bar, i.e tuple with gradients wrt to x0, LQR params, and horizon
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    res : Tuple[LQRParams, Tuple[Array, Array, Array]]
+        The result from the forward pass, that is, the tuple of LQR gradients and optimal tau 
+        gradients.
+    tau_bar : Array
+        The gradients with respect to tau.
+
+    Returns
+    -------
+    LQRParams
+        The LQR parameters with reverse gradients.
     """
     params, sol = res
     Xs_star, Us_star, Lambs = sol
@@ -198,17 +267,23 @@ dlqr.defvjp(fwd_dlqr, rev_dlqr)
 @partial(custom_vjp, nondiff_argnums=(0,))
 def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
     """
-    Solves the differential linear quadratic regulator (DLQR) problem. Custom VJP function for DLQR.
-    Reverse mode uses an LQR solver to solve the reverse LQR problem of the gradients on state and
-    input trajectory gradients.
+    Solves the differential linear quadratic regulator (DLQR) problem. Custom VJP function for 
+    DLQR. Reverse mode uses an LQR solver to solve the reverse LQR problem of the gradients on 
+    state and input trajectory gradients.
 
-    Args:
-        dims (ModelDims): The dimensions of the model.
-        params (Params): The parameters of the model.
-        tau_guess (Array): The initial guess for the optimal control sequence.
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    params : LQRParams
+        The parameters of the model.
+    tau_star : Array
+        The optimal state-control trajectory.
 
-    Returns:
-        Array: Concatenated optimal state and control sequence along axis=1.
+    Returns
+    -------
+    Array
+        Concatenated optimal state and control sequence along axis=1.
     """
     # sol = solve_lqr(params, dims)  #  tau_guess)
     # Xs_star, Us_star, _ = sol
@@ -220,15 +295,22 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
 def fwd_dllqr(
     dims: ModelDims, params: LQRParams, tau_star: Array
 ) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]:
-    """Solves the forward differential linear quadratic regulator (DLQR) problem.
+    """
+    Solves the forward differential linear quadratic regulator (DLQR) problem.
 
-    Args:
-        dims (ModelDims): The dimensions of the model.
-        params (Params): The parameters of the DLQR problem.
-        tau_guess (Array): The initial guess for the state-control trajectory.
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    params : LQRParams
+        The parameters of the DLQR problem.
+    tau_star : Array
+        The optimal state-control trajectory.
 
-    Returns:
-        Tuple: A tuple containing the optimal state-control trajectory and the updated parameters
+    Returns
+    -------
+    Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]
+        A tuple containing the optimal state-control trajectory and the updated parameters
         and solution.
     """
     lqr = params.lqr
@@ -241,7 +323,23 @@ def fwd_dllqr(
 
 
 def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
-    """reverse mode for DLQR"""
+    """
+    Reverse mode for DLQR.
+
+    Parameters
+    ----------
+    dims : ModelDims
+        The dimensions of the model.
+    res : Tuple[LQRParams, Tuple[Array, Array, Array]]
+        The result from the forward pass.
+    tau_bar : Array
+        The gradients with respect to tau.
+
+    Returns
+    -------
+    LQRParams
+        The LQR parameters with reverse gradients.
+    """
     params, sol = res
     Xs_star, Us_star, Lambs = sol
     # isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
