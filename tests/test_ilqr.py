@@ -483,12 +483,12 @@ PLOT_URL = ("https://gist.githubusercontent.com/"
        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
        "figure_style.mplstyle")
 PRINTING_ON = True
-PLOTTING_ON = True
+PLOTTING_ON = False
 if PLOTTING_ON:
     style.use(PLOT_URL)
     FIG_DIR = Path(getcwd(), "fig_dump", "seq_ilqr")
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-print(FIG_DIR)
+    print(FIG_DIR)
 
 def _plot_kkt(*args):
     """plot KKT conditions and state trajectories"""
