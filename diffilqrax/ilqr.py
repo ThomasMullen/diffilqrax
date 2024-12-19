@@ -6,7 +6,6 @@ from jax import Array
 import jax
 from jax import lax
 import jax.numpy as jnp
-import chex
 
 from diffilqrax import lqr
 from diffilqrax.lqr import bmm
@@ -20,14 +19,27 @@ from diffilqrax.typs import (
     ParallelSystem,
 )
 from diffilqrax.utils import time_map
-from chex import assert_scalar_negative, assert_scalar_positive
+
+# from chex import assert_scalar_negative, assert_scalar_positive
 
 jax.config.update("jax_enable_x64", True)  # double precision
 jax.config.update("jax_disable_jit", False)  # uncomment for debugging purposes
 
 
 def sum_cost_to_go(x: CostToGo) -> Array:
-    """Sum linear and quadratic components of cost-to-go tuple"""
+    """
+    Sum linear and quadratic components of cost-to-go tuple.
+
+    Parameters
+    ----------
+    x : CostToGo
+        The cost-to-go tuple containing linear and quadratic components.
+
+    Returns
+    -------
+    Array
+        The sum of the linear and quadratic components.
+    """
     return x.V + x.v
 
 
@@ -39,7 +51,29 @@ def compute_lqr_params(
     include_dyn_offset: bool = False,
     include_cost_offset: bool = False,
 ) -> LQR:
-    """Compute LQR parameters with optional offset for dynamics."""
+    """
+    Compute LQR parameters with optional offset for dynamics and cost.
+
+    Parameters
+    ----------
+    model : System | ParallelSystem
+        The system model.
+    Xs : Array
+        The state trajectory.
+    Us : Array
+        The control trajectory.
+    params : iLQRParams
+        The iLQR parameters.
+    include_dyn_offset : bool, optional
+        Whether to include dynamic offset, by default False.
+    include_cost_offset : bool, optional
+        Whether to include cost offset, by default False.
+
+    Returns
+    -------
+    LQR
+        The LQR parameters.
+    """
     theta = params.theta
     tps = jnp.arange(model.dims.horizon)
 
@@ -107,22 +141,82 @@ def compute_lqr_params(
     )()
 
 
-def approx_lqr_offset(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
-    """Approximate non-linear model as LQR with offset."""
+def approx_lqr_offset(
+    model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams
+) -> LQR:
+    """
+    Approximate non-linear model as LQR with offset.
+
+    Parameters
+    ----------
+    model : System | ParallelSystem
+        The system model.
+    Xs : Array
+        The state trajectory.
+    Us : Array
+        The control trajectory.
+    params : iLQRParams
+        The iLQR parameters.
+
+    Returns
+    -------
+    LQR
+        The LQR parameters.
+    """
     return compute_lqr_params(
         model, Xs, Us, params, include_dyn_offset=True, include_cost_offset=True
     )
 
 
-def approx_lqr(model: Any, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
-    """Approximate non-linear model as LQR without offset."""
+def approx_lqr(
+    model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams
+) -> LQR:
+    """
+    Approximate non-linear model as LQR without offset.
+
+    Parameters
+    ----------
+    model : System | ParallelSystem
+        The system model.
+    Xs : Array
+        The state trajectory.
+    Us : Array
+        The control trajectory.
+    params : iLQRParams
+        The iLQR parameters.
+
+    Returns
+    -------
+    LQR
+        The LQR parameters.
+    """
     return compute_lqr_params(
         model, Xs, Us, params, include_dyn_offset=False, include_cost_offset=False
     )
 
 
-def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
-    """Approximate non-linear model as LQR with dynamic offset."""
+def approx_lqr_dyn(
+    model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams
+) -> LQR:
+    """
+    Approximate non-linear model as LQR with dynamic offset.
+
+    Parameters
+    ----------
+    model : System | ParallelSystem
+        The system model.
+    Xs : Array
+        The state trajectory.
+    Us : Array
+        The control trajectory.
+    params : iLQRParams
+        The iLQR parameters.
+
+    Returns
+    -------
+    LQR
+        The LQR parameters.
+    """
     return compute_lqr_params(
         model, Xs, Us, params, include_dyn_offset=True, include_cost_offset=False
     )
@@ -131,16 +225,23 @@ def approx_lqr_dyn(model: System, Xs: Array, Us: Array, params: iLQRParams) -> L
 def ilqr_simulate(
     model: System, Us: Array, params: iLQRParams
 ) -> Tuple[Tuple[Array, Array], float]:
-    """Simulate forward trajectory and cost with nonlinear params
+    """
+    Simulate forward trajectory and cost with nonlinear parameters.
 
-    Args:
-        dynamics (Callable): function of dynamics with args t, x, u, params
-        Us (ArrayLike): Input timeseries shape [Txm]
-        params (iLQRParams): Parameters containing x_init, horizon and theta
+    Parameters
+    ----------
+    model : System
+        The system model.
+    Us : Array
+        The control trajectory.
+    params : iLQRParams
+        The iLQR parameters.
 
-    Returns:
-        Tuple[[Array, Array], float]: A tuple containing the updated state and control trajectory,
-            and the total cost of the trajectory.
+    Returns
+    -------
+    Tuple[Tuple[Array, Array], float]
+        A tuple containing the updated state and control trajectory, and the total cost of the
+        trajectory.
     """
     x0, theta = params.x0, params.theta
     tps = jnp.arange(model.dims.horizon)
@@ -167,23 +268,29 @@ def ilqr_forward_pass(
     alpha: float = 1.0,
 ) -> Tuple[Tuple[Array, Array], float]:
     """
-    Performs a forward pass of the iterative Linear Quadratic Regulator (iLQR) algorithm. Uses the
-    deviations of target state and system generated state to update control inputs using gains
-    obtained from LQR solver.
+    Perform a forward pass of the iterative Linear Quadratic Regulator (iLQR) algorithm.
 
-    Args:
-        model (System): The nonlinear system model.
-        params (iLQRParams): The parameters of the system.
-        Ks (Gains): The gains obtained from the LQR controller.
-        Xs (np.ndarray): The target state trajectory.
-        Us (np.ndarray): The control trajectory.
-        alpha (float, optional): The linesearch parameter. Defaults to 1.0.
+    Parameters
+    ----------
+    model : System
+        The nonlinear system model.
+    params : iLQRParams
+        The parameters of the system.
+    Ks : Gains
+        The gains obtained from the LQR controller.
+    Xs : Array
+        The target state trajectory.
+    Us : Array
+        The control trajectory.
+    alpha : float, optional
+        The linesearch parameter, by default 1.0.
 
-    Returns:
-        Tuple[[np.ndarray, np.ndarray], float]: A tuple containing the updated state trajectory and
-            control trajectory, and the total cost of the trajectory.
+    Returns
+    -------
+    Tuple[Tuple[Array, Array], float]
+        A tuple containing the updated state trajectory and control trajectory, and the total cost
+        of the trajectory.
     """
-
     x0, theta = params.x0, params.theta
     tps = jnp.arange(model.dims.horizon)
     x_hat0 = x0
@@ -218,30 +325,39 @@ def ilqr_solver(
     use_linesearch: bool = True,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
-    """Solves the iterative Linear Quadratic Regulator (iLQR) problem.
+    """
+    Solve the iterative Linear Quadratic Regulator (iLQR) problem.
 
-    This function iteratively solves the LQR problem by approximating the dynamics and cost-to-go
-    functions using linearizations around the current state and control trajectories. It performs a
-    backward pass to calculate the control gains and expected cost reduction, and then performs a
-    forward pass to update the state and control trajectories. This process is repeated until the
-    change in the cost-to-go function falls below a specified convergence or the maximum number of
-    iterations is reached.
+    The non-linear system is approximated to be a local LQR problem. The optimal control gains are
+    iteratively added to the x and u perturbations until the cost converges to a local optimum.
+    Convergence speed can be improved by using line search to find the optimal step size.
 
-    Args:
-        model (System): The system model.
-        params (iLQRParams): The parameters of the system.
-        Us_init (Array): The initial control trajectory.
-        max_iter (int, optional): The maximum number of iterations. Defaults to 10.
-        convergence_thresh (float, optional): The convergence for convergence. Defaults to 1e-6.
-        alpha_init (float, optional): The initial step size for the forward pass. Defaults to 1.0.
-        verbose (bool, optional): Whether to print debug information. Defaults to False.
-        use_linesearch (bool, optional): Whether to use line search for the forward pass.
-            Defaults to False.
+    Parameters
+    ----------
+    model : System
+        The system model.
+    params : iLQRParams
+        The parameters of the system.
+    Us_init : Array
+        The initial control trajectory.
+    max_iter : int, optional
+        The maximum number of iterations, by default 40.
+    convergence_thresh : float, optional
+        The convergence threshold, by default 1e-6.
+    alpha_init : float, optional
+        The initial step size for the forward pass, by default 1.0.
+    verbose : bool, optional
+        Whether to print debug information, by default False.
+    use_linesearch : bool, optional
+        Whether to use line search for the forward pass, by default True.
+    **linesearch_kwargs
+        Additional keyword arguments for the line search.
 
-    Returns:
-        Tuple[Tuple[Array, Array, Array], float, Array]: A tuple containing the final state
-            trajectory, control trajectory, and the adjoint variables. Also returns the total cost
-            of the trajectory and the cost history.
+    Returns
+    -------
+    Tuple[Tuple[Array, Array, Array], float, Array]
+        A tuple containing the final state trajectory, control trajectory, and the adjoint
+        variables. Also returns the total cost of the trajectory and the cost history.
     """
     # simulate initial cost
     (Xs_init, _), c_init = ilqr_simulate(model, Us_init, params)
@@ -330,29 +446,51 @@ def linesearch(
     verbose: bool = False,
 ) -> Tuple[Tuple[Array, Array], float, float, Array]:
     """
-    Implementation of the line search backtracking algorithm for ilqr algorithm.
+    Implementation of the line search backtracking algorithm for iLQR algorithm.
+
     Each iteration of the line search algorithm performs a forward pass with the new control inputs
     defined by the gains and an alpha value. The change in cost is compared to the expected change
     in cost and the alpha is selected based on the ratio of the two values above a given tolerance.
     Otherwise, the alpha value is reduced by a factor of beta.
 
-    Args:
-        update (Callable): rollout function which returns new Xs, Us and cost
-        Ks (Gains): Gains obtained from the LQR controller.
-        Xs_init (Array): state trajectory
-        Us_init (Array): input trajectory
-        cost_init (float): cost of initial trajectory
-        alpha_init (float): initialised alpha value
-        expected_dJ (CostToGo): expected change in cost from LQR controller
-        beta (float): reduction factor for alpha
-        max_iter_linesearch (int, optional): Maximum iterations of linesearch. Defaults to 20.
-        tol (float, optional): Tolerance of ratio of actual to expected cost change to accept alpha
-            value. Defaults to 0.99999.
-        alpha_min (float, optional): Minimum alpha value. Defaults to 0.0001.
+    References
+    ----------
+    Tassa, Y., Erez, T., & Todorov, E. (2012).
+    Synthesis and stabilization of complex behaviors through online trajectory optimization.
+    IEEE. https://doi.org/10.1109/iros.2012.6386025
 
-    Returns:
-        Tuple: Returns the updated state and control trajectories, the alpha value, the total cost,
-            and the cost history.
+    Parameters
+    ----------
+    update : Callable
+        Rollout function which returns new Xs, Us and cost.
+    Ks : Gains
+        Gains obtained from the LQR controller.
+    Xs_init : Array
+        State trajectory.
+    Us_init : Array
+        Input trajectory.
+    alpha_init : float
+        Initial alpha value.
+    cost_init : float
+        Cost of initial trajectory.
+    expected_dJ : CostToGo
+        Expected change in cost from LQR controller.
+    beta : float, optional
+        Reduction factor for alpha, by default 0.5.
+    max_iter_linesearch : int, optional
+        Maximum iterations of linesearch, by default 12.
+    tol : float, optional
+        Tolerance of ratio of actual to expected cost change to accept alpha value, by default 0.1.
+    alpha_min : float, optional
+        Minimum alpha value, by default 1e-6.
+    verbose : bool, optional
+        Whether to print debug information, by default False.
+
+    Returns
+    -------
+    Tuple[Tuple[Array, Array], float, float, Array]
+        Returns the updated state and control trajectories, the alpha value, the total cost, and
+        the cost history.
     """
     # initialise carry: Xs, Us, old ilqr cost, alpha, n_iter, carry_on
     initial_carry = (Xs_init, Us_init, 0.0, cost_init, alpha_init, 0, 10.0, 0.0, True)
@@ -370,8 +508,10 @@ def linesearch(
         expected_delta_j = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         # calc z-value
         z = (old_cost - new_cost) / jnp.abs(expected_delta_j)
-        ## Note : so here I think we want the absolute value of the expected dJ (because we are doing old - new, and
-        # so that will be positive hopefully, and we want to check that the magnitude of the change is larger than some scaled version of the expected change
+        ## Note : so here I think we want the absolute value of the expected dJ
+        # (because we are doing old - new, and
+        # so that will be positive hopefully, and we want to check that the magnitude
+        # of the change is larger than some scaled version of the expected change
 
         if verbose:
             jax.debug.print(
@@ -428,5 +568,6 @@ def linesearch(
     # assert old_cost < cost_opt
     # assert jax.device_get(old_cost) < jax.device_get(cost_opt)
     # lax.cond(old_cost > cost_opt, lambda : True, lambda : False)
-    # chex.assert_scalar_negative(jax.device_get(old_cost) - jax.device_get(cost_opt))#, "Cost did not decrease"
+    # chex.assert_scalar_negative(jax.device_get(old_cost) - jax.device_get(cost_opt))
+    # #, "Cost did not decrease"
     return (Xs_star, Us_star), cost_opt

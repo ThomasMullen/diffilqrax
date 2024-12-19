@@ -33,12 +33,15 @@ from diffilqrax.utils import keygen, initialise_stable_dynamics
 jax.config.update('jax_default_device', jax.devices('cpu')[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
-OUTPUT_FIGS=True # save figures of tests
-PLOT_URL = ("https://gist.githubusercontent.com/"
-       "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
-       "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
-       "figure_style.mplstyle")
-style.use(PLOT_URL)
+OUTPUT_FIGS=False # save figures of tests
+if OUTPUT_FIGS:
+    FIG_DIR = Path(Path(getcwd()), "fig_dump", "seq_lqr")
+    FIG_DIR.mkdir(exist_ok=True,parent=True)
+    PLOT_URL = ("https://gist.githubusercontent.com/"
+        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
+        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
+        "figure_style.mplstyle")
+    style.use(PLOT_URL)
 
 def _plot_trajs(*args):
     x, u, lamb = args
@@ -124,9 +127,6 @@ class TestLQR(unittest.TestCase):
 
     def setUp(self):
         """Instantiate dummy LQR"""
-        if OUTPUT_FIGS:
-            self.fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
-            self.fig_dir.mkdir(exist_ok=True)
         print("\nRunning setUp method...")
         n = 30
         self.dims = chex.Dimensions(T=60, N=n, M=15, X=1)
@@ -247,7 +247,7 @@ class TestLQR(unittest.TestCase):
         Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
         if OUTPUT_FIGS:
             fig = _plot_trajs(Xs_lqr, Us_lqr, Lambs_lqr)
-            fig.savefig(f"{self.fig_dir}/seq_lqr_sol{self.sys_dims.n:03}_{self.sys_dims.m:03}.png")
+            fig.savefig(f"{FIG_DIR}/seq_lqr_sol{self.sys_dims.n:03}_{self.sys_dims.m:03}.png")
             close()
 
     def test_kkt_optimal(self):
@@ -260,7 +260,7 @@ class TestLQR(unittest.TestCase):
         if OUTPUT_FIGS:
             # Plot the KKT residuals
             fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
-            fig.savefig(f"{self.fig_dir}/seq_lqr_kkt_{self.sys_dims.n:03}_{self.sys_dims.m:03}.png")
+            fig.savefig(f"{FIG_DIR}/seq_lqr_kkt_{self.sys_dims.n:03}_{self.sys_dims.m:03}.png")
             close()
             
         # Verify that the average KKT conditions are satisfied
@@ -291,10 +291,6 @@ class TestLQRSolutionExact(unittest.TestCase):
     def setUp(self):
         """Instantiate LQR example using the pendulum example to compare against Ocaml"""
         print("\nRunning setUp method...")
-        if OUTPUT_FIGS:
-            fig_dir = Path(Path(getcwd()), "fig_dump", "seq_lqr")
-            fig_dir.mkdir(exist_ok=True)
-            self.fig_dir = fig_dir
         self.dims = chex.Dimensions(T=100, N=2, M=2, X=1)
         self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
         dt = self.sys_dims.dt
@@ -334,7 +330,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         if OUTPUT_FIGS:
             print("Plot u solutions")
             fig = _plot_lqr_sols(Xs_dir, Us_dir, Xs_quad, Us_quad, Xs_exact, Us_exact)
-            fig.savefig(f"{self.fig_dir}/compare_tiv_lqr_solver.png")
+            fig.savefig(f"{FIG_DIR}/compare_tiv_lqr_solver.png")
             close()
         # Verify that the two solutions are close
         assert jnp.allclose(Us_dir[:-1], Us_exact, rtol=1e-05, atol=1e-08)
@@ -351,7 +347,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         # Plot the KKT residuals
         if OUTPUT_FIGS:
             fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
-            fig.savefig(f"{self.fig_dir}/seq_tiv_lqr_kkt.png")
+            fig.savefig(f"{FIG_DIR}/seq_tiv_lqr_kkt.png")
             close()
             
         # Verify that the average KKT conditions are satisfied
@@ -378,7 +374,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         # Plot the KKT residuals
         if OUTPUT_FIGS:
             fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
-            fig.savefig(f"{self.fig_dir}/seq_tivb_lqr_kkt.png")
+            fig.savefig(f"{FIG_DIR}/seq_tivb_lqr_kkt.png")
             close()
             
         # Verify that the average KKT conditions are satisfied
@@ -408,7 +404,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         # Plot the KKT residuals
         if OUTPUT_FIGS:
             fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
-            fig.savefig(f"{self.fig_dir}/seq_tvq_lqr_kkt.png")
+            fig.savefig(f"{FIG_DIR}/seq_tvq_lqr_kkt.png")
             close()            
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
@@ -437,7 +433,7 @@ class TestLQRSolutionExact(unittest.TestCase):
         # Plot the KKT residuals
         if OUTPUT_FIGS:
             fig = _plot_kkt(Xs_dir, Us_dir, Lambs_dir, dLdXs, dLdUs, dLdLambs)
-            fig.savefig(f"{self.fig_dir}/seq_tvr_lqr_kkt.png")
+            fig.savefig(f"{FIG_DIR}/seq_tvr_lqr_kkt.png")
             close()            
         # Verify that the average KKT conditions are satisfied
         assert jnp.allclose(jnp.mean(jnp.abs(dLdUs)), 0.0, rtol=1e-05, atol=1e-08)
