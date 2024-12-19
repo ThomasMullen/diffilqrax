@@ -1,16 +1,15 @@
-"""LQR solver via dynamic programming"""
+"""Solve LQR problem via dynamic programming"""
 
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 from jax.typing import ArrayLike
-from jax import Array
 import jax
-from jax import lax
+from jax import lax, Array
 import jax.numpy as jnp
 from jax.scipy.linalg import solve
 
+
 from diffilqrax.typs import (
     symmetrise_matrix,
-    symmetrise_tensor,
     ModelDims,
     LQRParams,
     Gains,
@@ -21,9 +20,11 @@ from diffilqrax.typs import (
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
+
 def bmm(arr1: Array, arr2: Array) -> Array:
     """Batch matrix multiplication"""
     return jax.vmap(jnp.matmul)(arr1, arr2)
+
 
 # LQR struct
 LQRBackParams = Tuple[
@@ -32,18 +33,29 @@ LQRBackParams = Tuple[
 
 
 def simulate_trajectory(
-    dynamics: Callable, Us: ArrayLike, params: LQRParams, dims: ModelDims
+    dynamics: Callable[[Array, Array, Array, Any], Array],
+    Us: ArrayLike,
+    params: LQRParams,
+    dims: ModelDims,
 ) -> Array:
-    """Simulate forward pass with LQR params
+    """
+    Simulate forward pass with LQR params.
 
-    Args:
-        dynamics (Callable): function of dynamics with args t, x, u, params
-        Us (ArrayLike): Input timeseries shape [Txm]
-        params (Params): Parameters containing x_init, horizon and theta
-        dims (ModelDims): Parameters containing shape of system n, m, horizon and dt
+    Parameters
+    ----------
+    dynamics : Callable
+        Function of dynamics with args t, x, u, params.
+    Us : ArrayLike
+        Input timeseries shape [Txm].
+    params : LQRParams
+        Parameters containing x_init, horizon and theta.
+    dims : ModelDims
+        Parameters containing shape of system n, m, horizon and dt.
 
-    Returns:
-        Array: state trajectory [(T+1)xn]
+    Returns
+    -------
+    Array
+        State trajectory [(T+1)xn].
     """
     horizon = dims.horizon
     x0, lqr = params.x0, params[1]
@@ -53,7 +65,7 @@ def simulate_trajectory(
         nx = dynamics(t, x, u, lqr)
         return nx, nx
 
-    _, Xs = lax.scan(step, x0, (jnp.arange(horizon), Us))
+    Xs = lax.scan(step, x0, (jnp.arange(horizon), Us))[1]
 
     return jnp.vstack([x0[None], Xs])
 
@@ -65,15 +77,22 @@ def lin_dyn_step(t: int, x: ArrayLike, u: ArrayLike, lqr: LQR) -> Array:
 
 
 def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
-    """Adjoint backward pass with LQR params
+    """
+    Adjoint backward pass with LQR params.
 
-    Args:
-        Xs (np.ndarray): State timeseries shape [(T+1)xn]
-        Us (np.ndarray): Input timeseries shape [Txm]
-        params (Params): LQR state and cost matrices
+    Parameters
+    ----------
+    Xs : np.ndarray
+        State timeseries shape [(T+1)xn].
+    Us : np.ndarray
+        Input timeseries shape [Txm].
+    params : LQRParams
+        LQR state and cost matrices.
 
-    Returns:
-        np.ndarray: adjoint λs [(T+1)xn]
+    Returns
+    -------
+    np.ndarray
+        Adjoint λs [(T+1)xn].
     """
     lqr = params[1]
     AT = lqr.A.transpose(0, 2, 1)
@@ -91,14 +110,20 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
 
 
 def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
-    """LQR forward pass using gain state feedback
+    """
+    LQR forward pass using gain state feedback.
 
-    Args:
-        gains (Gains): K matrices
-        params (Params): LQR state and cost matrices
+    Parameters
+    ----------
+    gains : Gains
+        K matrices.
+    params : LQRParams
+        LQR state and cost matrices.
 
-    Returns:
-        Tuple[Array, Array]: updated state [(T+1)xn] and inputs [Txm]
+    Returns
+    -------
+    Tuple[Array, Array]
+        Updated state [(T+1)xn] and inputs [Txm].
     """
     x0, lqr = params.x0, params.lqr
 
@@ -108,35 +133,48 @@ def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
         nx = A @ x + B @ u + a
         return nx, (nx, u)
 
-    Xs, Us = lax.scan(
-        dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k)
-    )[1]
+    Xs, Us = lax.scan(dynamics, init=x0, xs=(lqr.A, lqr.B, lqr.a, gains.K, gains.k))[1]
 
     return jnp.vstack([x0[None], Xs]), Us
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
-    """expected change in cost [Tassa, 2020]"""
+    """
+    Expected change in cost [Tassa, 2020].
+
+    Parameters
+    ----------
+    dJ : CostToGo
+        Cost to go.
+    alpha : float, optional
+        Scaling factor, by default 0.5.
+
+    Returns
+    -------
+    float
+        Expected change in cost.
+    """
     return -(dJ.V * alpha**2 + dJ.v * alpha)
 
 
 def lqr_backward_pass(
     lqr: LQR,
-    dims: ModelDims,
-    expected_change: bool = False,
-) -> Gains:
-    """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
+) -> Tuple[float, Gains]:
+    """
+    LQR backward pass learn optimal Gains given LQR cost constraints and dynamics.
 
-    Args:
-        lqr (LQR): LQR parameters
-        T (int): parameter time horizon
-        expected_change (bool, optional): Estimate expected change in cost [Tassa, 2020].
-        Defaults to False.
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
 
-    Returns:
-        Gains: Optimal feedback gains.
+    Returns
+    -------
+    Gains
+        Optimal feedback gains.
     """
     a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    n_dim, _ = lqr.B[0].shape
 
     def riccati_step(
         carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
@@ -144,26 +182,23 @@ def lqr_backward_pass(
         AT, BT, (A, B, a, Q, q, R, r, S) = inps
         curr_val, cost_step = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        # Hxx = Q + AT @ V @ A
-        # Huu = R + BT @ V @ B
-        Hxx = symmetrise_matrix(Q + AT @ V @ A)
-        Huu = symmetrise_matrix(R + BT @ V @ B)
-        Hxu = S + AT @ V @ B
+        Huu = symmetrise_matrix(R + BT @ V @ B)  # .reshape(m_dim, m_dim)
+        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
+        mu = 0.*jnp.maximum(1e-12, 1e-12 - min_eval)
+        # mu = 1.e-6
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)  # .reshape(n_dim, n_dim)
+        Hxu = S + AT @ (V) @ B
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
-
-        # With Levenberg-Marquardt regulisation
-        # min_eval = jnp.linalg.eigh(Huu)[0][0]
-        # I_mu = jnp.maximum(0.0, 1e-6 - min_eval) * jnp.eye(dims.m)
-        I_mu = 1e-7 * jnp.eye(dims.m)
-
-        # solve gains
-        # k = -solve(Huu + I_mu, hu, assume_a="her")
-        # K = -solve(Huu + I_mu, Hxu.T, assume_a="her")
+        I_mu = mu * BT @ B  # jnp.eye(m_dim)
+        Hxu_reg = S + AT @ (V + mu * jnp.eye(n_dim)) @ B
+        Huu_reg = Huu + I_mu
         K, k = jnp.hsplit(
-            -solve(Huu + I_mu, jnp.c_[Hxu.T, hu], assume_a="her"), [dims.n]
+            -solve(Huu_reg, jnp.c_[Hxu_reg.T, hu], assume_a="her"), [n_dim]
         )
-        k = k.squeeze()
+        k = k.reshape(
+            -1,
+        )
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
@@ -182,14 +217,31 @@ def lqr_backward_pass(
         reverse=True,
     )
 
-    if not expected_change:
-        return dJ, Ks
-
-    return (dJ, Ks), calc_expected_change(dJ=dJ)
+    return dJ, Ks
 
 
-def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
-    """Define KKT conditions for LQR problem"""
+def kkt(
+    params: LQRParams, Xs: Array, Us: Array, Lambs: Array
+) -> Tuple[Array, Array, Array]:
+    """
+    Define KKT conditions for LQR problem.
+
+    Parameters
+    ----------
+    params : LQRParams
+        LQR parameters.
+    Xs : Array
+        State trajectory.
+    Us : Array
+        Control inputs.
+    Lambs : Array
+        Adjoint variables.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        Gradients with respect to states, inputs, and adjoint variables.
+    """
     AT = params.lqr.A.transpose(0, 2, 1)
     BT = params.lqr.B.transpose(0, 2, 1)
     ST = params.lqr.S.transpose(0, 2, 1)
@@ -213,25 +265,47 @@ def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array):
     return dLdXs, dLdUs, dLdLambs
 
 
-def solve_lqr(params: LQRParams, sys_dims: ModelDims):
-    "run backward forward sweep to find optimal control"
+def solve_lqr(params: LQRParams) -> Tuple[Array, Array, Array]:
+    """
+    Run backward forward sweep to find optimal control.
+
+    Parameters
+    ----------
+    params : LQRParams
+        LQR parameters.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        State trajectory, control inputs, and adjoint variables.
+    """
     # backward
-    _, gains = lqr_backward_pass(params.lqr, sys_dims)
+    gains = lqr_backward_pass(params.lqr)[1]
     # forward
     Xs, Us = lqr_forward_pass(gains, params)
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, params)
-    return gains, Xs, Us, Lambs
+    return Xs, Us, Lambs
 
 
-def solve_lqr_swap_x0(params: LQRParams, sys_dims: ModelDims):
-    "run backward forward sweep to find optimal control freeze x0 to zero"
+def solve_lqr_swap_x0(params: LQRParams) -> Tuple[Array, Array, Array]:
+    """
+    Run backward forward sweep to find optimal control freeze x0 to zero.
+
+    Parameters
+    ----------
+    params : LQRParams
+        LQR parameters.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        State trajectory, control inputs, and adjoint variables.
+    """
     # backward
-    # print("r", new_params.lqr.r[-10:])
-    _, gains = lqr_backward_pass(params.lqr, sys_dims)
-    # print("k", gains.k[-10:])
+    gains = lqr_backward_pass(params.lqr)[1]
     new_params = LQRParams(jnp.zeros_like(params.x0), params.lqr)
     Xs, Us = lqr_forward_pass(gains, new_params)
     # adjoint
     Lambs = lqr_adjoint_pass(Xs, Us, new_params)
-    return gains, Xs, Us, Lambs
+    return Xs, Us, Lambs

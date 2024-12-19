@@ -34,7 +34,7 @@ def setup_lqr_time_varying(
 ) -> LQR:
     """Setup LQR problem"""
     key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
+    key, skeys = keygen(key, 4)
     # initialise dynamics
     span_time_m = dims["TXX"]
     span_time_v = dims["TX"]
@@ -46,11 +46,11 @@ def setup_lqr_time_varying(
     q = 2 * 1e-1 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
     R = pen_weight["R"] * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
     r = 1e-6 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = pen_weight["S"] * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
+    S = pen_weight["S"] * jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
     Qf = pen_weight["Q"] * jnp.eye(dims["N"][0])
     qf = 2 * 1e-1 * jnp.ones(dims["N"])
     # construct LQR
-    lqr = LQR(A, B, a, Q, q, Qf, qf, R, r, S)
+    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
     return lqr()
 
 
@@ -65,15 +65,15 @@ def setup_lqr(
     span_time_v = dims["TX"]
     A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
     B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
-    a = jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
+    a = 0*jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
     Qf = 1.0 * jnp.eye(dims["N"][0])
     qf = 1.0 * jnp.ones(dims["N"])
     Q = 1.0 * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
-    q = 0.0 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
+    q = 1.0 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
     R = 1.0 * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
-    r = 0.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = 0.0 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
-    return LQR(A, B, a, Q, q, Qf, qf, R, r, S)()
+    r = 1.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
+    S = 0.5 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
+    return LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
 
 
 class TestLQR(unittest.TestCase):
@@ -154,18 +154,18 @@ class TestDLQR(unittest.TestCase):
         test dlqr struct, shapes and solutions compared to direct gradients,
         and implicit gradients
         """
-        def replace_params(p):
+        def replace_params(p:Prms)->LQRParams:
             lqr = LQR(
                 A=p.A,
                 B=self.params.lqr.B,
                 a=p.a,
                 Q=p.Q,
                 q=p.q,
-                Qf=self.params.lqr.Qf,
-                qf=self.params.lqr.qf,
                 R=p.R,
                 r=p.r,
                 S=p.S,
+                Qf=self.params.lqr.Qf,
+                qf=self.params.lqr.qf,
             )
             return LQRParams(p.x0, lqr)
 
@@ -174,22 +174,23 @@ class TestDLQR(unittest.TestCase):
             tau_lqr = dlqr(self.sys_dims, replace_params(prms), self.x0)
             Us_lqr = tau_lqr[:, self.sys_dims.n :]
             Xs_lqr = tau_lqr[:, : self.sys_dims.n]
-            return jnp.linalg.norm(Us_lqr) ** 2
+            return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
         def implicit_solve_lqr(Xs, Us, Lambs, params):
-            gains, Xs, Us, Lambs = solve_lqr(params, self.sys_dims)
+            Xs, Us, Lambs = solve_lqr(params)
             return Xs, Us, Lambs
 
         def implicit_loss(prms):
             Xs_lqr, Us_lqr, _Us_lqr = implicit_solve_lqr(
                 None, None, None, replace_params(prms)
             )
-            return jnp.linalg.norm(Us_lqr) ** 2
+            print(Xs_lqr.shape)
+            return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         def direct_loss(prms):
-            gains, Xs, Us, Lambs = solve_lqr(replace_params(prms), self.sys_dims)
-            return jnp.linalg.norm(Us) ** 2
+            Xs, Us, Lambs = solve_lqr(replace_params(prms))
+            return jnp.linalg.norm(Us) ** 2 + jnp.linalg.norm(Xs - 1) ** 2
 
         prms = Prms(
             a=self.params.lqr.a,
@@ -205,11 +206,16 @@ class TestDLQR(unittest.TestCase):
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
         direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
         if PRINTING_ON:
-            print("\n || Printing grads || \n ")
-            print("\n || Printing  q || \n ")
-            print(implicit_g.q[:4])
-            print(direct_g.q[:4])
-            print(lqr_g.q[:4])
+            print("\n || Printing grads S || \n ")
+            print("\n || Implicit || \n ")
+            print(lqr_g.S[:4])
+            print("\n || Direct || \n ")
+            print(direct_g.S[:4])
+            print("\n || Printing grads a || \n ")
+            print("\n || Implicit || \n ")
+            print(lqr_g.a[:4])
+            print("\n || Direct || \n ")
+            print(direct_g.a[:4])
             print("\n || Printing  Q || \n ")
             print(direct_g.Q[:4])
             print(lqr_g.Q[:4])
@@ -220,11 +226,12 @@ class TestDLQR(unittest.TestCase):
             print("\n || Printing  x0 || \n ")
             print(direct_g.x0)
             print(lqr_g.x0)
-        # assert jnp.allclose(lqr_g.q, direct_g.q)
-        # assert jnp.allclose(lqr_g.r[:-1], direct_g.r)
-        # assert jnp.allclose(lqr_g.Q, direct_g.Q)
-        # assert jnp.allclose(lqr_g.R[:-1], direct_g.R)
-        # assert jnp.allclose(lqr_g.A, direct_g.A)
+        assert jnp.allclose(lqr_g.a, direct_g.a)
+        assert jnp.allclose(lqr_g.q, direct_g.q)
+        assert jnp.allclose(lqr_g.r, direct_g.r)
+        assert jnp.allclose(lqr_g.Q, direct_g.Q)
+        assert jnp.allclose(lqr_g.R, direct_g.R)
+        assert jnp.allclose(lqr_g.A, direct_g.A)
         # verify shapes and dtypes
         chex.assert_trees_all_equal_shapes_and_dtypes(lqr_val, direct_val)
         chex.assert_trees_all_equal_shapes_and_dtypes(lqr_g, direct_g)
@@ -233,7 +240,7 @@ class TestDLQR(unittest.TestCase):
         # verify numerics
         chex.assert_trees_all_close(lqr_val, direct_val, rtol=1e-3)
         chex.assert_trees_all_close(lqr_g, direct_g, rtol=1e-3)
-        # chex.assert_trees_all_close(implicit_val, direct_val, rtol = 1e-3)
+        chex.assert_trees_all_close(implicit_val, direct_val, rtol = 1e-3)
 
     # chex.assert_trees_all_close(implicit_g, direct_g, rtol = 1e-3)
 
