@@ -42,8 +42,20 @@ find = {}
 [tool.setuptools.dynamic]
 version = {file = "diffilqrax/VERSION"}
 dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = { file = ["requirements_dev.txt"] }}
-
+optional-dependencies = {
+  dev = { file = ["requirements_dev.txt"] },
+  doc = [
+    "sphinx",
+    "sphinx-design",
+    "pydata-sphinx-theme",
+    "Ipython",
+    "ipykernel",
+    "sphinx>=3.1, <6.0",
+    "sphinxcontrib-bibtex",
+    "requests",
+    "numpydoc",
+  ]
+}
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
