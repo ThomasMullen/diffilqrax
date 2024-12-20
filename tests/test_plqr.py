@@ -43,13 +43,13 @@ PLOT_URL = (
     "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
     "figure_style.mplstyle"
 )
-PLOTTING_ON = True
+PLOTTING_ON = False
 if PLOTTING_ON:
     # style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
     style.use(PLOT_URL)
     FIG_DIR = Path(getcwd(), "fig_dump", "para_lqr")
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-
+LONG_TIME_PROFILE = False
 
 def is_jax_array(arr: Array) -> bool:
     """validate jax array type"""
@@ -255,8 +255,14 @@ class TestPLQR(unittest.TestCase):
     def test_plqr_cpu_profile(self):
         cpu = jax.devices("cpu")[0]
         n_reps = 2
-        n_dims = onp.array([32,33])
-        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
+        if LONG_TIME_PROFILE:
+            n_dims = onp.array([16,32])
+        else:
+            n_dims = onp.array([2,4])
+        if LONG_TIME_PROFILE:
+            horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
+        else:
+            horizon_dims = onp.array([10, 100])
         cpu_lqr = jax.jit(solve_lqr, backend="cpu")
         cpu_plqr = jax.jit(solve_plqr, backend="cpu")
         

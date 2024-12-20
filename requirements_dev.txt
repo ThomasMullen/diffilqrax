@@ -14,3 +14,15 @@ twine
 pylint
 sphinx
 pydata-sphinx-theme
+sphinx_design
+pydata-sphinx-theme
+sphinx-autobuild
+myst-nb
+sphinx-autoapi
+sphinxcontrib-video
+sphinxcontrib-jupyter
+sphinx-togglebutton
+sphinx-gallery
+sphinx-tabs
+sphinxcontrib-bibtex
+numpydoc
