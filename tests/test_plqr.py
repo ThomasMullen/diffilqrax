@@ -190,11 +190,11 @@ class TestPLQR(unittest.TestCase):
             fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint01.png")
             close()
 
-        fig, ax = subplots(1, 2, sharey=True)
-        ax[0].plot(Lambs_lqr)
-        ax[1].plot(lmda)
-        fig.tight_layout()
-        fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint02.png")
+            fig, ax = subplots(1, 2, sharey=True)
+            ax[0].plot(Lambs_lqr)
+            ax[1].plot(lmda)
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint02.png")
 
     def test_adjoint_via_rev_integration(self):
         """Test adjoint via reverse integration and v-funs"""
@@ -263,8 +263,8 @@ class TestPLQR(unittest.TestCase):
             horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
         else:
             horizon_dims = onp.array([10, 100])
-        cpu_lqr = jax.jit(solve_lqr, backend="cpu")
-        cpu_plqr = jax.jit(solve_plqr, backend="cpu")
+        cpu_lqr = jax.jit(solve_lqr, device=cpu)
+        cpu_plqr = jax.jit(solve_plqr, device=cpu)
         
         clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
         print(clock_times.shape)
@@ -322,8 +322,8 @@ class TestPLQR(unittest.TestCase):
         n_reps = 2
         n_dims = onp.array([12,20])
         horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000,])
-        gpu_lqr = jax.jit(solve_lqr, backend="gpu")
-        gpu_plqr = jax.jit(solve_plqr, backend="gpu")
+        gpu_lqr = jax.jit(solve_lqr, gpu)
+        gpu_plqr = jax.jit(solve_plqr, gpu)
         
         clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
         print(clock_times.shape)

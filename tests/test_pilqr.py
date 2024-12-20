@@ -115,18 +115,19 @@ class TestiLQRStructs(unittest.TestCase):
             use_linesearch=True,
             **self.ls_kwargs,
         )
-        fig, ax = subplots(2, 2, sharey=True)
-        ax[0, 1].plot(Us_stars)
-        ax[0, 0].plot(Xs_stars)
-        ax[0, 1].set(title="U (parallel)")
-        ax[0, 0].set(title="X (parallel)")
-        ax[1, 0].plot(Xs_stars_ilqr)
-        ax[1, 1].plot(Us_stars_ilqr)
-        ax[1, 1].set(title="U (normal)")
-        ax[1, 0].set(title="X (normal)")
-        fig.tight_layout()
-        fig.savefig(f"{FIG_DIR}/pilqr_solver01.png")
         chex.assert_trees_all_close(Xs_stars, Xs_stars_ilqr, rtol=1e-03, atol=1e-02)
+        if PLOTTING_ON:
+            fig, ax = subplots(2, 2, sharey=True)
+            ax[0, 1].plot(Us_stars)
+            ax[0, 0].plot(Xs_stars)
+            ax[0, 1].set(title="U (parallel)")
+            ax[0, 0].set(title="X (parallel)")
+            ax[1, 0].plot(Xs_stars_ilqr)
+            ax[1, 1].plot(Us_stars_ilqr)
+            ax[1, 1].set(title="U (normal)")
+            ax[1, 0].set(title="X (normal)")
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/pilqr_solver01.png")
         
      ##TODO : add more thorough tests including possible offset in dynamics
      ##add speed test of pilqr   
