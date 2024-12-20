@@ -30,9 +30,9 @@ from diffilqrax.typs import (
 jax.config.update("jax_enable_x64", True)  # double precision
 
 # helper functions - pop first and last element from pytree structures
-_pop_first = partial(jax.tree_map, lambda x: x[1:])
-_pull_first = partial(jax.tree_map, lambda x: x[0])
-_pop_last = partial(jax.tree_map, lambda x: x[:-1])
+_pop_first = partial(jax.tree.map, lambda x: x[1:])
+_pull_first = partial(jax.tree.map, lambda x: x[0])
+_pop_last = partial(jax.tree.map, lambda x: x[:-1])
 
 
 # build associative riccati elements

@@ -4,7 +4,7 @@ from typing import NamedTuple, Callable, Any, Union, Tuple, Optional
 from functools import partial
 from jax import lax, Array
 from jax.typing import ArrayLike
-from flax import struct
+# from flax import struct
 from diffilqrax.utils import linearise, quadratise
 
 

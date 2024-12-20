@@ -161,8 +161,8 @@ class TestDILQR(unittest.TestCase):
         if PRINTING_ON:
             jax.debug.print("Direct: {dv}", dv=direct_val)
             jax.debug.print("Implicit: {iv}", iv=implicit_val)
-            jax.debug.print("Dgrads: {dg}", dg = partial(jax.tree_map, lambda x: x.flatten()[0])(direct_g))
-            jax.debug.print("Igrads: {ig}", ig = partial(jax.tree_map, lambda x: x.flatten()[0])(implicit_g))
+            jax.debug.print("Dgrads: {dg}", dg = partial(jax.tree.map, lambda x: x.flatten()[0])(direct_g))
+            jax.debug.print("Igrads: {ig}", ig = partial(jax.tree.map, lambda x: x.flatten()[0])(implicit_g))
 
         if PLOTTING_ON:
             fig, axes = plt.subplots(1,len(direct_g), figsize=(10, 2))
