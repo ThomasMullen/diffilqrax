@@ -3,15 +3,23 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-diffilqrax documentation
-========================
+.. rst-class:: heading-center
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+Welcome to DiffiLQRax!
+====================================
+
+DiffiLQRax is an open source Python package that provides a differentiable implementation of the iterative Linear Quadratic Regulator (iLQR) algorithm using the JAX library. 
+
+
+Please support the development of Megabouts by starring and/or watching the project on Github_!
 
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   userguide/getting_started
+   userguide/design_principles
+   about/lqr_theory
+   api/modules
 
