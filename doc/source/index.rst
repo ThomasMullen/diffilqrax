@@ -8,6 +8,11 @@
    :width: 420px
    :class: only-dark
 
+.. image:: _static/images/diffilqrax_logo.png
+   :align: center
+   :width: 420px
+   :class: only-light
+
 
 
 .. rst-class:: heading-center
