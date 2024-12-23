@@ -2,7 +2,7 @@
 Differentiable LQR
 ==================
 
-.. automodule:: diffilqrax.dlqr
+.. automodule:: diffilqrax.diff_lqr
    :members:
    :undoc-members:
    :show-inheritance:

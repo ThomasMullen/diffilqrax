@@ -3,7 +3,15 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. image:: _static/images/diffilqrax_logo_dm.png
+   :align: center
+   :width: 420px
+   :class: only-dark
+
+
+
 .. rst-class:: heading-center
+
 
 Welcome to DiffiLQRax!
 ====================================
@@ -22,7 +30,7 @@ Please support the development of Megabouts by starring and/or watching the proj
    userguide/design_principles
    about/lqr_theory
    api/modules
-   
+
 
 Acknowledgements
 ================

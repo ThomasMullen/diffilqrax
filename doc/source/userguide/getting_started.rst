@@ -1,3 +1,4 @@
+.. _getting_started:
 Getting started
 ===============
 
@@ -55,7 +56,7 @@ Here is a simple example of how to use the LQR and iLQR solvers:
     opt_xs, opt_us, opt_adjoints = lqr.solve(lqr_params)
 
 To use the differentiable solver, import :code:`diff_lqr` instead of :code:`lqr`. 
-To see the different available solvers, refer to the :ref:`design principles <design_principles>`.
+To see the different available solvers, refer to the :doc:`design_principles`.
 
 .. code-block:: Python
 
