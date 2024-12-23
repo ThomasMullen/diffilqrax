@@ -32,6 +32,7 @@ Please support the development of Megabouts by starring and/or watching the proj
    :caption: Contents:
 
    userguide/getting_started
+   userguide/tutorials
    userguide/design_principles
    about/lqr_theory
    api/modules
