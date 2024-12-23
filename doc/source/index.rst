@@ -22,4 +22,9 @@ Please support the development of Megabouts by starring and/or watching the proj
    userguide/design_principles
    about/lqr_theory
    api/modules
+   
 
+Acknowledgements
+================
+This project has received funding from the European Union’s Horizon 2020 research 
+and innovation programme under the Marie Skłodowska-Curie grant agreement #813457.
