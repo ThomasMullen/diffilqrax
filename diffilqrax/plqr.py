@@ -1,4 +1,15 @@
-"""LQR solver using associative parallel scan"""
+"""
+LQR solver using associative parallel scan
+
+Implementation of the Parallel Linear Quadratic Regulator (PLQR) algorithm
+-----------------------------------------------------------------------
+1. Initialisation: compute elements :math:`a=\{A, b, C, η, J\}`
+   do for all in parallel i.e. :code:`vmap`;
+2. Parallel backward scan: initialise with all elements & apply associative operator
+   note association operator should be vmap. Scan will return :math:`V_{k}(x_{k})=\{V, v\}`;
+3. Compute optimal control: :math:`u_k = -K_kx_k + K^{v}_{k} v_{k+1} - K_k^{c} c_{k}`.
+   :math:`K`s have closed form solutions, so calculate :math:`u_k` in parallel :code:`vmap`.
+"""
 
 from typing import Tuple
 from functools import partial
@@ -7,7 +18,6 @@ import jax.numpy as jnp
 import jax.scipy as jsc
 from jax import Array, vmap
 from jax.lax import associative_scan
-from jax.lib import xla_bridge
 
 from diffilqrax.typs import (
     symmetrise_matrix,
@@ -20,35 +30,28 @@ from diffilqrax.typs import (
 jax.config.update("jax_enable_x64", True)  # double precision
 
 # helper functions - pop first and last element from pytree structures
-_pop_first = partial(jax.tree_map, lambda x: x[1:])
-_pull_first = partial(jax.tree_map, lambda x: x[0])
-_pop_last = partial(jax.tree_map, lambda x: x[:-1])
-
-"""
-Implementation:
----
-1. Initialisation: compute elements a={A, b, C, η, J}
-   do for all in parallel i.e. vmap
-2. Parallel backward scan: initialise with all elements & apply associative operator
-   note association operator should be vmap. Scan will return V_k(x_k)={V, v}
-3. Compute optimal control: u_k = -K_kx_k + K^{v}_{k} v_{k+1} - K_k^{c} c_{k}
-   Ks have closed form sols - so calc u_k in parallel vmap
-
-"""
+_pop_first = partial(jax.tree.map, lambda x: x[1:])
+_pull_first = partial(jax.tree.map, lambda x: x[0])
+_pop_last = partial(jax.tree.map, lambda x: x[:-1])
 
 
 # build associative riccati elements
 def build_associative_riccati_elements(
     model: LQRParams,
 ) -> Tuple[Tuple[Array, Array, Array, Array, Array]]:
-    """Join set of elements for associative scan.
+    """
+    Join set of elements for associative scan.
     NOTE: This is a special case where reference r_T=0 and readout C=I.
 
-    Args:
-        model (LQRParams)
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
 
-    Returns:
-        Tuple: return tuple of elements A, b, C, η, J
+    Returns
+    -------
+    Tuple
+        Tuple of elements A, b, C, η, J.
     """
 
     def _last(model: LQRParams):
@@ -100,35 +103,47 @@ def build_associative_riccati_elements(
 
 
 def associative_riccati_scan(model: LQRParams) -> Tuple[Array, Array]:
-    """Obtain value function through associative riccati scan.
+    """
+    Obtain value function through associative riccati scan.
 
-    Args:
-        model (LQRParams): LQR model parameters
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
 
-    Returns:
-        Tuple[Array, Array]: linear and quadratic value functions
+    Returns
+    -------
+    Tuple[Array, Array]
+        Linear and quadratic value functions.
     """
     lqr_elements = build_associative_riccati_elements(model)
     _, _, _, etas, Js = associative_scan(riccati_operator, lqr_elements, reverse=True)
     return etas, symmetrise_tensor(Js)
 
 
-def get_dJs(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> CostToGo:
-    """Calculate expected change in cost-to-go. Can change alpha to relevant backtrack
-    step size.
+def get_dcosts(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> CostToGo:
+    """
+    Calculate expected change in cost-to-go. Can change alpha to relevant backtrack step size.
 
-    Args:
-        model (LQRParams): LQR model parameters
-        etas (Array): eta values through time
-        Js (Array): J values through time
-        alpha (float, optional): linesearch alpha parameter. Defaults to 1.0.
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
+    etas : Array
+        Eta values through time.
+    Js : Array
+        J values through time.
+    alpha : float, optional
+        Linesearch alpha parameter, by default 1.0.
 
-    Returns:
-        CostToGo: Return total change in cost-to-go
+    Returns
+    -------
+    CostToGo
+        Total change in cost-to-go.
     """
 
     @partial(vmap, in_axes=(LQR(0, 0, 0, 0, 0, 0, 0, 0, None, None), 0, 0))
-    def get_dJ(lqr, eta, J):
+    def get_dcost(lqr, eta, J):
         c = lqr.a
         B = lqr.B
         R = lqr.R
@@ -144,17 +159,11 @@ def get_dJs(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> Cos
         dJ = 0.5 * (k.T @ Huu @ k).squeeze()  # 0.5*qu.T@pinv@qu
         return CostToGo(dJ, -dj)  ##this needs to be a function of alpha
 
-    dJs = get_dJ(model.lqr, etas[1:], Js[1:])
+    dJs = get_dcost(model.lqr, etas[1:], Js[1:])
     # dj, dJ = dJs.v, dJs.V
     return CostToGo(
         V=jnp.sum(dJs.V * alpha**2), v=jnp.sum(dJs.v * alpha)
     )  # this needs to be a function of alpha
-
-
-# jnp.flip(final_elements[-2], axis = 0), jnp.flip(final_elements[-1], axis = 0) #jnp.r_[final_elements[-2][1:], model.lqr.qf[None]], jnp.r_[final_elements[-1][1:], -model.lqr.Qf[None]] #final_elements[-2], final_elements[-1]
-# jnp.r_[final_elements[-2][0:], model.lqr.qf[None]], jnp.r_[final_elements[-1][0:], -model.lqr.Qf[None]] #this only returns J, eta, which are the only things we need to compute
-# Vk : Sk = Jk_{T+1}, vk = eta_k_{T+1}
-##or is it? how do we have all k and k+1 accessible?
 
 
 def build_associative_lin_dyn_elements(
@@ -164,32 +173,51 @@ def build_associative_lin_dyn_elements(
     Tuple[Tuple[Array, Array, Array, Array], Tuple[Array, Array, Array, Array]],
     Array,
 ]:
-    """Join set of elements for associative scan.
-    Args:
-        model (LQRParams)
+    """
+    Join set of elements for associative scan.
 
-    Returns:
-        Tuple: return tuple of elements Fs, Cs
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
+    etas : Array
+        Eta values through time.
+    Js : Array
+        J values through time.
+    alpha : float
+        Linesearch step parameter.
+
+    Returns
+    -------
+    Tuple
+        Tuple of elements Fs, Cs.
     """
 
     def _first(
         model: LQRParams, eta0: Array, J0: Array, alpha: float
     ) -> Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]:
-        """Build first associative element for optimal trajectory.
-            Offset correspond to the coordinate transformation back into the original space.
-            Ks returns to recover the optimal control.
+        """
+        Build first associative element for optimal trajectory.
+        Offset correspond to the coordinate transformation back into the original space.
+        Ks returns to recover the optimal control.
 
-        Args:
-            model (LQRParams): LQR problem
-            eta0 (Array): linear value fn time point k+1
-            J0 (Array): quadratic value fn time point k+1
-            alpha (float): lineasearch step parameter. Multiply Kv and Kc terms as they correspond
-                to k term in δu = Kx + αk
+        Parameters
+        ----------
+        model : LQRParams
+            LQR problem
+        eta0 : Array
+            linear value fn time point k+1
+        J0 : Array
+            quadratic value fn time point k+1
+        alpha : float
+            lineasearch step parameter. Multiply Kv and Kc terms as they correspond
+            to k term in δu = Kx + αk
 
-        Returns:
-            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]:
-                (Efective state dynamics initialised with 0,
-                effective bias initialised with initial state), Ks, offset
+        Returns
+        -------
+        Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]
+            (Efective state dynamics initialised with 0,
+            effective bias initialised with initial state), Ks, offset
         """
 
         lqr_init = _pull_first(model.lqr)
@@ -221,18 +249,25 @@ def build_associative_lin_dyn_elements(
 
     @partial(vmap, in_axes=(LQR(0, 0, 0, 0, 0, 0, 0, 0, None, None), 0, 0, None))
     def _generic(lqr: LQR, eta: Array, J: Array, alpha: float):
-        """Build generic associative element for optimal trajectory.
+        """
+        Build generic associative element for optimal trajectory.
 
-        Args:
-            lqr (LQR): LQR parameters
-            eta (Array): linear value fn time point k+1
-            J (Array): quadratic value fn time point k+1
-            alpha (float): lineasearch step parameter.
+        Parameters
+        ----------
+        lqr : LQR
+            LQR parameters
+        eta : Array
+            linear value fn time point k+1
+        J : Array
+            quadratic value fn time point k+1
+        alpha : float
+            lineasearch step parameter.
 
-        Returns:
-            Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]:
-                (Efective state dynamics,
-                effective bias), Ks, offset
+        Returns
+        -------
+        Tuple[Tuple[Array, Array], Tuple[Array, Array, Array, Array], Array]
+            (Efective state dynamics,
+            effective bias), Ks, offset
         """
         m_dim = lqr.R.shape[0]
         mu = 1e-7 * jnp.eye(m_dim)
@@ -279,19 +314,26 @@ def build_associative_lin_dyn_elements(
 def associative_opt_traj_scan(
     model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0
 ) -> Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]:
-    """Obtain effective state dynamic and bias through associative scan.
-        Ks returned (Kx, Kv, Kc, delta) to recover optimal control: state feedback gain,
-        linear val fn gain, dynamics offset gain, delta of linear gains.
+    """
+    Obtain effective state dynamic and bias through associative scan.
+    Ks returned (Kx, Kv, Kc, delta) to recover optimal control: state feedback gain,
+    linear val fn gain, dynamics offset gain, delta of linear gains.
 
-    Args:
-        model (LQRParams): LQR problem (initial state, LQR parameters)
-        etas (Array): linear value functions
-        Js (Array): quadratic value functions
-        alpha (float, optional): linesearch step parameter. Defaults to 1.0.
+    Parameters
+    ----------
+    model : LQRParams
+        LQR problem (initial state, LQR parameters).
+    etas : Array
+        Linear value functions.
+    Js : Array
+        Quadratic value functions.
+    alpha : float, optional
+        Linesearch step parameter, by default 1.0.
 
-    Returns:
-        Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]:
-            Effective state dynamics, effective bias, Ks, offset
+    Returns
+    -------
+    Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]
+        Effective state dynamics, effective bias, Ks, offset.
     """
     # need to add vmaps
     associative_dyn_elems, Ks, offsets = build_associative_lin_dyn_elements(
@@ -305,7 +347,25 @@ def associative_opt_traj_scan(
 def get_delta_u(
     Ks: Tuple[Array, Array, Array, Array], x: Array, v: Array, c: Array
 ) -> Array:
-    """Obtain δu from optimal control gains."""
+    """
+    Obtain δu from optimal control gains.
+
+    Parameters
+    ----------
+    Ks : Tuple[Array, Array, Array, Array]
+        Optimal control gains.
+    x : Array
+        State trajectory.
+    v : Array
+        Linear value function.
+    c : Array
+        Effective bias.
+
+    Returns
+    -------
+    Array
+        Control input δu.
+    """
     _, _, _, ddelta = Ks
     delta_us = ddelta  # -Kx@x +  #Kv@v - Kc@c #+ ddelta #- c#Kv@v - Kc@c #
     return delta_us
@@ -313,7 +373,19 @@ def get_delta_u(
 
 @jax.jit
 def solve_plqr(model: LQRParams) -> Tuple[Array, Array, Array]:
-    "run backward forward sweep to find optimal control"
+    """
+    Run backward forward sweep to find optimal control.
+
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        State trajectory, control inputs, and adjoint variables.
+    """
     # backward
     vs, Vs = associative_riccati_scan(model)
     # NOTE: cs is already finding updated Xs -> jnp.r_[model.x0[None],cs] == new_xs
@@ -325,7 +397,19 @@ def solve_plqr(model: LQRParams) -> Tuple[Array, Array, Array]:
 
 
 def solve_plqr_swap_x0(model: LQRParams):
-    "run backward forward sweep to find optimal control freeze x0 to zero"
+    """
+    Run backward forward sweep to find optimal control freeze x0 to zero.
+
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        State trajectory, control inputs, and adjoint variables.
+    """
     model = model._replace(x0=jnp.zeros_like(model.x0))
     vs, Vs = associative_riccati_scan(model)
     Fs, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(model, vs, Vs)
@@ -341,14 +425,22 @@ def solve_plqr_swap_x0(model: LQRParams):
 def build_fwd_lin_dyn_elements(
     lqr_params: LQRParams, Us_init: Array, a_term: Array = None
 ) -> Tuple[Array, Array]:
-    """Generate sequence of elements {c} for forward integration
+    """
+    Generate sequence of elements {c} for forward integration.
 
-    Args:
-        lqr_params (LQRParams): LQR parameters and initial state
-        Us_init (Array): Input sequence
+    Parameters
+    ----------
+    lqr_params : LQRParams
+        LQR parameters and initial state.
+    Us_init : Array
+        Input sequence.
+    a_term : Array, optional
+        Offset term, by default None.
 
-    Returns:
-        Tuple[Array, Array]: set of elements {c} for associative scan
+    Returns
+    -------
+    Tuple[Array, Array]
+        Set of elements {c} for associative scan.
     """
 
     initial_element = (
@@ -375,14 +467,22 @@ def build_fwd_lin_dyn_elements(
 def parallel_forward_lin_integration(
     lqr_params: LQRParams, Us_init: Array, a_term: Array
 ) -> Array:
-    """Associative scan for forward linear dynamics
+    """
+    Associative scan for forward linear dynamics.
 
-    Args:
-        lqr_params (LQRParams): LQR parameters and initial state
-        Us_init (Array): input sequence
+    Parameters
+    ----------
+    lqr_params : LQRParams
+        LQR parameters and initial state.
+    Us_init : Array
+        Input sequence.
+    a_term : Array
+        Offset term.
 
-    Returns:
-        Array: state trajectory
+    Returns
+    -------
+    Array
+        State trajectory.
     """
     # delta_us = compute_offset_us(lqr_params)
     dyn_elements = build_fwd_lin_dyn_elements(lqr_params, Us_init, a_term)
@@ -396,14 +496,22 @@ def build_rev_lin_dyn_elements(
     xs_traj: Array,
     us_traj: Array,
 ) -> Tuple[Array, Array]:
-    """Generate sequence of elements {c} for reverse integration of adjoints
+    """
+    Generate sequence of elements {c} for reverse integration of adjoints.
 
-    Args:
-        lqr_params (LQRParams): LQR parameters and initial state
-        Us_init (Array): Input sequence
+    Parameters
+    ----------
+    lqr_params : LQRParams
+        LQR parameters and initial state.
+    xs_traj : Array
+        State trajectory.
+    us_traj : Array
+        Control inputs.
 
-    Returns:
-        Tuple[Array, Array]: set of elements {c} for associative scan
+    Returns
+    -------
+    Tuple[Array, Array]
+        Set of elements {c} for associative scan.
     """
 
     lambda_f = lqr_params.lqr.Qf @ xs_traj[-1] + lqr_params.lqr.qf
@@ -438,14 +546,22 @@ def build_rev_lin_dyn_elements(
 def parallel_reverse_lin_integration(
     lqr_params: LQRParams, xs_traj: Array, us_traj: Array
 ) -> Array:
-    """Associative scan for reverse linear dynamics
+    """
+    Associative scan for reverse linear dynamics.
 
-    Args:
-        lqr_params (LQRParams): LQR parameters and initial state
-        Us_init (Array): input sequence
+    Parameters
+    ----------
+    lqr_params : LQRParams
+        LQR parameters and initial state.
+    xs_traj : Array
+        State trajectory.
+    us_traj : Array
+        Control inputs.
 
-    Returns:
-        Array: state trajectory
+    Returns
+    -------
+    Array
+        Adjoint variables.
     """
     # delta_us = compute_offset_us(lqr_params)
     dyn_elements = build_rev_lin_dyn_elements(lqr_params, xs_traj, us_traj)
@@ -453,22 +569,23 @@ def parallel_reverse_lin_integration(
     return c_bs
 
 
-# ----------------------------
-# Define associative operators
-# ----------------------------
-
-
 # forward dynamics
 @vmap
 def dynamic_operator(elem1, elem2):
-    """Associative operator for forward linear dynamics
+    """
+    Associative operator for forward linear dynamics.
 
-    Args:
-        elem1 (Tuple[Array, Array]): Previous effective state dynamic and effective bias
-        elem2 (Tuple[Array, Array]): Next effective state dynamic and effective bias
+    Parameters
+    ----------
+    elem1 : Tuple[Array, Array]
+        Previous effective state dynamic and effective bias.
+    elem2 : Tuple[Array, Array]
+        Next effective state dynamic and effective bias.
 
-    Returns:
-        Tuple[Array, Array]: Updated state and control
+    Returns
+    -------
+    Tuple[Array, Array]
+        Updated state and control.
     """
     F1, c1 = elem1
     F2, c2 = elem2
@@ -480,6 +597,21 @@ def dynamic_operator(elem1, elem2):
 # riccati recursion
 @vmap
 def riccati_operator(elem2, elem1):
+    """
+    Associative operator for Riccati recursion.
+
+    Parameters
+    ----------
+    elem1 : Tuple[Array, Array, Array, Array, Array]
+        Previous Riccati elements.
+    elem2 : Tuple[Array, Array, Array, Array, Array]
+        Next Riccati elements.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array, Array, Array]
+        Updated Riccati elements.
+    """
     A1, b1, C1, η1, J1 = elem1
     A2, b2, C2, η2, J2 = elem2
 

@@ -36,13 +36,14 @@ PLOT_URL = ("https://gist.githubusercontent.com/"
        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
        "figure_style.mplstyle")
+LONG_TIME_PROFILE = False
 PRINTING_ON = True
-PLOTTING_ON = True
+PLOTTING_ON = False
 if PLOTTING_ON:
     style.use(PLOT_URL)
     FIG_DIR = Path(getcwd(), "fig_dump", "para_ilqr")
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-print(FIG_DIR)
+    print(FIG_DIR)
 
 class TestiLQRStructs(unittest.TestCase):
     """Test LQR dimensions and data structures"""
@@ -177,6 +178,14 @@ class TestiLQRStructs(unittest.TestCase):
         "alpha_min": 0.0001,
         }
         start = time.time()
+        if LONG_TIME_PROFILE:
+            ns = [8,16,32] #2,4,8,32] #,5,10] #,100]
+        else:
+            ns = [2,4,6] #2,4,8,32] #,5,10] #,100]
+        if LONG_TIME_PROFILE:
+            Ts = [10,100,1000]
+        else:
+            Ts = [10,20,130]
         ns = [8,16,32] #2,4,8,32] #,5,10] #,100]
         Ts = [10,100,1000] #,500,1000, 5000,10000,20000]#,10000]#,100000] #, 50000, 100000, 200000, 500000, 1000000] #10000]
         parallel_lqr_times_0 = []

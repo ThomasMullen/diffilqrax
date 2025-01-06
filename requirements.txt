@@ -1,3 +1,4 @@
+tdqm
 numpy
 jax
 jaxopt

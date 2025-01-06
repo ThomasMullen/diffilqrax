@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Differentiable iLQR algorithm for dynamical systems"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
 dynamic = ["dependencies", "optional-dependencies", "version"]
 classifiers = [
@@ -24,8 +24,6 @@ classifiers = [
   # Pick your license as you wish
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -42,8 +40,10 @@ find = {}
 [tool.setuptools.dynamic]
 version = {file = "diffilqrax/VERSION"}
 dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = { file = ["requirements_dev.txt"] }}
-
+optional-dependencies = { 
+    dev = { file = ["requirements_dev.txt"] }, 
+    doc = { file = ["requirements_dev.txt"], dependencies = ["sphinx", "sphinx-autodoc-typehints"] } 
+}
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"

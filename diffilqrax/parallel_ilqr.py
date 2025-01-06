@@ -1,27 +1,25 @@
-"""iterative LQR solver"""
+"""Solve iLQR with parallel dynamics using associative scans"""
 
-from typing import Callable, Tuple, Optional, Any
+from typing import Tuple, Any
 from functools import partial
-from jax import Array
-from diffilqrax.lqr import bmm
 import jax
+from jax import Array
 from jax import lax
 import jax.numpy as jnp
 
 from diffilqrax.lqr import lqr_adjoint_pass
+from diffilqrax.lqr import bmm
 from diffilqrax.plqr import (
     associative_opt_traj_scan,
     associative_riccati_scan,
     build_fwd_lin_dyn_elements,
-    get_dJs,
+    get_dcosts,
     dynamic_operator,
 )
 from diffilqrax.ilqr import approx_lqr, linesearch, approx_lqr_dyn
 from diffilqrax.typs import (
     iLQRParams,
     System,
-    LQR,
-    Gains,
     CostToGo,
     LQRParams,
     ParallelSystem,
@@ -33,14 +31,24 @@ jax.config.update("jax_enable_x64", True)  # double precision
 def parallel_forward_lin_integration_ilqr(
     model: System, params: iLQRParams, Us_init: Array, a_term: Array
 ) -> Array:
-    """Associative scan for forward linear dynamics
+    """
+    Perform associative scan for forward linear dynamics.
 
-    Args:
-        lqr_params (LQRParams): LQR parameters and initial state
-        Us_init (Array): input sequence
+    Parameters
+    ----------
+    model : System
+        The system model.
+    params : iLQRParams
+        The iLQR parameters.
+    Us_init : Array
+        The initial control sequence.
+    a_term : Array
+        The affine term for the dynamics.
 
-    Returns:
-        Array: state trajectory
+    Returns
+    -------
+    Array
+        The state trajectory.
     """
     x0 = params.x0
     lqr_params = approx_lqr(
@@ -59,17 +67,27 @@ def parallel_forward_lin_integration_ilqr(
 def parallel_feedback_lin_dyn_ilqr(
     model: System, params: iLQRParams, Us_init: Array, a_term: Array, Kx: Array
 ) -> Array:
-    """Associative scan for forward linear dynamics
-    Function to include feedback + edit the dynamcis to have (A - K)x
-
-    Args:
-        lqr_params (LQRParams): LQR parameters and initial state
-        Us_init (Array): input sequence
-
-    Returns:
-        Array: state trajectory
     """
+    Perform associative scan for forward linear dynamics with feedback.
 
+    Parameters
+    ----------
+    model : System
+        The system model.
+    params : iLQRParams
+        The iLQR parameters.
+    Us_init : Array
+        The initial control sequence.
+    a_term : Array
+        The affine term for the dynamics.
+    Kx : Array
+        The feedback gain matrix.
+
+    Returns
+    -------
+    Array
+        The state trajectory.
+    """
     lqr_params = approx_lqr(
         model,
         jnp.r_[params.x0[None], jnp.zeros((model.dims.horizon, model.dims.n))],
@@ -85,13 +103,37 @@ def parallel_feedback_lin_dyn_ilqr(
 
 
 def pilqr_forward_pass(
-    parallel_model: ParallelSystem,  ##same as system but additionally taking in the parallel dynamics (could be None in which case we would default to linear w a warning)
+    parallel_model: ParallelSystem | Any,
     params: iLQRParams,
     values: CostToGo,
     Xs: Array,
     Us: Array,
     alpha: float = 1.0,
 ) -> Tuple[Tuple[Array, Array], float]:
+    """
+    Perform a forward pass of the parallel iLQR algorithm.
+
+    Parameters
+    ----------
+    parallel_model : ParallelSystem | Any
+        The parallel system model.
+    params : iLQRParams
+        The iLQR parameters.
+    values : CostToGo
+        The cost-to-go values.
+    Xs : Array
+        The state trajectory.
+    Us : Array
+        The control trajectory.
+    alpha : float, optional
+        The linesearch parameter, by default 1.0.
+
+    Returns
+    -------
+    Tuple[Tuple[Array, Array], float]
+        A tuple containing the updated state trajectory and control trajectory, and the total cost
+        of the trajectory.
+    """
     model = parallel_model.model
 
     lqr_mats = approx_lqr_dyn(model, Xs, Us, params)
@@ -115,11 +157,12 @@ def pilqr_forward_pass(
     Kxxs = bmm(Ks, Xs[:-1]) + ks + offsets
     # NOTE: in the case of a linear system, equivalent to `parallel_feedback_lin_dyn_ilqr`
     new_Xs = parallel_model.parallel_dynamics_feedback(
-        model, params, Us + Kxxs, dyn_bias, Ks#, Xs
+        model, params, Us + Kxxs, dyn_bias, Ks
     )
-    # this should define the dynamics incorporating the feedback term that says how to handle delta_X (current state - initial traj)
-    # we assume Ks@initial_traj is already passed as input so only care about the current state and the parallel_dynamics_feedback
-    # function should define how to handle that
+    # this should define the dynamics incorporating the feedback term that says how to handle
+    # delta_X (current state - initial traj) we assume Ks@initial_traj is already passed as
+    # input so only care about the current state and the parallel_dynamics_feedback function
+    # should define how to handle that
     new_Us = Us + delta_Us
     # new_Xs = parallel_model.parallel_dynamics(model, params,  new_Us,  lqr_model_with_a.lqr.a)
     total_cost = jnp.sum(
@@ -142,11 +185,41 @@ def pilqr_solver(
     use_linesearch: bool = True,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
+    """
+    Solve the parallel iterative Linear Quadratic Regulator (iLQR) problem.
+
+    Parameters
+    ----------
+    parallel_model : ParallelSystem
+        The parallel system model.
+    params : iLQRParams
+        The iLQR parameters.
+    Us_init : Array
+        The initial control trajectory.
+    max_iter : int, optional
+        The maximum number of iterations, by default 40.
+    convergence_thresh : float, optional
+        The convergence threshold, by default 1e-6.
+    alpha_init : float, optional
+        The initial step size for the forward pass, by default 1.0.
+    verbose : bool, optional
+        Whether to print debug information, by default False.
+    use_linesearch : bool, optional
+        Whether to use line search for the forward pass, by default True.
+    **linesearch_kwargs
+        Additional keyword arguments for the line search.
+
+    Returns
+    -------
+    Tuple[Tuple[Array, Array, Array], float, Array]
+        A tuple containing the final state trajectory, control trajectory, and the adjoint
+        variables. Also returns the total cost of the trajectory and the cost history.
+    """
     model = parallel_model.model
     Xs_init = parallel_model.parallel_dynamics(
         model, params, Us_init, jnp.zeros_like(Us_init[..., 0])
     )
-    
+
     a_term = approx_lqr_dyn(parallel_model.model, Xs_init, Us_init, params).a
     Xs_init = parallel_model.parallel_dynamics(model, params, Us_init, a_term)
     c_init = jnp.sum(
@@ -159,28 +232,40 @@ def pilqr_solver(
     prollout = partial(pilqr_forward_pass, parallel_model, params)
 
     def plqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
-        """lqr iteration update function"""
-        # unravel carry
+        """
+        Perform one iteration of the parallel iLQR algorithm.
+
+        Parameters
+        ----------
+        carry_tuple : Tuple[Array, Array, float, int, bool]
+            The carry tuple containing the state trajectory, control trajectory, total cost,
+            iteration number, and a boolean indicating whether to continue.
+
+        Returns
+        -------
+        Tuple[Array, Array, float, int, bool]
+            The updated carry tuple.
+        """
         old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
         lqr = approx_lqr(model, old_Xs, old_Us, params)
         lqr_params = LQRParams(params.x0, lqr)
-        etas, Js = associative_riccati_scan(
-            lqr_params
-        )  ##need to make a parallel v of that
-        exp_dJ = get_dJs(lqr_params, etas, Js)
+        etas, Js = associative_riccati_scan(lqr_params)
+        exp_dJ = get_dcosts(lqr_params, etas, Js)
 
         def linesearch_wrapped(*args):
             value_fns, Xs_init, Us_init, alpha_init = args
             return linesearch(
                 prollout,
-                value_fns,  ###the linesearch should be done with the Ks, not the etas and Js
+                value_fns,
                 Xs_init,
                 Us_init,
                 alpha_init,
                 cost_init=old_cost,
                 expected_dJ=exp_dJ,
                 **linesearch_kwargs,
-            )  ## TO CHECK : for the linesearch I believe we can use the exact same function as in ilqr, as long as we pass a different rollout - is that riht?
+            )
+            # NOTE : for the linesearch I believe we can use the exact same function
+            # as in ilqr, as long as we pass a different rollout - is that riht?
 
         # if no line search: α = 1.0; else use dynamic line search
         (new_Xs, new_Us), new_total_cost = lax.cond(
@@ -193,14 +278,27 @@ def pilqr_solver(
             alpha_init,
         )
 
-        # calc change in dold_cost w.r.t old dold_cost
         z = (old_cost - new_total_cost) / jnp.abs(old_cost)
-        # determine cond: Δold_cost > threshold
-        carry_on = z > convergence_thresh  # n_iter < 70 #
+        carry_on = z > convergence_thresh
         return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
 
     def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
-        """if cond false return existing carry else run another iteration of lqr_iter"""
+        """
+        Loop function for the parallel iLQR algorithm.
+
+        Parameters
+        ----------
+        carry_tuple : Tuple[Array, Array, float, int, bool]
+            The carry tuple containing the state trajectory, control trajectory, total cost,
+            iteration number, and a boolean indicating whether to continue.
+        _ : Any
+            Unused parameter.
+
+        Returns
+        -------
+        Tuple[Tuple[Array, Array, float, int, bool], float]
+            The updated carry tuple and the total cost.
+        """
         updated_carry = lax.cond(carry_tuple[-1], plqr_iter, lambda x: x, carry_tuple)
         return updated_carry, updated_carry[2]
 

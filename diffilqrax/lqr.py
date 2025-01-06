@@ -1,4 +1,4 @@
-"""LQR solver via dynamic programming"""
+"""Solve LQR problem via dynamic programming"""
 
 from typing import Callable, Tuple, Any
 from jax.typing import ArrayLike
@@ -38,16 +38,24 @@ def simulate_trajectory(
     params: LQRParams,
     dims: ModelDims,
 ) -> Array:
-    """Simulate forward pass with LQR params
+    """
+    Simulate forward pass with LQR params.
 
-    Args:
-        dynamics (Callable): function of dynamics with args t, x, u, params
-        Us (ArrayLike): Input timeseries shape [Txm]
-        params (Params): Parameters containing x_init, horizon and theta
-        dims (ModelDims): Parameters containing shape of system n, m, horizon and dt
+    Parameters
+    ----------
+    dynamics : Callable
+        Function of dynamics with args t, x, u, params.
+    Us : ArrayLike
+        Input timeseries shape [Txm].
+    params : LQRParams
+        Parameters containing x_init, horizon and theta.
+    dims : ModelDims
+        Parameters containing shape of system n, m, horizon and dt.
 
-    Returns:
-        Array: state trajectory [(T+1)xn]
+    Returns
+    -------
+    Array
+        State trajectory [(T+1)xn].
     """
     horizon = dims.horizon
     x0, lqr = params.x0, params[1]
@@ -69,15 +77,22 @@ def lin_dyn_step(t: int, x: ArrayLike, u: ArrayLike, lqr: LQR) -> Array:
 
 
 def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
-    """Adjoint backward pass with LQR params
+    """
+    Adjoint backward pass with LQR params.
 
-    Args:
-        Xs (np.ndarray): State timeseries shape [(T+1)xn]
-        Us (np.ndarray): Input timeseries shape [Txm]
-        params (Params): LQR state and cost matrices
+    Parameters
+    ----------
+    Xs : np.ndarray
+        State timeseries shape [(T+1)xn].
+    Us : np.ndarray
+        Input timeseries shape [Txm].
+    params : LQRParams
+        LQR state and cost matrices.
 
-    Returns:
-        np.ndarray: adjoint λs [(T+1)xn]
+    Returns
+    -------
+    np.ndarray
+        Adjoint λs [(T+1)xn].
     """
     lqr = params[1]
     AT = lqr.A.transpose(0, 2, 1)
@@ -95,14 +110,20 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
 
 
 def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
-    """LQR forward pass using gain state feedback
+    """
+    LQR forward pass using gain state feedback.
 
-    Args:
-        gains (Gains): K matrices
-        params (Params): LQR state and cost matrices
+    Parameters
+    ----------
+    gains : Gains
+        K matrices.
+    params : LQRParams
+        LQR state and cost matrices.
 
-    Returns:
-        Tuple[Array, Array]: updated state [(T+1)xn] and inputs [Txm]
+    Returns
+    -------
+    Tuple[Array, Array]
+        Updated state [(T+1)xn] and inputs [Txm].
     """
     x0, lqr = params.x0, params.lqr
 
@@ -118,23 +139,42 @@ def lqr_forward_pass(gains: Gains, params: LQRParams) -> Tuple[Array, Array]:
 
 
 def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
-    """expected change in cost [Tassa, 2020]"""
+    """
+    Expected change in cost [Tassa, 2020].
+
+    Parameters
+    ----------
+    dJ : CostToGo
+        Cost to go.
+    alpha : float, optional
+        Scaling factor, by default 0.5.
+
+    Returns
+    -------
+    float
+        Expected change in cost.
+    """
     return -(dJ.V * alpha**2 + dJ.v * alpha)
 
 
 def lqr_backward_pass(
     lqr: LQR,
 ) -> Tuple[float, Gains]:
-    """LQR backward pass learn optimal Gains given LQR cost constraints and dynamics
+    """
+    LQR backward pass learn optimal Gains given LQR cost constraints and dynamics.
 
-    Args:
-        lqr (LQR): LQR parameters
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
 
-    Returns:
-        Gains: Optimal feedback gains.
+    Returns
+    -------
+    Gains
+        Optimal feedback gains.
     """
     a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
-    n_dim, m_dim = lqr.B[0].shape
+    n_dim, _ = lqr.B[0].shape
 
     def riccati_step(
         carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
@@ -183,7 +223,25 @@ def lqr_backward_pass(
 def kkt(
     params: LQRParams, Xs: Array, Us: Array, Lambs: Array
 ) -> Tuple[Array, Array, Array]:
-    """Define KKT conditions for LQR problem"""
+    """
+    Define KKT conditions for LQR problem.
+
+    Parameters
+    ----------
+    params : LQRParams
+        LQR parameters.
+    Xs : Array
+        State trajectory.
+    Us : Array
+        Control inputs.
+    Lambs : Array
+        Adjoint variables.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        Gradients with respect to states, inputs, and adjoint variables.
+    """
     AT = params.lqr.A.transpose(0, 2, 1)
     BT = params.lqr.B.transpose(0, 2, 1)
     ST = params.lqr.S.transpose(0, 2, 1)
@@ -208,7 +266,19 @@ def kkt(
 
 
 def solve_lqr(params: LQRParams) -> Tuple[Array, Array, Array]:
-    "run backward forward sweep to find optimal control"
+    """
+    Run backward forward sweep to find optimal control.
+
+    Parameters
+    ----------
+    params : LQRParams
+        LQR parameters.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        State trajectory, control inputs, and adjoint variables.
+    """
     # backward
     gains = lqr_backward_pass(params.lqr)[1]
     # forward
@@ -219,7 +289,19 @@ def solve_lqr(params: LQRParams) -> Tuple[Array, Array, Array]:
 
 
 def solve_lqr_swap_x0(params: LQRParams) -> Tuple[Array, Array, Array]:
-    "run backward forward sweep to find optimal control freeze x0 to zero"
+    """
+    Run backward forward sweep to find optimal control freeze x0 to zero.
+
+    Parameters
+    ----------
+    params : LQRParams
+        LQR parameters.
+
+    Returns
+    -------
+    Tuple[Array, Array, Array]
+        State trajectory, control inputs, and adjoint variables.
+    """
     # backward
     gains = lqr_backward_pass(params.lqr)[1]
     new_params = LQRParams(jnp.zeros_like(params.x0), params.lqr)
