@@ -45,3 +45,11 @@ exclude_patterns = []
 
 html_theme = "pydata_sphinx_theme"
 html_static_path = ['_static']
+
+html_theme_options = {
+   "logo": {
+        "text": "Diffilqrax documentation",
+        "image_dark": "./_static/images/diffilqrax_logo_dm2_short2.png",
+        "image_light": "./_static/images/diffilqrax_logo_dm2_short.png",
+   }
+}

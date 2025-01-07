@@ -1,4 +1,4 @@
-.. diffilqrax documentation master file, created by
+.. DiffiLQRax Documentation master file, created by
    sphinx-quickstart on Thu Dec 19 23:21:29 2024.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
@@ -24,12 +24,43 @@ Welcome to DiffiLQRax!
 DiffiLQRax is an open source Python package that provides a differentiable implementation of the iterative Linear Quadratic Regulator (iLQR) algorithm using the JAX library. 
 
 
-Please support the development of Megabouts by starring and/or watching the project on Github_!
+Please support the development of DiffiLQRax by starring and/or watching the project on Github_!
 
+Installation
+------------
+
+To get started with this code, clone the repository and install the required dependencies. Then, you can run the main script to see the iLQR in action.
+
+.. code-block:: bash
+
+   git clone git@github.com:ThomasMullen/diffilqrax.git
+   cd diffilqrax
+   python -m build
+   pip install -e .
+
+or, you can import from pip install
+
+.. code-block:: bash
+
+   pip install diffilqrax
+
+Examples
+---------
+
+.. nbgallery::
+    :caption: LQR examples
+    :name: rst-gallery
+    :reversed:
+   examples/lqr_integrator.ipynb
+   examples/lqr_tracking_integrator.ipynb
+   
+
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Contents
 
    userguide/getting_started
    examples/index
