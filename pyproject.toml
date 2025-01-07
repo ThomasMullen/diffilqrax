@@ -42,7 +42,7 @@ version = {file = "diffilqrax/VERSION"}
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies = { 
     dev = { file = ["requirements_dev.txt"] }, 
-    doc = { file = ["requirements_dev.txt"], dependencies = ["sphinx", "sphinx-autodoc-typehints", "sphinx-gallery"] } 
+    doc = { file = ["requirements_dev.txt"], dependencies = ["sphinx", "sphinx-autodoc-typehints", "sphinx-gallery", "sphinx-design-elements"] } 
 }
 
 [project.urls]

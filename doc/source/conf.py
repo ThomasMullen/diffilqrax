@@ -31,7 +31,8 @@ extensions = [
     # "numpydoc",
     # "myst_nb",
     # "sphinxcontrib.bibtex",
-    # "sphinx_design",
+    "sphinx_design",
+    # "sphinx_design_elements",
     # "sphinx.ext.autosectionlabel",
 ]
 

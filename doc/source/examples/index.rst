@@ -9,9 +9,9 @@ This section contains a series of tutorials to help you use the diffiLQRax packa
     :name: rst-gallery
     :reversed:
     
+    ./gradient_through_ilqr.ipynb
     ./lqr_integrator.ipynb
     ./lqr_tracking_integrator.ipynb
-
 
 
 

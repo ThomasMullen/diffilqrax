@@ -24,7 +24,21 @@ Welcome to DiffiLQRax!
 DiffiLQRax is an open source Python package that provides a differentiable implementation of the iterative Linear Quadratic Regulator (iLQR) algorithm using the JAX library. 
 
 
-Please support the development of DiffiLQRax by starring and/or watching the project on Github_!
+Please support the development of DiffiLQRax by starring and/or watching the project on Github!
+
+
+Examples
+---------
+
+.. nbgallery::
+    :caption: DiffiLQRax examples
+    :name: rst-gallery
+    :reversed:
+    
+   examples/lqr_integrator.ipynb
+   examples/lqr_tracking_integrator.ipynb
+   examples/gradient_through_ilqr.ipynb
+
 
 Installation
 ------------
@@ -44,16 +58,7 @@ or, you can import from pip install
 
    pip install diffilqrax
 
-Examples
----------
 
-.. nbgallery::
-    :caption: LQR examples
-    :name: rst-gallery
-    :reversed:
-   examples/lqr_integrator.ipynb
-   examples/lqr_tracking_integrator.ipynb
-   
 
 Contents
 --------
