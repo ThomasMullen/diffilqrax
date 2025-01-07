@@ -3,14 +3,16 @@ Tutorials
 
 This section contains a series of tutorials to help you use the diffiLQRax package for optimal control.
 
-Toy LQR examples
-================
 
-
-..  toctree::
-    :maxdepth: 1
-
+.. nbgallery::
+    :caption: LQR examples
+    :name: rst-gallery
+    :glob:
+    :reversed:
+    
+    ./lqr_tracking_integrator.ipynb
     ./lqr_integrator.ipynb
+
 
 
 Toy iLQR examples
