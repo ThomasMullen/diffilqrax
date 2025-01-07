@@ -21,9 +21,12 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
+    # "sphinx.ext.imgmath",
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
+    "nbsphinx",
+    "sphinx_gallery.load_style",
     # "IPython.sphinxext.ipython_console_highlighting",  # lowercase didn't work
     # "numpydoc",
     # "myst_nb",
