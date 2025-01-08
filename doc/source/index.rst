@@ -38,6 +38,7 @@ Examples
    examples/lqr_integrator.ipynb
    examples/lqr_tracking_integrator.ipynb
    examples/gradient_through_ilqr.ipynb
+   examples/simple_pendulum.ipynb
 
 
 Installation
