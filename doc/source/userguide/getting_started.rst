@@ -103,3 +103,39 @@ To see the different available solvers, refer to the :doc:`design_principles`.
 
     # Solve problem
     (opt_xs, opt_us, opt_adjoints), total_cost = ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
+
+Build Documentation
+-------------------
+
+To build documentation on local device,
+
+.. code-block:: bash
+
+    cd doc
+    sphinx-build -b html ./source ./build
+
+This requires the following dependencies in additional to the :code:requirement_dev.txt :
+
+Documentation dependencies:
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: bash
+
+    sphinx
+    sphinx-autodoc-typehints
+    sphinx-gallery
+    pydata-sphinx-theme
+    sphinx_design
+    pydata-sphinx-theme
+    sphinx-autobuild
+    sphinx-autoapi
+    sphinxcontrib-video
+    sphinxcontrib-jupyter
+    sphinx-togglebutton
+    sphinx-tabs
+    sphinxcontrib-bibtex
+    numpydoc
+    nbsphinx
+
+Once you have installed these dependencies, you can build the documentation by running:
+

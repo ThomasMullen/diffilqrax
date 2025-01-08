@@ -21,14 +21,18 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
+    # "sphinx.ext.imgmath",
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
+    "nbsphinx",
+    "sphinx_gallery.load_style",
     # "IPython.sphinxext.ipython_console_highlighting",  # lowercase didn't work
     # "numpydoc",
     # "myst_nb",
     # "sphinxcontrib.bibtex",
-    # "sphinx_design",
+    "sphinx_design",
+    # "sphinx_design_elements",
     # "sphinx.ext.autosectionlabel",
 ]
 
@@ -42,3 +46,11 @@ exclude_patterns = []
 
 html_theme = "pydata_sphinx_theme"
 html_static_path = ['_static']
+
+html_theme_options = {
+   "logo": {
+        "text": "Diffilqrax documentation",
+        "image_dark": "./_static/images/diffilqrax_logo_dm2_short2.png",
+        "image_light": "./_static/images/diffilqrax_logo_dm2_short.png",
+   }
+}

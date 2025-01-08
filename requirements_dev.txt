@@ -26,3 +26,4 @@ sphinx-gallery
 sphinx-tabs
 sphinxcontrib-bibtex
 numpydoc
+nbsphinx
