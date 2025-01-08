@@ -3,13 +3,10 @@
    :width: 200
    :alt: DiffiLQRax logo
 
-.. image:: ./doc/source/_static/images/diffilqrax_logo.png
-   :align: center
-   :width: 200
-   :class: only-light
-   :alt: DiffiLQRax logo
 
-.. rst-class:: heading-center
+===========
+DiffiLQRax
+==========
 
 
 .. image:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg
