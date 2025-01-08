@@ -1,4 +1,4 @@
-.. image:: https://github.com/ThomasMullen/diffilqrax/doc/source/_static/images/diffilqrax_logo_dm.png
+.. image:: ./doc/source/_static/images/diffilqrax_logo_dm.png
    :width: 400
    :align: center
    :alt: DiffiLQRax logo
