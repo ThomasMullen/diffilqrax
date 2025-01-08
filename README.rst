@@ -1,6 +1,8 @@
-================
-DiffiLQRax
-================
+.. image:: https://github.com/ThomasMullen/diffilqrax/doc/source/_static/images/diffilqrax_logo_dm.png
+   :width: 400
+   :align: center
+   :alt: DiffiLQRax logo
+
 
 .. image:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg
    :align: left
