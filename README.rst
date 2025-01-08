@@ -4,11 +4,6 @@
    :alt: DiffiLQRax logo
 
 
-===========
-DiffiLQRax
-==========
-
-
 .. image:: https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg
    :align: left
 
