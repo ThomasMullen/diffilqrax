@@ -9,7 +9,7 @@ authors = [
   { name="Marine Schimel", email="marine.schimel@hotmail.fr" },
 ]
 description = "Differentiable iLQR algorithm for dynamical systems"
-readme = "README.rst"
+readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 dynamic = ["dependencies", "optional-dependencies", "version"]
