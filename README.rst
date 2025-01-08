@@ -1,13 +1,6 @@
    .. image:: ./doc/source/_static/images/diffilqrax_logo_dm.png
    :align: center
    :width: 400
-   :class: only-dark
-   :alt: DiffiLQRax logo
-
-.. image:: ./doc/source/_static/images/diffilqrax_logo.png
-   :align: center
-   :width: 400
-   :class: only-light
    :alt: DiffiLQRax logo
 
 .. rst-class:: heading-center
