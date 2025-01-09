@@ -1,4 +1,4 @@
-![DiffiLQRax logo](./doc/source/_static/images/diffilqrax_logo_dm.png)
+![DiffiLQRax logo](./doc/source/_static/images/diffilqrax_logo_banner_dm.png)
 
 
 ![Pylint](https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg)
@@ -66,6 +66,11 @@ def dynamics(t, x, u, theta):
 model = System(cost, costf, dynamics, dims)
 ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
 ```
+
+## Design principle
+
+![DiffiLQRax Deisgn Principle](./doc/source/_static/images/diffilqrax_design_principle.png)
+
 
 ## License
 

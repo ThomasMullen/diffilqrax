@@ -17,3 +17,13 @@ Design Principles
 +----------------+------------------------------+----------------+---------------------------------+
 |                | ``diffilqrax.parallel_ilqr`` | GPU            | ``ThetaParams, ParallelSystem`` |
 +----------------+------------------------------+----------------+---------------------------------+
+
+The layout of the modules are hierarchically structure outlined in the schematic below:
+
+.. image:: ../_static/images/diffilqrax_design_principle.png
+   :align: center
+   :class: only-dark
+
+.. image:: ../_static/images/diffilqrax_design_principle.png
+   :align: center
+   :class: only-light
