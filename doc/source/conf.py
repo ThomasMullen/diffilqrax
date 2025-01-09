@@ -10,6 +10,7 @@ project = 'diffilqrax'
 copyright = '2024, Thomas Soares Mullen & Marine Schimel'
 author = 'Thomas Soares Mullen & Marine Schimel'
 
+
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
@@ -52,5 +53,21 @@ html_theme_options = {
         "text": "Diffilqrax documentation",
         "image_dark": "./_static/images/diffilqrax_logo_dm2_short2.png",
         "image_light": "./_static/images/diffilqrax_logo_dm2_short.png",
-   }
+   },
+   # GitHub link in header
+    # "icon_links": [
+    #     {
+    #         "name": "GitHub",
+    #         "url": "https://github.com/ThomasMullen/diffilqrax",
+    #         "icon": "fa-brands fa-github",
+    #     }
+    # ],
+   # Navigation bar links
+    # "navbar_links": [
+    #     {"name": "Getting started", "url": "userguide/getting_started"},
+    #     {"name": "Tutorials", "url": "examples/index"},
+    #     {"name": "Design principle", "url": "userguide/design_principles"},
+    #     {"name": "API", "url": "api/modules"},
+    # ],
 }
+
