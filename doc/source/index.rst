@@ -27,22 +27,69 @@ DiffiLQRax is an open source Python package that provides a differentiable imple
 Please support the development of DiffiLQRax by starring and/or watching the project on Github!
 
 
-Examples
----------
+Quick Examples
+--------------
 
-.. nbgallery::
-    :caption: DiffiLQRax examples
-    :name: rst-gallery
-    :reversed:
+LQR Examples
+^^^^^^^^^^^^
+
+.. grid:: 2
+
+   .. grid-item-card::  LQR optimal control of integrator dynamics
+      :link: ./examples/lqr_integrator
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: _static/nb_thumbnails/lqr_integrator.png
+         :alt: Thumbnail for LQR solution
+         :class: gallery-thumbnail
+
+   .. grid-item-card::  LQR tracking optimal control of integrator dynamics
+      :link: ./examples/lqr_tracking_integrator
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: _static/nb_thumbnails/lqr_tracking_integrator.png
+         :alt: Thumbnail for LQR tracking solution
+         :class: gallery-thumbnail
+
+iLQR Examples
+^^^^^^^^^^^^^
+
+.. grid:: 3
+
+   .. grid-item-card::  iLQR solver for simple pendulum
+      :link: ./examples/simple_pendulum
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: _static/nb_thumbnails/simple_pendulum.png
+         :alt: Thumbnail for iLQR solution for pendulum
+         :class: gallery-thumbnail
+
+   .. grid-item-card::  iLQR Optimal Control compared with Gradient Descent
+      :link: ./examples/ilqr_vs_backpropagation
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: _static/nb_thumbnails/ilqr_vs_backpropagation.png
+         :alt: Thumbnail for iLQR vs gradient descent
+         :class: gallery-thumbnail
+
+   .. grid-item-card::  iLQR solver Implicit vs. Direct gradients
+      :link: ./examples/gradients_through_ilqr
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: _static/nb_thumbnails/gradients_through_ilqr.png
+         :alt: Thumbnail for iLQR solution and implicit-direct gradients
+         :class: gallery-thumbnail
     
-   examples/lqr_integrator.ipynb
-   examples/lqr_tracking_integrator.ipynb
-   examples/gradient_through_ilqr.ipynb
-   examples/simple_pendulum.ipynb
-   examples/simple_pendulum_with_slider.ipynb
-   examples/gradients_through_ilqr.ipynb
-
-
 Installation
 ------------
 
