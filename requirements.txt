@@ -2,6 +2,7 @@ tdqm
 numpy
 jax
 jaxopt
+optax
 chex
 pytest
 matplotlib

@@ -1,0 +1,15 @@
+sphinx
+sphinx-autobuild
+pydata-sphinx-theme
+sphinx-autodoc-typehints
+sphinx-gallery
+sphinx_design
+sphinx-design-elements
+sphinx-autoapi
+sphinxcontrib-video
+sphinxcontrib-bibtex
+numpydoc
+nbsphinx
+sphinxcontrib-jupyter
+sphinx-togglebutton
+sphinx-tabs
