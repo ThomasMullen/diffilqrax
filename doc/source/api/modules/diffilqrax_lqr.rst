@@ -1,6 +1,7 @@
+.. _lqr_api:
 
 LQR
-==============
+===
 
 .. automodule:: diffilqrax.lqr
    :members:

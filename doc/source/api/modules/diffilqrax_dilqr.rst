@@ -1,5 +1,5 @@
 Differentiable iLQR
-==================
+===================
 
 .. automodule:: diffilqrax.diff_ilqr
    :members:
