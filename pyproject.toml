@@ -37,7 +37,7 @@ packages = ["diffilqrax"]
 [tool.setuptools.dynamic]
 version = {file = "diffilqrax/VERSION"}
 dependencies = {file = ["requirements.txt"]}
-optional-dependencies = { dev = { file = ["requirements_dev.txt"] }, doc = { file = ["requirements_dev.txt"] } }
+optional-dependencies = { dev = { file = ["requirements_dev.txt"] }, doc = { file = ["requirements_doc.txt"] } }
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
