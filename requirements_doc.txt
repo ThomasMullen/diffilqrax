@@ -9,6 +9,7 @@ sphinx-autoapi
 sphinxcontrib-video
 sphinxcontrib-bibtex
 numpydoc
+pandocfilters
 nbsphinx
 sphinxcontrib-jupyter
 sphinx-togglebutton
