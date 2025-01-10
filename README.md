@@ -4,6 +4,8 @@
 ![Pylint](https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg)
 ![Python Package](https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-package.yml/badge.svg)
 ![Python Publish](https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-publish.yml/badge.svg)
+![PyPI version](https://badge.fury.io/py/diffilqrax.svg?icon=si%3Apython)
+
 
 # Diffilqrax: Differentiable optimal control
 

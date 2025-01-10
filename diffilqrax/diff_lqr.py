@@ -232,10 +232,13 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     Use :func:`build_ajoint_lqr` to build the reverse LQR problem with gradients. Where 
     :math:`\overline{c} = [\overline{q}, \overline{r}]`, :math:`\overline{F}`, 
     where :math:`F = [A, B]`, and :math:`\overline{C}` (where :math:`C = [Q, R]`) as:
-        :math:`\overline{C} = 0.5 \left( \overline{c} \tau_{\star}^T + \tau_{\star} 
-        \overline{c}^T \right)`
-        :math:`\overline{F}_t = \lambda_{\star_{t+1}} \overline{c}^T + f_{t+1} 
-        \tau_{\star_t}^T`
+    .. math::
+    
+        \overline{C} = 0.5 \left( \overline{c} \tau_{\star}^T + \tau_{\star} \overline{c}^T \right)
+    
+    .. math::
+    
+        \overline{F}_t = \lambda_{\star_{t+1}} \overline{c}^T + f_{t+1} \tau_{\star_t}^T
 
 
     Parameters
