@@ -1,11 +1,9 @@
-matplotlib
+tdqm
+numpy
 jax
 jaxopt
-chex
-numpy
-scipy
-tqdm
-jax_dataclasses
+optax
 chex
 pytest
-black
+matplotlib
+build

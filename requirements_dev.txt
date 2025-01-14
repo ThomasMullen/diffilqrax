@@ -1,0 +1,14 @@
+matplotlib
+jax
+jaxopt
+chex
+numpy
+scipy
+tqdm
+jax_dataclasses
+chex
+pytest
+black
+build
+twine
+pylint

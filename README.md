@@ -1,49 +1,83 @@
-# ilqr_vae_py
-jax ilqr implementation
-
-LQR linear system with quadratic and linear cost terms
-
-Final state cost:
-$$l_T(x_T) = \frac{1}{2} x_T^{T}Q_Tx_T + q_T^{T}x_T+\alpha_{T}$$
-
-Current state cost:
-$$l_t(x_t) = \frac{1}{2} x_t^{T}Q_tx_t + \frac{1}{2} u_t^{T}R_tu_t + q_t^{T}x_t + r_t^{T}u_t+\alpha_{t}$$
-
-With dynamics:
-$$f_t(x_t, u_t) = A_tx_t + B_tu_t + a_t$$
-
-The optimal cost-to-go $J^{*}_T{}(x_t)$ is defined as:
-
-$$J^{*}_T{}(x_t) = \frac{1}{2} x_T^{T}P_Tx_T + p_T^{T}x_T+\beta_{T} $$
-
-where $P$ and $p$ are the quadratic and linear value iteration respectively.
+![DiffiLQRax logo](./doc/source/_static/images/diffilqrax_logo_banner_dm.png)
 
 
+![Pylint](https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg)
+![Python Package](https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-package.yml/badge.svg)
+![Python Publish](https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-publish.yml/badge.svg)
+![PyPI version](https://badge.fury.io/py/diffilqrax.svg?icon=si%3Apython)
 
 
-# Resources
-DDP implementation https://bjack205.github.io/papers/AL_iLQR_Tutorial.pdf
-Jax DP and implicit differentiation https://stephentu.github.io/presentations/jax4dc/#/1
+# Diffilqrax: Differentiable optimal control
+
+## Diffilqrax: What is it?
+
+This repository contains an implementation of the iterative Linear Quadratic Regulator (iLQR) using the JAX library. The iLQR is a powerful algorithm used for optimal control, and this implementation is designed to be fully differentiable.
+
+## Getting Started
+
+To get started with this code, clone the repository and install the required dependencies. Then, you can run the main script to see the iLQR in action.
+
+```bash
+git clone git@github.com:ThomasMullen/diffilqrax.git
+cd diffilqrax
+python -m build
+pip install -e .
+```
+
+or, you can import from pip install
+
+```bash
+pip install diffilqrax
+```
+
+### Quick example
+
+```python
+import jax.numpy as jnp
+import jax.random as jr
+from diffilqrax import ilqr
+from diffilqrax.typs import iLQRParams, Theta, ModelDims, System
+from diffilqrax.utils import initialise_stable_dynamics, keygen
+
+dims = ModelDims(8, 2, 100, dt=0.1)
+
+key = jr.PRNGKey(seed=234)
+key, skeys = keygen(key, 5)
+
+Uh = initialise_stable_dynamics(next(skeys), dims.n, dims.horizon, 0.6)[0]
+Wh = jr.normal(next(skeys), (dims.n, dims.m))
+theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n), Q=jnp.eye(dims.n))
+params = iLQRParams(x0=jr.normal(next(skeys), dims.n), theta=theta)
+Us = jnp.zeros((dims.horizon, dims.m))   
+# define linesearch hyper parameters
+ls_kwargs = {
+    "beta":0.8,
+    "max_iter_linesearch":16,
+    "tol":1e0,
+    "alpha_min":0.0001,
+    }
+def cost(t, x, u, theta):
+    return jnp.sum(x**2) + jnp.sum(u**2)
+
+def costf(x, theta):
+    return jnp.sum(x**2)
+
+def dynamics(t, x, u, theta):
+    return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+
+model = System(cost, costf, dynamics, dims)
+ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
+```
+
+## Design principle
+
+![DiffiLQRax Deisgn Principle](./doc/source/_static/images/diffilqrax_design_principle.png)
 
 
+## License
 
-Define Lagrangian
-$$
-\begin{split}
-    \mathcal{L}(\bm{x},\bm{u}, \bm{\lambda}) &= \sum^{T-1}_{t=0} \frac{1}{2} (x_{t}^{T}Q_{t}x_{t} + x_{t}^{T}S_{t}u_{t} + u_{t}^{T}S_{t}^{T}x_{t} + u_{t}^{T}R_{t}u_{t}) + x_{t}^{T}q_{t} + u^{T}_{t}r_{t}  \\ 
-    &+ x_{T}^{T}Q_{f}x_{T} + x_{T}^{T}q_{f} \\
-    &+ \sum^{T-1}_{t=0} \lambda_{t}^{T}(A_{t}x_{t} + B_{t}u_{t} +a_{t} - \mathbb{I}x_{t+1}) \\
-    &+ \lambda_{0}(x_{0} - \mathbb{I}x_{t+1})
-\end{split}
-$$
+This project is licensed under the MIT License. See the LICENSE file for details.
 
-Partials
-$$
-\begin{align}
-	\nabla_{x_{t}}\mathcal{L}(x,u, \bm{\lambda}) &= Q_{t}x_{t} + S_{t}u_{t} + q_{t} + A_{t}^{T}\bm{\lambda}_{t+1} - \bm{\lambda}_{t}= 0 \\
-	\nabla_{x_{T}} \mathcal{L}(x,u, \bm{\lambda})&= Q_{f}x_{T} + q_{f} - \bm{\lambda}_{T} = 0 \\
-	\nabla_{\bm{\lambda}_{0}}\mathcal{L}(x,u, \bm{\lambda}) &= x_{0} - \mathbb{I}x_{0} = 0 \\
-	\nabla_{\bm{\lambda}_{t+1}}\mathcal{L}(x,u, \bm{\lambda}) &= A_{t}x_{t} + B_{t}u_{t} +a_{t}- \mathbb{I}x_{t+1} = 0 \\
-	\nabla_{u_{t}}\mathcal{L}(x,u,\bm{\lambda}) &= S_{t}^{T}x_{t} + R_{t}u_{t} + r_{t}+ B_{t}^{T}\lambda_{t+1} = 0.
-\end{align}
-$$
+## Acknowledgments
+
+This project has received funding from the European Union’s Horizon 2020 research and innovation programme under the Marie Skłodowska-Curie grant agreement #813457.

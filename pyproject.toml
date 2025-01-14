@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["dependencies", "optional-dependencies", "version"]
+name = "diffilqrax"
+authors = [
+  { name="Thomas Soares Mullen", email="thomasmullen96@gmail.com" },
+  { name="Marine Schimel", email="marine.schimel@hotmail.fr" },
+]
+description = "Differentiable iLQR algorithm for dynamical systems"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+keywords = ["lqr", "ilqr", "optimal control", "Optimal Control", "kalman"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  # Indicate who your project is intended for
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Education",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Physics",
+  # Pick your license as you wish
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+[tool.setuptools]
+packages = ["diffilqrax"]
+
+[tool.setuptools.dynamic]
+version = {file = "diffilqrax/VERSION"}
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = { dev = { file = ["requirements_dev.txt"] }, doc = { file = ["requirements_doc.txt"] } }
+
+[project.urls]
+"Homepage" = "https://github.com/ThomasMullen/diffilqrax"
+"Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax/issues"
