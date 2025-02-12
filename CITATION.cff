@@ -1,0 +1,11 @@
+@software{diffilqrax2025,
+  doi = {10.5281/ZENODO.14861292},
+  url = {https://zenodo.org/doi/10.5281/zenodo.14861292},
+  author = {Thomas Soares Mullen and Marine Schimel},
+  title = {{DiffiLQRAX: Differentiable iLQR in JAX}},
+  publisher = {Zenodo},
+  year = {2025},
+  month = {feb},
+  version = {v0.0.8},
+  copyright = {Apache License 2.0}
+}
