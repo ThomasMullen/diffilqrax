@@ -1,0 +1,755 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>diffilqrax.parallel_ilqr &#8212; diffilqrax  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/diffilqrax/parallel_ilqr';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/diffilqrax_logo_dm2_short.png" class="logo__image only-light" alt=""/>
+    <img src="../../_static/diffilqrax_logo_dm2_short2.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Diffilqrax documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/modules.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/modules.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">diffilqrax.parallel_ilqr</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for diffilqrax.parallel_ilqr</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Solve iLQR with parallel dynamics using associative scans&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">Array</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">lax</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">jnp</span>
+
+<span class="kn">from</span> <span class="nn">diffilqrax.lqr</span> <span class="kn">import</span> <span class="n">lqr_adjoint_pass</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.lqr</span> <span class="kn">import</span> <span class="n">bmm</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.plqr</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">associative_opt_traj_scan</span><span class="p">,</span>
+    <span class="n">associative_riccati_scan</span><span class="p">,</span>
+    <span class="n">build_fwd_lin_dyn_elements</span><span class="p">,</span>
+    <span class="n">get_dcosts</span><span class="p">,</span>
+    <span class="n">dynamic_operator</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.ilqr</span> <span class="kn">import</span> <span class="n">approx_lqr</span><span class="p">,</span> <span class="n">linesearch</span><span class="p">,</span> <span class="n">approx_lqr_dyn</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.typs</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">iLQRParams</span><span class="p">,</span>
+    <span class="n">System</span><span class="p">,</span>
+    <span class="n">CostToGo</span><span class="p">,</span>
+    <span class="n">LQRParams</span><span class="p">,</span>
+    <span class="n">ParallelSystem</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>  <span class="c1"># double precision</span>
+
+
+<div class="viewcode-block" id="parallel_forward_lin_integration_ilqr">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_pilqr.html#diffilqrax.parallel_ilqr.parallel_forward_lin_integration_ilqr">[docs]</a>
+<span class="k">def</span> <span class="nf">parallel_forward_lin_integration_ilqr</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">:</span> <span class="n">System</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">iLQRParams</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">a_term</span><span class="p">:</span> <span class="n">Array</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform associative scan for forward linear dynamics.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : System</span>
+<span class="sd">        The system model.</span>
+<span class="sd">    params : iLQRParams</span>
+<span class="sd">        The iLQR parameters.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        The initial control sequence.</span>
+<span class="sd">    a_term : Array</span>
+<span class="sd">        The affine term for the dynamics.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Array</span>
+<span class="sd">        The state trajectory.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x0</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">x0</span>
+    <span class="n">lqr_params</span> <span class="o">=</span> <span class="n">approx_lqr</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">x0</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">Us_init</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))],</span>
+        <span class="n">Us_init</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">dyn_elements</span> <span class="o">=</span> <span class="n">build_fwd_lin_dyn_elements</span><span class="p">(</span>
+        <span class="n">LQRParams</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">lqr_params</span><span class="p">),</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">a_term</span>
+    <span class="p">)</span>
+    <span class="n">c_as</span><span class="p">,</span> <span class="n">c_bs</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">associative_scan</span><span class="p">(</span><span class="n">dynamic_operator</span><span class="p">,</span> <span class="n">dyn_elements</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">c_bs</span></div>
+
+
+
+<div class="viewcode-block" id="parallel_feedback_lin_dyn_ilqr">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_pilqr.html#diffilqrax.parallel_ilqr.parallel_feedback_lin_dyn_ilqr">[docs]</a>
+<span class="k">def</span> <span class="nf">parallel_feedback_lin_dyn_ilqr</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">:</span> <span class="n">System</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">iLQRParams</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">a_term</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Kx</span><span class="p">:</span> <span class="n">Array</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform associative scan for forward linear dynamics with feedback.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : System</span>
+<span class="sd">        The system model.</span>
+<span class="sd">    params : iLQRParams</span>
+<span class="sd">        The iLQR parameters.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        The initial control sequence.</span>
+<span class="sd">    a_term : Array</span>
+<span class="sd">        The affine term for the dynamics.</span>
+<span class="sd">    Kx : Array</span>
+<span class="sd">        The feedback gain matrix.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Array</span>
+<span class="sd">        The state trajectory.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lqr_params</span> <span class="o">=</span> <span class="n">approx_lqr</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">params</span><span class="o">.</span><span class="n">x0</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">model</span><span class="o">.</span><span class="n">dims</span><span class="o">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">))],</span>
+        <span class="n">Us_init</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">lqr_params</span> <span class="o">=</span> <span class="n">lqr_params</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">A</span><span class="o">=</span><span class="n">lqr_params</span><span class="o">.</span><span class="n">A</span> <span class="o">-</span> <span class="n">bmm</span><span class="p">(</span><span class="n">lqr_params</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="n">Kx</span><span class="p">))</span>
+    <span class="n">dyn_elements</span> <span class="o">=</span> <span class="n">build_fwd_lin_dyn_elements</span><span class="p">(</span>
+        <span class="n">LQRParams</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">x0</span><span class="p">,</span> <span class="n">lqr_params</span><span class="p">),</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">a_term</span>
+    <span class="p">)</span>
+    <span class="n">c_as</span><span class="p">,</span> <span class="n">c_bs</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">associative_scan</span><span class="p">(</span><span class="n">dynamic_operator</span><span class="p">,</span> <span class="n">dyn_elements</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">c_bs</span></div>
+
+
+
+<div class="viewcode-block" id="pilqr_forward_pass">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_pilqr.html#diffilqrax.parallel_ilqr.pilqr_forward_pass">[docs]</a>
+<span class="k">def</span> <span class="nf">pilqr_forward_pass</span><span class="p">(</span>
+    <span class="n">parallel_model</span><span class="p">:</span> <span class="n">ParallelSystem</span> <span class="o">|</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">iLQRParams</span><span class="p">,</span>
+    <span class="n">values</span><span class="p">:</span> <span class="n">CostToGo</span><span class="p">,</span>
+    <span class="n">Xs</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span>
+    <span class="n">Us</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">],</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform a forward pass of the parallel iLQR algorithm.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    parallel_model : ParallelSystem | Any</span>
+<span class="sd">        The parallel system model.</span>
+<span class="sd">    params : iLQRParams</span>
+<span class="sd">        The iLQR parameters.</span>
+<span class="sd">    values : CostToGo</span>
+<span class="sd">        The cost-to-go values.</span>
+<span class="sd">    Xs : Array</span>
+<span class="sd">        The state trajectory.</span>
+<span class="sd">    Us : Array</span>
+<span class="sd">        The control trajectory.</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        The linesearch parameter, by default 1.0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Tuple[Array, Array], float]</span>
+<span class="sd">        A tuple containing the updated state trajectory and control trajectory, and the total cost</span>
+<span class="sd">        of the trajectory.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">parallel_model</span><span class="o">.</span><span class="n">model</span>
+
+    <span class="n">lqr_mats</span> <span class="o">=</span> <span class="n">approx_lqr_dyn</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">Xs</span><span class="p">,</span> <span class="n">Us</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="n">dyn_bias</span> <span class="o">=</span> <span class="n">lqr_mats</span><span class="o">.</span><span class="n">a</span>
+    <span class="c1"># this is the model from delta_x, so delta_x0 = 0</span>
+    <span class="n">lqr_model</span> <span class="o">=</span> <span class="n">LQRParams</span><span class="p">(</span>
+        <span class="n">x0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">x0</span><span class="p">),</span> <span class="n">lqr</span><span class="o">=</span><span class="n">lqr_mats</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">dyn_bias</span><span class="p">))</span>
+    <span class="p">)</span>
+    <span class="c1"># this is a parallel lin scan anyway b</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">cs</span><span class="p">,</span> <span class="p">(</span><span class="n">Ks</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">ks</span><span class="p">),</span> <span class="n">offsets</span> <span class="o">=</span> <span class="n">associative_opt_traj_scan</span><span class="p">(</span>
+        <span class="n">lqr_model</span><span class="p">,</span> <span class="n">values</span><span class="o">.</span><span class="n">v</span><span class="p">,</span> <span class="n">values</span><span class="o">.</span><span class="n">V</span><span class="p">,</span> <span class="n">alpha</span>
+    <span class="p">)</span>
+
+    <span class="c1"># dyn with Ks edit to linear dyn, u + k + K@x as constant term</span>
+    <span class="c1"># can define function to include feedback + edit the dynamcis to have (A - K)x</span>
+    <span class="n">delta_Xs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">x0</span><span class="p">)[</span><span class="kc">None</span><span class="p">],</span> <span class="n">cs</span><span class="p">]</span>
+    <span class="c1"># Potentially we could return it as output of the parallel scan</span>
+    <span class="c1"># δu_= B @ Kv @ (v - V@c) - Kx@x</span>
+    <span class="c1"># where u = u_ + offset (eq 64 in https://arxiv.org/abs/2104.03186)</span>
+    <span class="n">delta_Us</span> <span class="o">=</span> <span class="n">ks</span> <span class="o">-</span> <span class="n">bmm</span><span class="p">(</span><span class="n">Ks</span><span class="p">,</span> <span class="n">delta_Xs</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">offsets</span>
+    <span class="n">Kxxs</span> <span class="o">=</span> <span class="n">bmm</span><span class="p">(</span><span class="n">Ks</span><span class="p">,</span> <span class="n">Xs</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">ks</span> <span class="o">+</span> <span class="n">offsets</span>
+    <span class="c1"># NOTE: in the case of a linear system, equivalent to `parallel_feedback_lin_dyn_ilqr`</span>
+    <span class="n">new_Xs</span> <span class="o">=</span> <span class="n">parallel_model</span><span class="o">.</span><span class="n">parallel_dynamics_feedback</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">Us</span> <span class="o">+</span> <span class="n">Kxxs</span><span class="p">,</span> <span class="n">dyn_bias</span><span class="p">,</span> <span class="n">Ks</span>
+    <span class="p">)</span>
+    <span class="c1"># this should define the dynamics incorporating the feedback term that says how to handle</span>
+    <span class="c1"># delta_X (current state - initial traj) we assume Ks@initial_traj is already passed as</span>
+    <span class="c1"># input so only care about the current state and the parallel_dynamics_feedback function</span>
+    <span class="c1"># should define how to handle that</span>
+    <span class="n">new_Us</span> <span class="o">=</span> <span class="n">Us</span> <span class="o">+</span> <span class="n">delta_Us</span>
+    <span class="c1"># new_Xs = parallel_model.parallel_dynamics(model, params,  new_Us,  lqr_model_with_a.lqr.a)</span>
+    <span class="n">total_cost</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+        <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">cost</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">))(</span>
+            <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">dims</span><span class="o">.</span><span class="n">horizon</span><span class="p">),</span> <span class="n">new_Xs</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">new_Us</span><span class="p">,</span> <span class="n">params</span><span class="o">.</span><span class="n">theta</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">total_cost</span> <span class="o">+=</span> <span class="n">model</span><span class="o">.</span><span class="n">costf</span><span class="p">(</span><span class="n">new_Xs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">params</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">new_Xs</span><span class="p">,</span> <span class="n">new_Us</span><span class="p">),</span> <span class="n">total_cost</span></div>
+
+
+
+<div class="viewcode-block" id="pilqr_solver">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_pilqr.html#diffilqrax.parallel_ilqr.pilqr_solver">[docs]</a>
+<span class="k">def</span> <span class="nf">pilqr_solver</span><span class="p">(</span>
+    <span class="n">parallel_model</span><span class="p">:</span> <span class="n">ParallelSystem</span><span class="p">,</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">iLQRParams</span><span class="p">,</span>
+    <span class="n">Us_init</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span>
+    <span class="n">max_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">40</span><span class="p">,</span>
+    <span class="n">convergence_thresh</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span>
+    <span class="n">alpha_init</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">use_linesearch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">linesearch_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">],</span> <span class="nb">float</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Solve the parallel iterative Linear Quadratic Regulator (iLQR) problem.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    parallel_model : ParallelSystem</span>
+<span class="sd">        The parallel system model.</span>
+<span class="sd">    params : iLQRParams</span>
+<span class="sd">        The iLQR parameters.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        The initial control trajectory.</span>
+<span class="sd">    max_iter : int, optional</span>
+<span class="sd">        The maximum number of iterations, by default 40.</span>
+<span class="sd">    convergence_thresh : float, optional</span>
+<span class="sd">        The convergence threshold, by default 1e-6.</span>
+<span class="sd">    alpha_init : float, optional</span>
+<span class="sd">        The initial step size for the forward pass, by default 1.0.</span>
+<span class="sd">    verbose : bool, optional</span>
+<span class="sd">        Whether to print debug information, by default False.</span>
+<span class="sd">    use_linesearch : bool, optional</span>
+<span class="sd">        Whether to use line search for the forward pass, by default True.</span>
+<span class="sd">    **linesearch_kwargs</span>
+<span class="sd">        Additional keyword arguments for the line search.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Tuple[Array, Array, Array], float, Array]</span>
+<span class="sd">        A tuple containing the final state trajectory, control trajectory, and the adjoint</span>
+<span class="sd">        variables. Also returns the total cost of the trajectory and the cost history.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">parallel_model</span><span class="o">.</span><span class="n">model</span>
+    <span class="n">Xs_init</span> <span class="o">=</span> <span class="n">parallel_model</span><span class="o">.</span><span class="n">parallel_dynamics</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">Us_init</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="p">)</span>
+
+    <span class="n">a_term</span> <span class="o">=</span> <span class="n">approx_lqr_dyn</span><span class="p">(</span><span class="n">parallel_model</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">Xs_init</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">a</span>
+    <span class="n">Xs_init</span> <span class="o">=</span> <span class="n">parallel_model</span><span class="o">.</span><span class="n">parallel_dynamics</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">a_term</span><span class="p">)</span>
+    <span class="n">c_init</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+        <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">cost</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">))(</span>
+            <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">dims</span><span class="o">.</span><span class="n">horizon</span><span class="p">),</span> <span class="n">Xs_init</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">params</span><span class="o">.</span><span class="n">theta</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">c_init</span> <span class="o">+=</span> <span class="n">model</span><span class="o">.</span><span class="n">costf</span><span class="p">(</span><span class="n">Xs_init</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">params</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span>
+    <span class="n">initial_carry</span> <span class="o">=</span> <span class="p">(</span><span class="n">Xs_init</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">c_init</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">prollout</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">pilqr_forward_pass</span><span class="p">,</span> <span class="n">parallel_model</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">plqr_iter</span><span class="p">(</span><span class="n">carry_tuple</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform one iteration of the parallel iLQR algorithm.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        carry_tuple : Tuple[Array, Array, float, int, bool]</span>
+<span class="sd">            The carry tuple containing the state trajectory, control trajectory, total cost,</span>
+<span class="sd">            iteration number, and a boolean indicating whether to continue.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Tuple[Array, Array, float, int, bool]</span>
+<span class="sd">            The updated carry tuple.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">old_Xs</span><span class="p">,</span> <span class="n">old_Us</span><span class="p">,</span> <span class="n">old_cost</span><span class="p">,</span> <span class="n">n_iter</span><span class="p">,</span> <span class="n">carry_on</span> <span class="o">=</span> <span class="n">carry_tuple</span>
+        <span class="n">lqr</span> <span class="o">=</span> <span class="n">approx_lqr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">old_Xs</span><span class="p">,</span> <span class="n">old_Us</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+        <span class="n">lqr_params</span> <span class="o">=</span> <span class="n">LQRParams</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">x0</span><span class="p">,</span> <span class="n">lqr</span><span class="p">)</span>
+        <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span> <span class="o">=</span> <span class="n">associative_riccati_scan</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">)</span>
+        <span class="n">exp_dJ</span> <span class="o">=</span> <span class="n">get_dcosts</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">,</span> <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">linesearch_wrapped</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+            <span class="n">value_fns</span><span class="p">,</span> <span class="n">Xs_init</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">alpha_init</span> <span class="o">=</span> <span class="n">args</span>
+            <span class="k">return</span> <span class="n">linesearch</span><span class="p">(</span>
+                <span class="n">prollout</span><span class="p">,</span>
+                <span class="n">value_fns</span><span class="p">,</span>
+                <span class="n">Xs_init</span><span class="p">,</span>
+                <span class="n">Us_init</span><span class="p">,</span>
+                <span class="n">alpha_init</span><span class="p">,</span>
+                <span class="n">cost_init</span><span class="o">=</span><span class="n">old_cost</span><span class="p">,</span>
+                <span class="n">expected_dJ</span><span class="o">=</span><span class="n">exp_dJ</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">linesearch_kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># NOTE : for the linesearch I believe we can use the exact same function</span>
+            <span class="c1"># as in ilqr, as long as we pass a different rollout - is that riht?</span>
+
+        <span class="c1"># if no line search: α = 1.0; else use dynamic line search</span>
+        <span class="p">(</span><span class="n">new_Xs</span><span class="p">,</span> <span class="n">new_Us</span><span class="p">),</span> <span class="n">new_total_cost</span> <span class="o">=</span> <span class="n">lax</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span>
+            <span class="n">use_linesearch</span><span class="p">,</span>
+            <span class="n">linesearch_wrapped</span><span class="p">,</span>
+            <span class="n">prollout</span><span class="p">,</span>
+            <span class="n">CostToGo</span><span class="p">(</span><span class="n">Js</span><span class="p">,</span> <span class="n">etas</span><span class="p">),</span>
+            <span class="n">old_Xs</span><span class="p">,</span>
+            <span class="n">old_Us</span><span class="p">,</span>
+            <span class="n">alpha_init</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">z</span> <span class="o">=</span> <span class="p">(</span><span class="n">old_cost</span> <span class="o">-</span> <span class="n">new_total_cost</span><span class="p">)</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">old_cost</span><span class="p">)</span>
+        <span class="n">carry_on</span> <span class="o">=</span> <span class="n">z</span> <span class="o">&gt;</span> <span class="n">convergence_thresh</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">new_Xs</span><span class="p">,</span> <span class="n">new_Us</span><span class="p">,</span> <span class="n">new_total_cost</span><span class="p">,</span> <span class="n">n_iter</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">carry_on</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">loop_fun</span><span class="p">(</span><span class="n">carry_tuple</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">bool</span><span class="p">],</span> <span class="n">_</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Loop function for the parallel iLQR algorithm.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        carry_tuple : Tuple[Array, Array, float, int, bool]</span>
+<span class="sd">            The carry tuple containing the state trajectory, control trajectory, total cost,</span>
+<span class="sd">            iteration number, and a boolean indicating whether to continue.</span>
+<span class="sd">        _ : Any</span>
+<span class="sd">            Unused parameter.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Tuple[Tuple[Array, Array, float, int, bool], float]</span>
+<span class="sd">            The updated carry tuple and the total cost.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">updated_carry</span> <span class="o">=</span> <span class="n">lax</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span><span class="n">carry_tuple</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">plqr_iter</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">,</span> <span class="n">carry_tuple</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">updated_carry</span><span class="p">,</span> <span class="n">updated_carry</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="c1"># scan through with max iterations</span>
+    <span class="p">(</span><span class="n">Xs_star</span><span class="p">,</span> <span class="n">Us_star</span><span class="p">,</span> <span class="n">total_cost</span><span class="p">,</span> <span class="n">n_iters</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">costs</span> <span class="o">=</span> <span class="n">lax</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span>
+        <span class="n">loop_fun</span><span class="p">,</span> <span class="n">initial_carry</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="n">max_iter</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">jax</span><span class="o">.</span><span class="n">debug</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converged in </span><span class="si">{</span><span class="n">n_iters</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">max_iter</span><span class="si">}</span><span class="s2"> iterations&quot;</span><span class="p">)</span>
+        <span class="n">jax</span><span class="o">.</span><span class="n">debug</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;old_cost: </span><span class="si">{</span><span class="n">total_cost</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">lqr_params_stars</span> <span class="o">=</span> <span class="n">approx_lqr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">Xs_star</span><span class="p">,</span> <span class="n">Us_star</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="c1"># TODO : Not sure if this is needed - otherwise should solve with Vs and vs</span>
+    <span class="n">Lambs_star</span> <span class="o">=</span> <span class="n">lqr_adjoint_pass</span><span class="p">(</span>
+        <span class="n">Xs_star</span><span class="p">,</span> <span class="n">Us_star</span><span class="p">,</span> <span class="n">LQRParams</span><span class="p">(</span><span class="n">Xs_star</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">lqr_params_stars</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">Xs_star</span><span class="p">,</span> <span class="n">Us_star</span><span class="p">,</span> <span class="n">Lambs_star</span><span class="p">),</span> <span class="n">total_cost</span><span class="p">,</span> <span class="n">costs</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024, Thomas Soares Mullen &amp; Marine Schimel.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

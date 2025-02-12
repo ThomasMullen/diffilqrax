@@ -1,0 +1,794 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Associative LQR &#8212; diffilqrax  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/modules/diffilqrax_plqr';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Associative iLQR" href="diffilqrax_pilqr.html" />
+    <link rel="prev" title="iLQR" href="diffilqrax_ilqr.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/diffilqrax_logo_dm2_short.png" class="logo__image only-light" alt=""/>
+    <img src="../../_static/diffilqrax_logo_dm2_short2.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Diffilqrax documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../modules.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../modules.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="diffilqrax_lqr.html">LQR</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffilqrax_ilqr.html">iLQR</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Associative LQR</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffilqrax_pilqr.html">Associative iLQR</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffilqrax_dlqr.html">Differentiable LQR</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffilqrax_dilqr.html">Differentiable iLQR</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffilqrax_typs.html">Diffilqrax types</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../modules.html" class="nav-link">API Documentation</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Associative LQR</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-diffilqrax.plqr">
+<span id="associative-lqr"></span><h1>Associative LQR<a class="headerlink" href="#module-diffilqrax.plqr" title="Link to this heading">#</a></h1>
+<p>LQR solver using associative parallel scan</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.associative_opt_traj_scan">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">associative_opt_traj_scan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">etas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Js</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#associative_opt_traj_scan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.associative_opt_traj_scan" title="Link to this definition">#</a></dt>
+<dd><p>Obtain effective state dynamic and bias through associative scan.
+Ks returned (Kx, Kv, Kc, delta) to recover optimal control: state feedback gain,
+linear val fn gain, dynamics offset gain, delta of linear gains.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR problem (initial state, LQR parameters).</p></li>
+<li><p><strong>etas</strong> (<em>Array</em>) – Linear value functions.</p></li>
+<li><p><strong>Js</strong> (<em>Array</em>) – Quadratic value functions.</p></li>
+<li><p><strong>alpha</strong> (<em>float</em><em>, </em><em>optional</em>) – Linesearch step parameter, by default 1.0.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Effective state dynamics, effective bias, Ks, offset.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[Array, Array, Tuple[Array, Array, Array, Array], Array]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.associative_riccati_scan">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">associative_riccati_scan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#associative_riccati_scan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.associative_riccati_scan" title="Link to this definition">#</a></dt>
+<dd><p>Obtain value function through associative riccati scan.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR model parameters.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Linear and quadratic value functions.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[Array, Array]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.build_associative_lin_dyn_elements">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">build_associative_lin_dyn_elements</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">etas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Js</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#build_associative_lin_dyn_elements"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.build_associative_lin_dyn_elements" title="Link to this definition">#</a></dt>
+<dd><p>Join set of elements for associative scan.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR model parameters.</p></li>
+<li><p><strong>etas</strong> (<em>Array</em>) – Eta values through time.</p></li>
+<li><p><strong>Js</strong> (<em>Array</em>) – J values through time.</p></li>
+<li><p><strong>alpha</strong> (<em>float</em>) – Linesearch step parameter.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of elements Fs, Cs.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.build_associative_riccati_elements">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">build_associative_riccati_elements</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#build_associative_riccati_elements"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.build_associative_riccati_elements" title="Link to this definition">#</a></dt>
+<dd><p>Join set of elements for associative scan.
+”
+:NOTE: This is a special case where reference r_T=0 and readout C=I.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR model parameters.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of elements A, b, C, η, J.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.build_fwd_lin_dyn_elements">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">build_fwd_lin_dyn_elements</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lqr_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Us_init</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a_term</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#build_fwd_lin_dyn_elements"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.build_fwd_lin_dyn_elements" title="Link to this definition">#</a></dt>
+<dd><p>Generate sequence of elements {c} for forward integration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lqr_params</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR parameters and initial state.</p></li>
+<li><p><strong>Us_init</strong> (<em>Array</em>) – Input sequence.</p></li>
+<li><p><strong>a_term</strong> (<em>Array</em><em>, </em><em>optional</em>) – Offset term, by default None.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Set of elements {c} for associative scan.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[Array, Array]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.build_rev_lin_dyn_elements">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">build_rev_lin_dyn_elements</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lqr_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs_traj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">us_traj</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#build_rev_lin_dyn_elements"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.build_rev_lin_dyn_elements" title="Link to this definition">#</a></dt>
+<dd><p>Generate sequence of elements {c} for reverse integration of adjoints.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lqr_params</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR parameters and initial state.</p></li>
+<li><p><strong>xs_traj</strong> (<em>Array</em>) – State trajectory.</p></li>
+<li><p><strong>us_traj</strong> (<em>Array</em>) – Control inputs.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Set of elements {c} for associative scan.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[Array, Array]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.dynamic_operator">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">dynamic_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">elem1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elem2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#dynamic_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.dynamic_operator" title="Link to this definition">#</a></dt>
+<dd><p>Vectorized version of dynamic_operator. Takes similar arguments as dynamic_operator but with additional array axes over which dynamic_operator is mapped.</p>
+<p>Original documentation:</p>
+<blockquote>
+<div><p>Associative operator for forward linear dynamics.</p>
+<dl class="simple">
+<dt>elem1<span class="classifier">Tuple[Array, Array]</span></dt><dd><p>Previous effective state dynamic and effective bias.</p>
+</dd>
+<dt>elem2<span class="classifier">Tuple[Array, Array]</span></dt><dd><p>Next effective state dynamic and effective bias.</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Tuple[Array, Array]</dt><dd><p>Updated state and control.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.get_dcosts">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">get_dcosts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">etas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Js</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#get_dcosts"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.get_dcosts" title="Link to this definition">#</a></dt>
+<dd><p>Calculate expected change in cost-to-go. Can change alpha to relevant backtrack step size.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR model parameters.</p></li>
+<li><p><strong>etas</strong> (<em>Array</em>) – Eta values through time.</p></li>
+<li><p><strong>Js</strong> (<em>Array</em>) – J values through time.</p></li>
+<li><p><strong>alpha</strong> (<em>float</em><em>, </em><em>optional</em>) – Linesearch alpha parameter, by default 1.0.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Total change in cost-to-go.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.CostToGo" title="diffilqrax.typs.CostToGo">CostToGo</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.get_delta_u">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">get_delta_u</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Ks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">c</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#get_delta_u"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.get_delta_u" title="Link to this definition">#</a></dt>
+<dd><p>Obtain δu from optimal control gains.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Ks</strong> (<em>Tuple</em><em>[</em><em>Array</em><em>, </em><em>Array</em><em>, </em><em>Array</em><em>, </em><em>Array</em><em>]</em>) – Optimal control gains.</p></li>
+<li><p><strong>x</strong> (<em>Array</em>) – State trajectory.</p></li>
+<li><p><strong>v</strong> (<em>Array</em>) – Linear value function.</p></li>
+<li><p><strong>c</strong> (<em>Array</em>) – Effective bias.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Control input δu.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.parallel_forward_lin_integration">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">parallel_forward_lin_integration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lqr_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Us_init</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a_term</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#parallel_forward_lin_integration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.parallel_forward_lin_integration" title="Link to this definition">#</a></dt>
+<dd><p>Associative scan for forward linear dynamics.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lqr_params</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR parameters and initial state.</p></li>
+<li><p><strong>Us_init</strong> (<em>Array</em>) – Input sequence.</p></li>
+<li><p><strong>a_term</strong> (<em>Array</em>) – Offset term.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>State trajectory.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.parallel_reverse_lin_integration">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">parallel_reverse_lin_integration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lqr_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs_traj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">us_traj</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#parallel_reverse_lin_integration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.parallel_reverse_lin_integration" title="Link to this definition">#</a></dt>
+<dd><p>Associative scan for reverse linear dynamics.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lqr_params</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR parameters and initial state.</p></li>
+<li><p><strong>xs_traj</strong> (<em>Array</em>) – State trajectory.</p></li>
+<li><p><strong>us_traj</strong> (<em>Array</em>) – Control inputs.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Adjoint variables.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.riccati_operator">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">riccati_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">elem2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elem1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#riccati_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.riccati_operator" title="Link to this definition">#</a></dt>
+<dd><p>Vectorized version of riccati_operator. Takes similar arguments as riccati_operator but with additional array axes over which riccati_operator is mapped.</p>
+<p>Original documentation:</p>
+<blockquote>
+<div><p>Associative operator for Riccati recursion.</p>
+<dl class="simple">
+<dt>elem1<span class="classifier">Tuple[Array, Array, Array, Array, Array]</span></dt><dd><p>Previous Riccati elements.</p>
+</dd>
+<dt>elem2<span class="classifier">Tuple[Array, Array, Array, Array, Array]</span></dt><dd><p>Next Riccati elements.</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Tuple[Array, Array, Array, Array, Array]</dt><dd><p>Updated Riccati elements.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.solve_plqr">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">solve_plqr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#solve_plqr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.solve_plqr" title="Link to this definition">#</a></dt>
+<dd><p>Run backward forward sweep to find optimal control.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR model parameters.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>State trajectory, control inputs, and adjoint variables.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[Array, Array, Array]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="diffilqrax.plqr.solve_plqr_swap_x0">
+<span class="sig-prename descclassname"><span class="pre">diffilqrax.plqr.</span></span><span class="sig-name descname"><span class="pre">solve_plqr_swap_x0</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/diffilqrax/plqr.html#solve_plqr_swap_x0"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#diffilqrax.plqr.solve_plqr_swap_x0" title="Link to this definition">#</a></dt>
+<dd><p>Run backward forward sweep to find optimal control freeze x0 to zero.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>model</strong> (<a class="reference internal" href="diffilqrax_typs.html#diffilqrax.typs.LQRParams" title="diffilqrax.typs.LQRParams"><em>LQRParams</em></a>) – LQR model parameters.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>State trajectory, control inputs, and adjoint variables.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[Array, Array, Array]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="diffilqrax_ilqr.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">iLQR</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="diffilqrax_pilqr.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Associative iLQR</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.associative_opt_traj_scan"><code class="docutils literal notranslate"><span class="pre">associative_opt_traj_scan()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.associative_riccati_scan"><code class="docutils literal notranslate"><span class="pre">associative_riccati_scan()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.build_associative_lin_dyn_elements"><code class="docutils literal notranslate"><span class="pre">build_associative_lin_dyn_elements()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.build_associative_riccati_elements"><code class="docutils literal notranslate"><span class="pre">build_associative_riccati_elements()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.build_fwd_lin_dyn_elements"><code class="docutils literal notranslate"><span class="pre">build_fwd_lin_dyn_elements()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.build_rev_lin_dyn_elements"><code class="docutils literal notranslate"><span class="pre">build_rev_lin_dyn_elements()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.dynamic_operator"><code class="docutils literal notranslate"><span class="pre">dynamic_operator()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.get_dcosts"><code class="docutils literal notranslate"><span class="pre">get_dcosts()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.get_delta_u"><code class="docutils literal notranslate"><span class="pre">get_delta_u()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.parallel_forward_lin_integration"><code class="docutils literal notranslate"><span class="pre">parallel_forward_lin_integration()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.parallel_reverse_lin_integration"><code class="docutils literal notranslate"><span class="pre">parallel_reverse_lin_integration()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.riccati_operator"><code class="docutils literal notranslate"><span class="pre">riccati_operator()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.solve_plqr"><code class="docutils literal notranslate"><span class="pre">solve_plqr()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#diffilqrax.plqr.solve_plqr_swap_x0"><code class="docutils literal notranslate"><span class="pre">solve_plqr_swap_x0()</span></code></a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../../_sources/api/modules/diffilqrax_plqr.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024, Thomas Soares Mullen &amp; Marine Schimel.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,851 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Implicit gradients through iLQR solver &#8212; diffilqrax  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'examples/gradients_through_ilqr';</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Design Principles" href="../userguide/design_principles.html" />
+    <link rel="prev" title="iLQR Optimal Control Compared with Gradient Descent for a Pendulum with a Sliding Pivot" href="ilqr_vs_backpropagation.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/diffilqrax_logo_dm2_short.png" class="logo__image only-light" alt=""/>
+    <img src="../_static/diffilqrax_logo_dm2_short2.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Diffilqrax documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api/modules.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api/modules.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="lqr_integrator.html">Optimal control of integrator dynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lqr_tracking_integrator.html">Optimal control of integrator dynamics with tracking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="simple_pendulum.html">Optimal control of pendulum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ilqr_vs_backpropagation.html">iLQR Optimal Control Compared with Gradient Descent for a Pendulum with a Sliding Pivot</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Implicit gradients through iLQR solver</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Tutorials</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Implicit gradients through iLQR solver</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="Implicit-gradients-through-iLQR-solver">
+<h1>Implicit gradients through iLQR solver<a class="headerlink" href="#Implicit-gradients-through-iLQR-solver" title="Link to this heading">#</a></h1>
+<section id="Imports">
+<h2>Imports<a class="headerlink" href="#Imports" title="Link to this heading">#</a></h2>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">Array</span>
+<span class="kn">import</span> <span class="nn">jax.random</span> <span class="k">as</span> <span class="nn">jr</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">jnp</span>
+<span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.diff_ilqr</span> <span class="kn">import</span> <span class="n">dilqr</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.ilqr</span> <span class="kn">import</span> <span class="n">ilqr_solver</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.exact</span> <span class="kn">import</span> <span class="n">quad_solve</span><span class="p">,</span> <span class="n">exact_solve</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.utils</span> <span class="kn">import</span> <span class="n">keygen</span>
+<span class="kn">from</span> <span class="nn">diffilqrax.typs</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">iLQRParams</span><span class="p">,</span>
+    <span class="n">System</span><span class="p">,</span>
+    <span class="n">ModelDims</span><span class="p">,</span>
+    <span class="n">Thetax0</span><span class="p">,</span>
+    <span class="n">Theta</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_default_device&quot;</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>  <span class="c1"># double precision</span>
+<br/></pre></div>
+</div>
+</div>
+</section>
+<section id="iLQR-Optimisation-Problem">
+<h2>iLQR Optimisation Problem<a class="headerlink" href="#iLQR-Optimisation-Problem" title="Link to this heading">#</a></h2>
+<p>The Iterative Linear Quadratic Regulator (iLQR) is an optimization algorithm used for trajectory optimization in control systems. It iteratively refines a control policy to minimize a cost function over a finite time horizon.</p>
+<section id="Problem-Formulation">
+<h3>Problem Formulation<a class="headerlink" href="#Problem-Formulation" title="Link to this heading">#</a></h3>
+<p>Given a dynamical system described by the state equation:</p>
+<div class="math notranslate nohighlight">
+\[x_{t+1} = f(x_t, u_t)\]</div>
+<p>where <span class="math notranslate nohighlight">\(x_t\)</span> is the state at time <span class="math notranslate nohighlight">\(t\)</span> and <span class="math notranslate nohighlight">\(u_t\)</span> is the control input at time $ t $.</p>
+<p>The objective is to find a sequence of control inputs $ {u_0, u_1, <span class="math">\ldots</span>, u_{T-1}} $ that minimizes the cost function:</p>
+<div class="math notranslate nohighlight">
+\[J = \ell_{T}(x_T) + \sum_{t=0}^{T-1} \ell(x_t, u_t)\]</div>
+<p>where $ <span class="math">\ell</span>_{T}(x_T) $ is the terminal cost and $ :nbsphinx-math:<a href="#id1"><span class="problematic" id="id2">`</span></a>ell`(x_t, u_t) $ is the running cost.</p>
+</section>
+<section id="Linear-Quadratic-Approximation">
+<h3>Linear Quadratic Approximation<a class="headerlink" href="#Linear-Quadratic-Approximation" title="Link to this heading">#</a></h3>
+<p>iLQR approximates the nonlinear dynamics and cost function using a quadratic expansion around a nominal trajectory $ {x_t^0, u_t^0} $:</p>
+<ol class="arabic">
+<li><p><strong>Dynamics Linearization:</strong></p>
+<div class="math notranslate nohighlight">
+\[x_{t+1} \approx A_t x_t + B_t u_t + c_t\]</div>
+<p>where $ A_t = <span class="math">\frac{\partial f}{\partial x}</span> <span class="math">\bigg</span>|<em>{(x_t^0, u_t^0)} $, $ B_t = :nbsphinx-math:`frac{partial f}{partial u}` :nbsphinx-math:`bigg`|</em>{(x_t^0, u_t^0)} $, and $ c_t = f(x_t^0, u_t^0) - A_t x_t^0 - B_t u_t^0 $.</p>
+</li>
+<li><p><strong>Cost Quadratic Approximation:</strong></p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\ell(x_t, u_t) \approx \frac{1}{2} \begin{bmatrix} x_t \\ u_t \end{bmatrix}^T \begin{bmatrix} Q_t &amp; S_t \\ S_t^T &amp; R_t \end{bmatrix} \begin{bmatrix} x_t \\ u_t \end{bmatrix} + \begin{bmatrix} q_t \\ r_t \end{bmatrix}^T \begin{bmatrix} x_t \\ u_t \end{bmatrix} + l_t\end{split}\]</div>
+<p>where $ Q_t, S_t, R_t, q_t, r_t, l_t $ are the coefficients of the quadratic expansion.</p>
+</li>
+</ol>
+</section>
+<section id="Backward-Pass">
+<h3>Backward Pass<a class="headerlink" href="#Backward-Pass" title="Link to this heading">#</a></h3>
+<p>In the backward pass, the value function is approximated by a quadratic function:</p>
+<div class="math notranslate nohighlight">
+\[V_t(x_t) \approx \frac{1}{2} x_t^T P_t x_t + p_t^T x_t + \alpha_t\]</div>
+<p>The optimal control law is derived as:</p>
+<div class="math notranslate nohighlight">
+\[\delta u_t = -K_t \delta x_t - k_t\]</div>
+<p>where $ K_t $ and $ k_t $ are the feedback and feedforward gains, respectively.</p>
+</section>
+<section id="Forward-Pass">
+<h3>Forward Pass<a class="headerlink" href="#Forward-Pass" title="Link to this heading">#</a></h3>
+<p>In the forward pass, the control inputs are updated using the derived control law, and the state trajectory is propagated using the system dynamics.</p>
+</section>
+<section id="Iteration">
+<h3>Iteration<a class="headerlink" href="#Iteration" title="Link to this heading">#</a></h3>
+<p>The process of linearization, backward pass, and forward pass is repeated until convergence.</p>
+<p>This iterative process refines the control policy and trajectory, leading to an optimal solution for the given cost function and system dynamics.</p>
+</section>
+</section>
+<section id="Set-up-problem">
+<h2>Set-up problem<a class="headerlink" href="#Set-up-problem" title="Link to this heading">#</a></h2>
+<section id="Implementation">
+<h3>Implementation<a class="headerlink" href="#Implementation" title="Link to this heading">#</a></h3>
+<p>The iLQR <code class="docutils literal notranslate"><span class="pre">System</span></code> contains the dimensionality of the problem in <code class="docutils literal notranslate"><span class="pre">ModelDims</span></code>, the non-linear dynamics, cost, and terminal cost functions.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Set-up dimensionality</span>
+<span class="n">dims</span> <span class="o">=</span> <span class="n">ModelDims</span><span class="p">(</span><span class="n">horizon</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+
+<span class="c1"># Set-up prarameters</span>
+<span class="n">key</span> <span class="o">=</span> <span class="n">jr</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">key</span><span class="p">,</span> <span class="n">skeys</span> <span class="o">=</span> <span class="n">keygen</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">Uh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">skeys</span><span class="p">),</span> <span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+
+<span class="n">Wh</span> <span class="o">=</span>  <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">skeys</span><span class="p">),</span> <span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dims</span><span class="o">.</span><span class="n">m</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">)</span> <span class="o">*</span> <span class="n">dims</span><span class="o">.</span><span class="n">dt</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">skeys</span><span class="p">),</span> <span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
+<span class="n">Q</span> <span class="o">=</span> <span class="n">L</span> <span class="o">@</span> <span class="n">L</span><span class="o">.</span><span class="n">T</span>
+
+<span class="c1"># Build system parameters</span>
+<span class="n">theta</span> <span class="o">=</span> <span class="n">Theta</span><span class="p">(</span><span class="n">Uh</span><span class="o">=</span><span class="n">Uh</span><span class="p">,</span> <span class="n">Wh</span><span class="o">=</span><span class="n">Wh</span><span class="p">,</span> <span class="n">Q</span><span class="o">=</span><span class="n">Q</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">))</span>
+<span class="n">params</span> <span class="o">=</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define iLQR model</span>
+<span class="k">def</span> <span class="nf">cost</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">u</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">theta</span><span class="p">:</span> <span class="n">Theta</span><span class="p">):</span>
+    <span class="n">x_tgt</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">t</span><span class="o">/</span><span class="mi">5</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span> <span class="o">-</span> <span class="n">x_tgt</span><span class="o">.</span><span class="n">squeeze</span><span class="p">())</span>
+            <span class="o">@</span> <span class="n">theta</span><span class="o">.</span><span class="n">Q</span> <span class="o">@</span>
+            <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span> <span class="o">-</span> <span class="n">x_tgt</span><span class="o">.</span><span class="n">squeeze</span><span class="p">())</span><span class="o">.</span><span class="n">T</span>
+        <span class="p">)</span>
+        <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">u</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">costf</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">theta</span><span class="p">:</span> <span class="n">Theta</span><span class="p">):</span>
+    <span class="c1"># return jnp.sum(jnp.abs(x))</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">dynamics</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">u</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">theta</span><span class="p">:</span> <span class="n">Theta</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">theta</span><span class="o">.</span><span class="n">Uh</span> <span class="o">@</span> <span class="n">jnp</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">+</span> <span class="n">theta</span><span class="o">.</span><span class="n">Wh</span> <span class="o">@</span> <span class="n">jnp</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">u</span><span class="p">)</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">theta</span><span class="o">.</span><span class="n">Uh</span><span class="p">)</span><span class="o">*</span><span class="n">jnp</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="n">ilqr_model</span> <span class="o">=</span> <span class="n">System</span><span class="p">(</span>
+    <span class="n">cost</span><span class="p">,</span> <span class="n">costf</span><span class="p">,</span> <span class="n">dynamics</span><span class="p">,</span> <span class="n">dims</span>
+<span class="p">)</span>
+
+<span class="c1"># Initialise u sequence</span>
+<span class="n">Us_init</span> <span class="o">=</span> <span class="mf">0.</span> <span class="o">*</span> <span class="n">jr</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span>
+            <span class="nb">next</span><span class="p">(</span><span class="n">skeys</span><span class="p">),</span> <span class="p">(</span><span class="n">dims</span><span class="o">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">dims</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+<section id="Solve-iLQR">
+<h2>Solve iLQR<a class="headerlink" href="#Solve-iLQR" title="Link to this heading">#</a></h2>
+<p>Define linesearch hyperparameters</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">ls_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;beta&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+            <span class="s2">&quot;max_iter_linesearch&quot;</span><span class="p">:</span> <span class="mi">24</span><span class="p">,</span>
+            <span class="s2">&quot;tol&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">,</span>
+            <span class="s2">&quot;alpha_min&quot;</span><span class="p">:</span> <span class="mf">0.00001</span><span class="p">,</span>
+        <span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">opt_traj</span> <span class="o">=</span> <span class="n">dilqr</span><span class="p">(</span>
+    <span class="n">ilqr_model</span><span class="p">,</span>
+    <span class="n">params</span><span class="p">,</span>
+    <span class="n">Us_init</span><span class="p">,</span>
+    <span class="n">max_iter</span><span class="o">=</span><span class="mi">70</span><span class="p">,</span>
+    <span class="n">convergence_thresh</span><span class="o">=</span><span class="mf">1e-9</span><span class="p">,</span>
+    <span class="n">alpha_init</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span>
+    <span class="n">use_linesearch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="c1"># verbose=True,</span>
+    <span class="o">**</span><span class="n">ls_kwargs</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">opt_state</span><span class="p">,</span> <span class="n">opt_input</span> <span class="o">=</span> <span class="n">opt_traj</span><span class="p">[:,</span> <span class="p">:</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">],</span> <span class="n">opt_traj</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">:]</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">opt_state</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">opt_input</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+[&lt;matplotlib.lines.Line2D at 0x13fa48250&gt;,
+ &lt;matplotlib.lines.Line2D at 0x13f5ea390&gt;]
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/examples_gradients_through_ilqr_10_1.png" src="../_images/examples_gradients_through_ilqr_10_1.png" />
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">opt_state_ilqr</span><span class="p">,</span> <span class="n">opt_input_ilqr</span><span class="p">,</span> <span class="n">opt_costate_ilqr</span><span class="p">),</span> <span class="n">J0</span><span class="p">,</span> <span class="n">cost_log</span> <span class="o">=</span> <span class="n">ilqr_solver</span><span class="p">(</span>
+    <span class="n">ilqr_model</span><span class="p">,</span>
+    <span class="n">params</span><span class="p">,</span>
+    <span class="n">Us_init</span><span class="p">,</span>
+    <span class="n">max_iter</span><span class="o">=</span><span class="mi">70</span><span class="p">,</span>
+    <span class="n">convergence_thresh</span><span class="o">=</span><span class="mf">1e-9</span><span class="p">,</span>
+    <span class="n">alpha_init</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span>
+    <span class="n">use_linesearch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="c1"># verbose=True,</span>
+    <span class="o">**</span><span class="n">ls_kwargs</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">opt_state_ilqr</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">opt_input_ilqr</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+[&lt;matplotlib.lines.Line2D at 0x13fcbd450&gt;,
+ &lt;matplotlib.lines.Line2D at 0x13fe08750&gt;]
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/examples_gradients_through_ilqr_12_1.png" src="../_images/examples_gradients_through_ilqr_12_1.png" />
+</div>
+</div>
+</section>
+<section id="iLQR-Gradient">
+<h2>iLQR Gradient<a class="headerlink" href="#iLQR-Gradient" title="Link to this heading">#</a></h2>
+<blockquote>
+<div><p>TODO: Explain the difference in the two gradients from ilqr solver and dilqr solver</p>
+</div></blockquote>
+<p>Implicitly differentiate through the iLQR solver using custom <code class="docutils literal notranslate"><span class="pre">jax.jvp</span></code> function</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">implicit_loss</span><span class="p">(</span><span class="n">theta_params</span><span class="p">):</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">Theta</span><span class="p">(</span><span class="n">Q</span><span class="o">=</span><span class="n">theta_params</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Q</span><span class="p">,</span> <span class="n">Uh</span><span class="o">=</span><span class="n">theta_params</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Uh</span><span class="p">,</span> <span class="n">Wh</span><span class="o">=</span><span class="n">theta_params</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Wh</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">))</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="mf">0.</span><span class="o">*</span><span class="n">theta_params</span><span class="o">.</span><span class="n">x0</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">)</span>
+    <span class="n">tau_star</span> <span class="o">=</span> <span class="n">dilqr</span><span class="p">(</span>
+        <span class="n">ilqr_model</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">,</span>
+        <span class="n">Us_init</span><span class="p">,</span>
+        <span class="n">max_iter</span><span class="o">=</span><span class="mi">70</span><span class="p">,</span>
+        <span class="n">convergence_thresh</span><span class="o">=</span><span class="mf">1e-9</span><span class="p">,</span>
+        <span class="n">alpha_init</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">use_linesearch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">ls_kwargs</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">opt_xs</span> <span class="o">=</span> <span class="n">tau_star</span><span class="p">[:,</span> <span class="p">:</span> <span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">]</span>
+    <span class="n">opt_us</span> <span class="o">=</span> <span class="n">tau_star</span><span class="p">[:,</span> <span class="n">dims</span><span class="o">.</span><span class="n">n</span> <span class="p">:]</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">opt_xs</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">opt_us</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">direct_loss</span><span class="p">(</span><span class="n">prms</span><span class="p">):</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">Theta</span><span class="p">(</span><span class="n">Uh</span><span class="o">=</span><span class="n">prms</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Uh</span><span class="p">,</span> <span class="n">Wh</span><span class="o">=</span><span class="n">prms</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Wh</span><span class="p">,</span> <span class="n">Q</span><span class="o">=</span><span class="n">prms</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Q</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">dims</span><span class="o">.</span><span class="n">n</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">))</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="mf">0.</span><span class="o">*</span><span class="n">prms</span><span class="o">.</span><span class="n">x0</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">opt_xs</span><span class="p">,</span> <span class="n">opt_us</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ilqr_solver</span><span class="p">(</span>
+        <span class="n">ilqr_model</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">,</span>
+        <span class="n">Us_init</span><span class="p">,</span>
+        <span class="n">max_iter</span><span class="o">=</span><span class="mi">70</span><span class="p">,</span>
+        <span class="n">convergence_thresh</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">,</span>
+        <span class="n">alpha_init</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">use_linesearch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">ls_kwargs</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">opt_xs</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">opt_us</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">implicit_val</span><span class="p">,</span> <span class="n">implicit_g</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">implicit_loss</span><span class="p">)(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">direct_val</span><span class="p">,</span> <span class="n">direct_g</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">direct_loss</span><span class="p">)(</span><span class="n">params</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">direct_g</span><span class="o">.</span><span class="n">theta</span><span class="p">),</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="s2">&quot;constrained&quot;</span><span class="p">,</span> <span class="n">gridspec_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;hspace&quot;</span><span class="p">:</span><span class="mf">0.1</span><span class="p">})</span>
+<span class="k">for</span> <span class="p">(</span><span class="n">ax</span><span class="p">,</span> <span class="n">dg</span><span class="p">,</span> <span class="n">ig</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="o">.</span><span class="n">flatten</span><span class="p">()[</span><span class="o">-</span><span class="mi">4</span><span class="p">:],</span> <span class="n">direct_g</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="n">implicit_g</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="n">implicit_g</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">_fields</span><span class="p">):</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">dg</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">ig</span><span class="o">.</span><span class="n">flatten</span><span class="p">())</span>
+    <span class="c1"># ax.set(xlabel=&quot;Direct&quot;, ylabel=&quot;Implicit&quot;, title=f&quot;{n}&quot;, xlim=[jnp.min(dg.flatten()), jnp.max(dg.flatten())], ylim=[jnp.min(dg.flatten()), jnp.max(dg.flatten())])</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">xlabel</span><span class="o">=</span><span class="s2">&quot;Direct&quot;</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s2">&quot;Implicit&quot;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">aspect</span><span class="o">=</span><span class="s2">&quot;equal&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="p">(</span><span class="n">ax</span><span class="p">,</span> <span class="n">opt_v</span><span class="p">,</span> <span class="n">ax_title</span><span class="p">,</span> <span class="n">y_lab</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="o">.</span><span class="n">flatten</span><span class="p">()[:</span><span class="mi">4</span><span class="p">],</span> <span class="p">(</span><span class="n">opt_state</span><span class="p">,</span> <span class="n">opt_input</span><span class="p">,</span> <span class="n">opt_state_ilqr</span><span class="p">,</span> <span class="n">opt_input_ilqr</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;dilqr&quot;</span><span class="p">,</span> <span class="s2">&quot;dilqr&quot;</span><span class="p">,</span> <span class="s2">&quot;ilqr&quot;</span><span class="p">,</span> <span class="s2">&quot;ilqr&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;State&quot;</span><span class="p">,</span> <span class="s2">&quot;Input&quot;</span><span class="p">,</span> <span class="s2">&quot;State&quot;</span><span class="p">,</span> <span class="s2">&quot;Input&quot;</span><span class="p">)):</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">opt_v</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">xlabel</span><span class="o">=</span><span class="s2">&quot;Timepoints&quot;</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="n">y_lab</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">ax_title</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/examples_gradients_through_ilqr_18_0.png" src="../_images/examples_gradients_through_ilqr_18_0.png" />
+</div>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="ilqr_vs_backpropagation.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">iLQR Optimal Control Compared with Gradient Descent for a Pendulum with a Sliding Pivot</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../userguide/design_principles.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Design Principles</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Imports">Imports</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#iLQR-Optimisation-Problem">iLQR Optimisation Problem</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Problem-Formulation">Problem Formulation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Linear-Quadratic-Approximation">Linear Quadratic Approximation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Backward-Pass">Backward Pass</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Forward-Pass">Forward Pass</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Iteration">Iteration</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Set-up-problem">Set-up problem</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Implementation">Implementation</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Solve-iLQR">Solve iLQR</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#iLQR-Gradient">iLQR Gradient</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/examples/gradients_through_ilqr.ipynb.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024, Thomas Soares Mullen &amp; Marine Schimel.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
