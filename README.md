@@ -6,6 +6,8 @@
 ![Python Publish](https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-publish.yml/badge.svg)
 ![PyPI version](https://badge.fury.io/py/diffilqrax.svg?icon=si%3Apython)
 [![DOI](https://zenodo.org/badge/699393913.svg)](https://doi.org/10.5281/zenodo.14861291)
+[![Documentation Status](https://readthedocs.org/projects/diffilqrax/badge/?version=latest)](https://diffilqrax.readthedocs.io/en/latest/?badge=latest)
+
 
 # Diffilqrax: Differentiable optimal control
 
