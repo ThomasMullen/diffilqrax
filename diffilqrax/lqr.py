@@ -157,45 +157,53 @@ def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
     return -(dJ.V * alpha**2 + dJ.v * alpha)
 
 
-def lqr_backward_pass(
+def regularised_backward_pass(
     lqr: LQR,
-) -> Tuple[float, Gains]:
+    mu: float = 0.0,
+    pd_thresh: float = 1e-8,
+) -> Tuple[CostToGo, Gains, Array]:
     """
-    LQR backward pass learn optimal Gains given LQR cost constraints and dynamics.
+    LQR backward pass with Levenberg-Marquardt regularisation of the input Hessian.
+
+    Follows the OCaml ``dilqr`` backward pass: only ``Huu`` is regularised,
+    ``Huu_reg = Huu + mu B^T B``. The value function update uses the full form so it stays
+    consistent with the regularised gains, and the expected change in cost uses the
+    unregularised ``Huu`` (Tassa et al., 2012). With ``mu=0`` this is the exact LQR solution.
 
     Parameters
     ----------
     lqr : LQR
         LQR parameters.
+    mu : float, optional
+        Regularisation strength, by default 0.0.
+    pd_thresh : float, optional
+        Minimum eigenvalue of ``Huu_reg`` for it to count as positive definite, by default 1e-8.
 
     Returns
     -------
-    Gains
-        Optimal feedback gains.
+    Tuple[CostToGo, Gains, Array]
+        Expected change in cost terms (V: 0.5 k^T Huu k, v: k^T hu summed over time), the optimal
+        feedback gains, and a boolean flag that is True if ``Huu_reg`` is positive definite at
+        every time step.
     """
     a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
     n_dim, _ = lqr.B[0].shape
 
     def riccati_step(
-        carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
-    ) -> Tuple[CostToGo, Gains]:
+        carry: Tuple[CostToGo, CostToGo, Array], inps: RiccatiStepParams
+    ) -> Tuple[Tuple[CostToGo, CostToGo, Array], Gains]:
         AT, BT, (A, B, a, Q, q, R, r, S) = inps
-        curr_val, cost_step = carry
+        curr_val, cost_step, is_pd = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        Huu = symmetrise_matrix(R + BT @ V @ B)  # .reshape(m_dim, m_dim)
-        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        mu = 0.*jnp.maximum(1e-12, 1e-12 - min_eval)
-        # mu = 1.e-6
-        Hxx = symmetrise_matrix(Q + AT @ V @ A)  # .reshape(n_dim, n_dim)
-        Hxu = S + AT @ (V) @ B
+        Huu = symmetrise_matrix(R + BT @ V @ B)
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)
+        Hxu = S + AT @ V @ B
         hx = q + AT @ (v + V @ a)
         hu = r + BT @ (v + V @ a)
-        I_mu = mu * BT @ B  # jnp.eye(m_dim)
-        Hxu_reg = S + AT @ (V + mu * jnp.eye(n_dim)) @ B
-        Huu_reg = Huu + I_mu
-        K, k = jnp.hsplit(
-            -solve(Huu_reg, jnp.c_[Hxu_reg.T, hu], assume_a="her"), [n_dim]
-        )
+        Huu_reg = symmetrise_matrix(Huu + mu * BT @ B)
+        min_eval = jnp.min(jnp.linalg.eigvalsh(lax.stop_gradient(Huu_reg)))
+        is_pd = jnp.logical_and(is_pd, min_eval > pd_thresh)
+        K, k = jnp.hsplit(-solve(Huu_reg, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim])
         k = k.reshape(
             -1,
         )
@@ -208,15 +216,35 @@ def lqr_backward_pass(
         dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
         dj = dj + (k.T @ hu).squeeze()
 
-        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), Gains(K, k)
+        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj), is_pd), Gains(K, k)
 
-    (V_0, dJ), Ks = lax.scan(
+    (_, dJ, is_pd), Ks = lax.scan(
         riccati_step,
-        init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
+        init=(CostToGo(lqr.Qf, lqr.qf), CostToGo(0.0, 0.0), jnp.array(True)),
         xs=(a_transp, b_transp, lqr[:-2]),
         reverse=True,
     )
 
+    return dJ, Ks, is_pd
+
+
+def lqr_backward_pass(
+    lqr: LQR,
+) -> Tuple[CostToGo, Gains]:
+    """
+    LQR backward pass learn optimal Gains given LQR cost constraints and dynamics.
+
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
+
+    Returns
+    -------
+    Tuple[CostToGo, Gains]
+        Expected change in cost terms and optimal feedback gains.
+    """
+    dJ, Ks, _ = regularised_backward_pass(lqr, mu=0.0)
     return dJ, Ks
 
 
