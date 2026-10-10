@@ -43,13 +43,13 @@ PLOT_URL = (
     "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
     "figure_style.mplstyle"
 )
-PLOTTING_ON = True
+PLOTTING_ON = False
 if PLOTTING_ON:
     # style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
     style.use(PLOT_URL)
     FIG_DIR = Path(getcwd(), "fig_dump", "para_lqr")
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-
+LONG_TIME_PROFILE = False
 
 def is_jax_array(arr: Array) -> bool:
     """validate jax array type"""
@@ -190,11 +190,11 @@ class TestPLQR(unittest.TestCase):
             fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint01.png")
             close()
 
-        fig, ax = subplots(1, 2, sharey=True)
-        ax[0].plot(Lambs_lqr)
-        ax[1].plot(lmda)
-        fig.tight_layout()
-        fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint02.png")
+            fig, ax = subplots(1, 2, sharey=True)
+            ax[0].plot(Lambs_lqr)
+            ax[1].plot(lmda)
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint02.png")
 
     def test_adjoint_via_rev_integration(self):
         """Test adjoint via reverse integration and v-funs"""
@@ -255,10 +255,16 @@ class TestPLQR(unittest.TestCase):
     def test_plqr_cpu_profile(self):
         cpu = jax.devices("cpu")[0]
         n_reps = 2
-        n_dims = onp.array([32,33])
-        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
-        cpu_lqr = jax.jit(solve_lqr, backend="cpu")
-        cpu_plqr = jax.jit(solve_plqr, backend="cpu")
+        if LONG_TIME_PROFILE:
+            n_dims = onp.array([16,32])
+        else:
+            n_dims = onp.array([2,4])
+        if LONG_TIME_PROFILE:
+            horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
+        else:
+            horizon_dims = onp.array([10, 100])
+        cpu_lqr = jax.jit(solve_lqr, device=cpu)
+        cpu_plqr = jax.jit(solve_plqr, device=cpu)
         
         clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
         print(clock_times.shape)
@@ -316,8 +322,8 @@ class TestPLQR(unittest.TestCase):
         n_reps = 2
         n_dims = onp.array([12,20])
         horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000,])
-        gpu_lqr = jax.jit(solve_lqr, backend="gpu")
-        gpu_plqr = jax.jit(solve_plqr, backend="gpu")
+        gpu_lqr = jax.jit(solve_lqr, gpu)
+        gpu_plqr = jax.jit(solve_plqr, gpu)
         
         clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
         print(clock_times.shape)

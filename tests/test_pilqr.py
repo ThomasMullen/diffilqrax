@@ -31,13 +31,14 @@ PLOT_URL = ("https://gist.githubusercontent.com/"
        "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
        "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
        "figure_style.mplstyle")
+LONG_TIME_PROFILE = False
 PRINTING_ON = True
-PLOTTING_ON = True
+PLOTTING_ON = False
 if PLOTTING_ON:
     style.use(PLOT_URL)
     FIG_DIR = Path(getcwd(), "fig_dump", "para_ilqr")
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-print(FIG_DIR)
+    print(FIG_DIR)
 
 class TestiLQRStructs(unittest.TestCase):
     """Test LQR dimensions and data structures"""
@@ -114,18 +115,19 @@ class TestiLQRStructs(unittest.TestCase):
             use_linesearch=True,
             **self.ls_kwargs,
         )
-        fig, ax = subplots(2, 2, sharey=True)
-        ax[0, 1].plot(Us_stars)
-        ax[0, 0].plot(Xs_stars)
-        ax[0, 1].set(title="U (parallel)")
-        ax[0, 0].set(title="X (parallel)")
-        ax[1, 0].plot(Xs_stars_ilqr)
-        ax[1, 1].plot(Us_stars_ilqr)
-        ax[1, 1].set(title="U (normal)")
-        ax[1, 0].set(title="X (normal)")
-        fig.tight_layout()
-        fig.savefig(f"{FIG_DIR}/pilqr_solver01.png")
         chex.assert_trees_all_close(Xs_stars, Xs_stars_ilqr, rtol=1e-03, atol=1e-02)
+        if PLOTTING_ON:
+            fig, ax = subplots(2, 2, sharey=True)
+            ax[0, 1].plot(Us_stars)
+            ax[0, 0].plot(Xs_stars)
+            ax[0, 1].set(title="U (parallel)")
+            ax[0, 0].set(title="X (parallel)")
+            ax[1, 0].plot(Xs_stars_ilqr)
+            ax[1, 1].plot(Us_stars_ilqr)
+            ax[1, 1].set(title="U (normal)")
+            ax[1, 0].set(title="X (normal)")
+            fig.tight_layout()
+            fig.savefig(f"{FIG_DIR}/pilqr_solver01.png")
         
      ##TODO : add more thorough tests including possible offset in dynamics
      ##add speed test of pilqr   

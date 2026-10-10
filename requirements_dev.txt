@@ -12,5 +12,4 @@ black
 build
 twine
 pylint
-sphinx
-pydata-sphinx-theme
+graphifyy
