@@ -665,11 +665,9 @@ class TestiLQRStructs(unittest.TestCase):
             self.params,
             self.Us_init,
             max_iter=70,
-            convergence_thresh=1e-8,
             alpha_init=1.0,
             verbose=False,
             use_linesearch=True,
-            **self.ls_kwargs,
         )
         lqr_params_stars = ilqr.approx_lqr(self.model, Xs_stars, Us_stars, self.params)
         lqr_tilde_params = LQRParams(Xs_stars[0], lqr_params_stars)
@@ -845,11 +843,9 @@ class TestiLQRExactSolution(unittest.TestCase):
             self.params,
             self.Us,
             max_iter=80,
-            convergence_thresh=1e-13,
             alpha_init=1.,
             verbose=True,
             use_linesearch=False,
-            **self.ls_kwargs,
         )
         if PLOTTING_ON:
             fig, ax = subplots(1,3)
@@ -877,11 +873,9 @@ class TestiLQRExactSolution(unittest.TestCase):
             self.params,
             self.Us,
             max_iter=80,
-            convergence_thresh=1e-13,
             alpha_init=1.,
             verbose=True,
             use_linesearch=False,
-            **self.ls_kwargs,
         )
         # lqr_tilde = ilqr.approx_lqr_dyn(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
         lqr_tilde = ilqr.approx_lqr_offset(model=self.model, Xs=Xs_stars, Us=Us_stars, params=self.params)
@@ -995,7 +989,6 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
             self.ilqr_params,
             self.Us,
             max_iter=70,
-            tol=1e-8,
             alpha_init=1.,
             verbose=True,
             use_linesearch=False,

@@ -101,11 +101,9 @@ class TestiLQRStructs(unittest.TestCase):
             self.params,
             self.Us_init,
             max_iter=70,
-            convergence_thresh=1e-8,
             alpha_init=1.0,
             verbose=True,
             use_linesearch=True,
-            **self.ls_kwargs,
         )
         # exercise
         (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = parallel_ilqr.pilqr_solver(
@@ -228,11 +226,9 @@ class TestiLQRStructs(unittest.TestCase):
                         params,
                         Us_init,
                         max_iter=70,
-                        convergence_thresh=1e-8,
                         alpha_init=1.0,
                         verbose=True,
                         use_linesearch=True,
-                        **self.ls_kwargs,
                     )
                     end = time.time()
                     normal_time = end-start

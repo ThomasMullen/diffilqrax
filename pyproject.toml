@@ -42,3 +42,6 @@ optional-dependencies = { dev = { file = ["requirements_dev.txt"] }, doc = { fil
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
 "Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax/issues"
+
+[tool.pytest.ini_options]
+markers = ["slow: large-dimension tests (deselect with '-m \"not slow\"')"]

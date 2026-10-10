@@ -97,11 +97,9 @@ class TestiLQRStructs(unittest.TestCase):
             self.params,
             self.Us_init,
             max_iter=70,
-            convergence_thresh=1e-8,
             alpha_init=1.0,
             verbose=True,
             use_linesearch=True,
-            **self.ls_kwargs,
         )
         # exercise
         (Xs_stars, Us_stars, Lambs_stars), converged_cost, cost_log = pilqr.pilqr_solver(
