@@ -108,11 +108,9 @@ class TestDILQR(unittest.TestCase):
                 params,
                 self.Us_init,
                 max_iter=70,
-                convergence_thresh=1e-9,
                 alpha_init=alpha_init,
                 use_linesearch=linesearch,
                 verbose=True,
-                **self.ls_kwargs,
             )
             Us_lqr = tau_star[:, self.model.dims.n :]
             x_tgt = jnp.ones(self.n).squeeze()
@@ -133,11 +131,9 @@ class TestDILQR(unittest.TestCase):
                 params,
                 self.Us_init,
                 max_iter=70,
-                convergence_thresh=1e-8,
                 alpha_init=alpha_init,
                 use_linesearch=linesearch,
                 verbose=False,
-                **self.ls_kwargs,
             )
 
             if PRINTING_ON:
@@ -173,10 +169,26 @@ class TestDILQR(unittest.TestCase):
             fig.savefig(f"{FIG_DIR}/grads.png")
             plt.close(fig)
         chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
-        chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
-        # TODO: Check why the gradients are not close
-        chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e0)
-        
+        chex.assert_trees_all_close(direct_val, implicit_val, rtol=1e-10)
+        chex.assert_trees_all_close(direct_g, implicit_g, rtol=1e-6, atol=1e-10)
+
+    def test_dilqr_gauss_newton_is_approximate(self):
+        """exact_hessian=False drops the dynamics curvature, so its gradients are only approximate"""
+
+        def loss(p, exact_hessian):
+            theta = Theta(Q=p.Q, Uh=p.Uh, Wh=p.Wh, sigma=jnp.zeros((self.n)))
+            tau_star = dilqr(
+                self.model, iLQRParams(x0=0 * p.x0, theta=theta), self.Us_init, exact_hessian=exact_hessian
+            )
+            return jnp.linalg.norm(tau_star) ** 2
+
+        g_exact = jax.grad(loss)(self.theta, True)
+        g_gn = jax.grad(loss)(self.theta, False)
+        chex.assert_trees_all_equal_shapes_and_dtypes(g_exact, g_gn)
+        # tanh(u) input dynamics have strong curvature: the Gauss-Newton gradient is far off here
+        rel_err = jnp.linalg.norm(g_exact.Wh - g_gn.Wh) / jnp.linalg.norm(g_exact.Wh)
+        assert rel_err > 1e-3, "dynamics curvature term should change the gradient"
+
 
     def tearDown(self):
         """Destruct test class"""
