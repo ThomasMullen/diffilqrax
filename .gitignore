@@ -9,6 +9,8 @@ __pycache__/
 # C extensions
 *.so
 .idea/
+.claude/
+/graphify-out/
 
 fig_dump/
 
