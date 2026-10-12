@@ -392,7 +392,7 @@ def ilqr_solver(
     model: System,
     params: iLQRParams,
     Us_init: Array,
-    max_iter: int = 40,
+    max_iter: int = 100,
     convergence_thresh: Optional[float] = None,
     alpha_init: float = 1.0,
     verbose: bool = False,
@@ -421,7 +421,8 @@ def ilqr_solver(
     Us_init : Array
         The initial control trajectory.
     max_iter : int, optional
-        The maximum number of iterations, by default 40.
+        The maximum number of iterations, by default 100. The OCaml step schedule (first trial
+        α = tau * alpha_init = 0.5) converges linearly at first, so harder problems may need more.
     convergence_thresh : float, optional
         Deprecated and ignored; convergence is determined by ``kkt_tol``.
     alpha_init : float, optional
