@@ -142,19 +142,12 @@ def pilqr_forward_pass(
     lqr_model = LQRParams(
         x0=jnp.zeros_like(params.x0), lqr=lqr_mats._replace(a=jnp.zeros_like(dyn_bias))
     )
-    # this is a parallel lin scan anyway b
-    _, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(
-        lqr_model, values.v, values.V, alpha
-    )
-
-    # dyn with Ks edit to linear dyn, u + k + K@x as constant term
-    # can define function to include feedback + edit the dynamcis to have (A - K)x
+    _, cs, gains = associative_opt_traj_scan(lqr_model, values.v, values.V, alpha)
+    # feedback convention of parallel_dynamics_feedback is u - Ks @ x
+    Ks, ks = -gains.K, alpha * gains.k
     delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs]
-    # Potentially we could return it as output of the parallel scan
-    # δu_= B @ Kv @ (v - V@c) - Kx@x
-    # where u = u_ + offset (eq 64 in https://arxiv.org/abs/2104.03186)
-    delta_Us = ks - bmm(Ks, delta_Xs[:-1]) + offsets
-    Kxxs = bmm(Ks, Xs[:-1]) + ks + offsets
+    delta_Us = ks - bmm(Ks, delta_Xs[:-1])
+    Kxxs = bmm(Ks, Xs[:-1]) + ks
     # NOTE: in the case of a linear system, equivalent to `parallel_feedback_lin_dyn_ilqr`
     new_Xs = parallel_model.parallel_dynamics_feedback(
         model, params, Us + Kxxs, dyn_bias, Ks
