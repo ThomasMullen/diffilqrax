@@ -178,6 +178,46 @@ def regularise_lqr(lqr: LQR, mu: float) -> LQR:
     return lqr._replace(R=lqr.R + mu * jnp.eye(lqr.R.shape[-1], dtype=lqr.R.dtype))
 
 
+def project_psd(mat: Array, delta: float = 0.0) -> Array:
+    """Project symmetric matrices [...xnxn] onto the PSD cone, clipping eigenvalues at ``delta``."""
+    evals, evecs = jnp.linalg.eigh(0.5 * (mat + jnp.swapaxes(mat, -1, -2)))
+    proj = (evecs * jnp.maximum(evals, delta)[..., None, :]) @ jnp.swapaxes(evecs, -1, -2)
+    return 0.5 * (proj + jnp.swapaxes(proj, -1, -2))
+
+
+def project_psd_lqr(lqr: LQR, delta: float = 1e-6, which: str = "full") -> LQR:
+    """
+    Convexify the local LQR stage by stage, as in ``primal_dual_ilqr.optimizers.regularize``. R is
+    projected to eigenvalues ≥ δ and, if ``which == "full"``, the Schur complement Q - S R⁻¹Sᵀ and Qf
+    too. The fully projected problem is a strictly convex LQR, so every element of the associative scan
+    is valid and every Huu is positive definite without retries. Linear terms are untouched, so the
+    gradient of the local problem is unchanged, but it is no longer a Newton model where the projection
+    is active. With ``which == "R"`` only negative input curvature is removed: the projection is
+    inactive wherever R ≻ δI, where the Newton step is kept.
+
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
+    delta : float
+        Minimum eigenvalue after projection.
+    which : str
+        "R" to project R only, "full" to also project Q - S R⁻¹Sᵀ and Qf.
+
+    Returns
+    -------
+    LQR
+        Convexified LQR parameters.
+    """
+    assert which in ("R", "full"), f"unknown projection {which}"
+    R = project_psd(lqr.R, delta)
+    if which == "R":
+        return lqr._replace(R=R)
+    SRS = symmetrise_tensor(lqr.S @ jnp.linalg.solve(R, lqr.S.transpose(0, 2, 1)))
+    Q = project_psd(lqr.Q - SRS, delta) + SRS
+    return lqr._replace(R=R, Q=Q, Qf=project_psd(lqr.Qf, delta))
+
+
 def plqr_backward_pass(model: LQRParams, mu: float = 0.0, pd_thresh: float = 1e-8) -> Tuple[CostToGo, Gains, Array]:
     """
     Parallel counterpart of :func:`diffilqrax.lqr.regularised_backward_pass`: associative Riccati scan

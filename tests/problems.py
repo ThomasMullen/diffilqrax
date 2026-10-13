@@ -263,6 +263,7 @@ def rnn_tracking(n: int = 50, m: int = 10, horizon: int = 60, seed: int = 3):
 NONCONVEX_COSTS = {
     "convex": lambda t, x, u: jnp.sum((x - 1.0) ** 2) + jnp.sum(u**2),
     "log_u": lambda t, x, u: jnp.sum((x - 1.0) ** 2) + jnp.sum(jnp.log(1 + u**2)) + 0.3 * jnp.sum(x**4),
+    "sharp_log_u": lambda t, x, u: jnp.sum((x - 1.0) ** 2) + jnp.sum(jnp.log(1 + (u / 0.2) ** 2)),
     "log_x": lambda t, x, u: jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**2) + jnp.sum(u**2),
     "track_log": lambda t, x, u: jnp.sum(jnp.log(1 + (x - t / 10) ** 2)) + 0.1 * jnp.sum(u**2),
 }
@@ -272,7 +273,8 @@ def linear_nonconvex_problem(kind: str = "track_log", n: int = 5, m: int = 3, ho
     """
     Linear dynamics x' = Uh x + Wh u + offset with a non-convex cost from NONCONVEX_COSTS. The parallel
     (linearised) rollout is exact for linear dynamics, so these isolate the effect of an indefinite
-    local LQR: "log_u" has an indefinite R, "log_x" an indefinite Q and "track_log" indefinite Huu.
+    local LQR: "log_u" has an indefinite R ("sharp_log_u" strongly so, wherever |u| > 0.2), "log_x" an
+    indefinite Q and "track_log" indefinite Huu.
     """
     k1, k2 = jr.split(jr.PRNGKey(seed))
     theta = Theta(

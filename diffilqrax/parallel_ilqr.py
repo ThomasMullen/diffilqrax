@@ -15,6 +15,7 @@ from diffilqrax.plqr import (
     closed_loop_scan,
     dynamic_operator,
     plqr_backward_pass,
+    project_psd_lqr,
 )
 from diffilqrax.ilqr import (
     approx_lqr,
@@ -173,6 +174,8 @@ def pilqr_solver(
     kkt_tol: float = 1e-10,
     mu_max: float = 1e10,
     max_reg_iter: int = 20,
+    make_psd: Optional[str] = None,
+    psd_delta: float = 1e-6,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """
@@ -213,6 +216,16 @@ def pilqr_solver(
         Stop when the regularisation exceeds this value without an accepted step, by default 1e10.
     max_reg_iter : int, optional
         Maximum number of regularisation increases per backward pass, by default 20.
+    make_psd : str, optional
+        Convexify the local LQR before the backward pass by projection onto the PSD cone
+        (:func:`diffilqrax.plqr.project_psd_lqr`), by default None (no projection). "R" projects the
+        input cost only: it removes negative input curvature without retries, which helps far from a
+        solution, and is inactive where R ≻ δI. If R is indefinite at the solution (with Huu ≻ 0 through
+        BᵀJB) it stays active and final convergence is slower. "full" also projects Q - S R⁻¹Sᵀ and Qf, which
+        makes every Huu positive definite but turns the step into a Gauss-Newton-like step where the
+        state cost is locally non-convex, which can converge only linearly. Composes with ``regularise``.
+    psd_delta : float, optional
+        Minimum eigenvalue after the PSD projection, by default 1e-6.
     **linesearch_kwargs
         Additional keyword arguments for :func:`diffilqrax.ilqr.armijo_linesearch` (tau, beta,
         alpha_min, max_iter_linesearch).
@@ -270,7 +283,8 @@ def pilqr_solver(
         converged = kkt_res < kkt_tol
 
         def take_step(_):
-            exp_dJ, gains, _, delta_new, mu_new = backward_with_reg(LQRParams(params.x0, lqr), delta, mu)
+            local_lqr = lqr if make_psd is None else project_psd_lqr(lqr, psd_delta, make_psd)
+            exp_dJ, gains, _, delta_new, mu_new = backward_with_reg(LQRParams(params.x0, local_lqr), delta, mu)
 
             if use_linesearch:
                 accepted, (new_Xs, new_Us), new_cost = armijo_linesearch(

@@ -1,12 +1,15 @@
 """
-Effect of adaptive regularisation (R -> R + μI) on the parallel iLQR solver.
+Effect of adaptive regularisation (R -> R + μI) and PSD projection of the local LQR on the parallel
+iLQR solver.
 
 For each linear-dynamics non-convex problem in ``tests/problems.NONCONVEX_COSTS`` and several random
-initial inputs, runs the sequential ilqr, pilqr with adaptive μ and pilqr with μ = 0, and records the
-cost history, the final cost gap to the best solution found and the KKT residual max|dL/dU|.
+initial inputs, runs the sequential ilqr, pilqr with adaptive μ, pilqr with adaptive μ and the PSD
+projection of R ("R") or of R and Q - S R⁻¹Sᵀ ("full"), and pilqr with μ = 0. Records the cost
+history, the iterations to converge, the final cost gap to the best solution found and the KKT
+residual max|dL/dU|.
 Linear dynamics keep the parallel rollout exact, so differences come from the regularisation only.
 
-Usage: ``venv/bin/python benchmarks/parallel_regularisation.py [--seeds 8]``
+Usage: ``venv/bin/python benchmarks/parallel_regularisation.py [--seeds 8] [--scale 1.0]``
 """
 
 import argparse
@@ -36,6 +39,12 @@ MAX_ITER = 200
 METHODS = {
     "ilqr": lambda model, params, U0: ilqr.ilqr_solver(model, params, U0, max_iter=MAX_ITER),
     "pilqr (adaptive μ)": lambda model, params, U0: pilqr_solver(as_parallel(model), params, U0, max_iter=MAX_ITER),
+    "pilqr (μ + PSD R)": lambda model, params, U0: pilqr_solver(
+        as_parallel(model), params, U0, max_iter=MAX_ITER, make_psd="R"
+    ),
+    "pilqr (μ + PSD full)": lambda model, params, U0: pilqr_solver(
+        as_parallel(model), params, U0, max_iter=MAX_ITER, make_psd="full"
+    ),
     "pilqr (μ = 0)": lambda model, params, U0: pilqr_solver(
         as_parallel(model), params, U0, max_iter=MAX_ITER, regularise=False
     ),
@@ -44,6 +53,11 @@ METHODS = {
 
 def kkt_residual(model, params, Xs, Us) -> float:
     return float(jnp.max(jnp.abs(ilqr.kkt_input_residual(ilqr.approx_lqr(model, Xs, Us, params)))))
+
+
+def iterations(costs, J) -> int:
+    """Iterations until the cost is within round-off of its final value"""
+    return int(jnp.argmax(jnp.abs(costs - J) <= 1e-10 * jnp.abs(J))) + 1
 
 
 def run(n_seeds: int, scale: float):
@@ -55,10 +69,17 @@ def run(n_seeds: int, scale: float):
             for name, solve in METHODS.items():
                 (Xs, Us, _), cost, costs = solve(model, params, U0)
                 rows.append(
-                    dict(problem=kind, seed=seed, method=name, cost=float(cost), kkt=kkt_residual(model, params, Xs, Us))
+                    dict(
+                        problem=kind,
+                        seed=seed,
+                        method=name,
+                        cost=float(cost),
+                        kkt=kkt_residual(model, params, Xs, Us),
+                        iters=iterations(costs, cost),
+                    )
                 )
                 histories[(kind, seed, name)] = jnp.asarray(costs)
-            print(kind, seed, "  ".join(f"{r['method']}: J={r['cost']:.8f} kkt={r['kkt']:.1e}" for r in rows[-3:]))
+            print(kind, seed, "  ".join(f"{r['method']}: J={r['cost']:.8f} kkt={r['kkt']:.1e}" for r in rows[-len(METHODS) :]))
     best = {}
     for r in rows:
         best[r["problem"]] = min(best.get(r["problem"], float("inf")), r["cost"])
@@ -69,8 +90,8 @@ def run(n_seeds: int, scale: float):
 
 def plot(rows, histories, best, out_dir: Path):
     kinds = list(NONCONVEX_COSTS)
-    colours = dict(zip(METHODS, ("k", "tab:blue", "tab:red")))
-    fig, axs = plt.subplots(2, len(kinds), figsize=(4.2 * len(kinds), 7.5), squeeze=False)
+    colours = dict(zip(METHODS, ("k", "tab:blue", "tab:green", "tab:orange", "tab:red")))
+    fig, axs = plt.subplots(3, len(kinds), figsize=(4.2 * len(kinds), 11), squeeze=False)
     for j, kind in enumerate(kinds):
         for (k, seed, name), costs in histories.items():
             if k != kind:
@@ -81,9 +102,12 @@ def plot(rows, histories, best, out_dir: Path):
         for i, name in enumerate(METHODS):
             pts = [r for r in rows if r["problem"] == kind and r["method"] == name]
             axs[1, j].scatter([i] * len(pts), [max(r["kkt"], 1e-16) for r in pts], color=colours[name], alpha=0.7)
+            axs[2, j].scatter([i] * len(pts), [r["iters"] for r in pts], color=colours[name], alpha=0.7)
         axs[1, j].set_yscale("log")
         axs[1, j].set_xticks(range(len(METHODS)), list(METHODS), rotation=20, fontsize=8)
         axs[1, j].set(title="final max|dL/dU| (each start)", ylabel="KKT residual")
+        axs[2, j].set_xticks(range(len(METHODS)), list(METHODS), rotation=20, fontsize=8)
+        axs[2, j].set(title="iterations to converge (each start)", ylabel="iterations")
         axs[0, j].legend(fontsize=7)
     fig.tight_layout()
     fig.savefig(out_dir / "parallel_regularisation.png", dpi=150)
@@ -107,7 +131,11 @@ def main():
         for name in METHODS:
             pts = [r for r in rows if r["problem"] == kind and r["method"] == name]
             ok = sum(r["kkt"] < 1e-9 for r in pts)
-            print(f"{kind:10s} {name:20s} KKT<1e-9: {ok}/{len(pts)}  max gap {max(r['gap'] for r in pts):.2e}")
+            iters = sum(r["iters"] for r in pts) / len(pts)
+            print(
+                f"{kind:12s} {name:21s} KKT<1e-9: {ok}/{len(pts)}  mean iters {iters:6.1f}  "
+                f"max gap {max(r['gap'] for r in pts):.2e}"
+            )
     print(f"saved to {out_dir}")
 
 
