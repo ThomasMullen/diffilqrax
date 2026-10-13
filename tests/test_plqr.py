@@ -183,7 +183,7 @@ def test_linesearch_alpha_scales_feedforward():
     """alpha scales the feedforward term only: u = Kx + αk along the resulting trajectory"""
     params = random_lqr(5, 3, horizon=40)
     etas, Js = associative_riccati_scan(params)
-    _, cs, gains = associative_opt_traj_scan(params, etas, Js, alpha=0.3)
+    cs, gains = associative_opt_traj_scan(params, etas, Js, alpha=0.3)
     Xs = jnp.r_[params.x0[None], cs]
     Us = jnp.einsum("tij,tj->ti", gains.K, Xs[:-1]) + 0.3 * gains.k
     assert_rel_close(lqr.simulate_trajectory(lqr.lin_dyn_step, Us, params, ModelDims(5, 3, 40, 0.1)), Xs)

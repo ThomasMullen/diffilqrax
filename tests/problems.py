@@ -13,7 +13,7 @@ import jax.random as jr
 from scipy.optimize import minimize
 
 from diffilqrax import ilqr, lqr
-from diffilqrax.typs import LQR, LQRParams, ModelDims, System, iLQRParams, Theta
+from diffilqrax.typs import LQR, LQRParams, ModelDims, ParallelSystem, System, iLQRParams, Theta
 from diffilqrax.utils import keygen, initialise_stable_time_varying_dynamics, smooth_l1
 
 jax.config.update("jax_enable_x64", True)
@@ -258,6 +258,47 @@ def rnn_tracking(n: int = 50, m: int = 10, horizon: int = 60, seed: int = 3):
         ModelDims(horizon=horizon, n=n, m=m, dt=0.1),
     )
     return model, iLQRParams(x0=0.5 * jr.normal(k3, (n,)), theta=theta)
+
+
+NONCONVEX_COSTS = {
+    "convex": lambda t, x, u: jnp.sum((x - 1.0) ** 2) + jnp.sum(u**2),
+    "log_u": lambda t, x, u: jnp.sum((x - 1.0) ** 2) + jnp.sum(jnp.log(1 + u**2)) + 0.3 * jnp.sum(x**4),
+    "log_x": lambda t, x, u: jnp.sum(jnp.log(1 + x**2)) + jnp.sum(x**2) + jnp.sum(u**2),
+    "track_log": lambda t, x, u: jnp.sum(jnp.log(1 + (x - t / 10) ** 2)) + 0.1 * jnp.sum(u**2),
+}
+
+
+def linear_nonconvex_problem(kind: str = "track_log", n: int = 5, m: int = 3, horizon: int = 50, seed: int = 0):
+    """
+    Linear dynamics x' = Uh x + Wh u + offset with a non-convex cost from NONCONVEX_COSTS. The parallel
+    (linearised) rollout is exact for linear dynamics, so these isolate the effect of an indefinite
+    local LQR: "log_u" has an indefinite R, "log_x" an indefinite Q and "track_log" indefinite Huu.
+    """
+    k1, k2 = jr.split(jr.PRNGKey(seed))
+    theta = Theta(
+        Uh=0.5 * jr.normal(k1, (n, n)) / jnp.sqrt(n),
+        Wh=0.5 * jr.normal(k2, (n, m)) / jnp.sqrt(m),
+        sigma=jnp.zeros(n),
+        Q=jnp.eye(n),
+    )
+    offset = 1.0 if kind == "log_x" else 0.0
+    cost = NONCONVEX_COSTS[kind]
+    model = System(
+        lambda t, x, u, th: cost(t, x, u),
+        lambda x, th: jnp.sum(x**2),
+        lambda t, x, u, th: th.Uh @ x + th.Wh @ u + offset,
+        ModelDims(horizon=horizon, n=n, m=m, dt=0.1),
+    )
+    return model, iLQRParams(x0=jnp.ones(n), theta=theta)
+
+
+def as_parallel(model: System) -> ParallelSystem:
+    """Wrap a System with the associative-scan (linearised) forward integrators"""
+    from diffilqrax import parallel_ilqr  # pylint: disable=import-outside-toplevel
+
+    return ParallelSystem(
+        model, parallel_ilqr.parallel_forward_lin_integration_ilqr, parallel_ilqr.parallel_feedback_lin_dyn_ilqr
+    )
 
 
 # --------------------------------------------------------------------------------------------

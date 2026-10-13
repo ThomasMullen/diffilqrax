@@ -156,9 +156,62 @@ def get_dcosts(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> 
     return CostToGo(V=0.5 * kHk * alpha**2, v=-kHk * alpha)
 
 
-def build_associative_lin_dyn_elements(
-    model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0
-) -> Tuple[Tuple[Array, Array], Gains]:
+def regularise_lqr(lqr: LQR, mu: float) -> LQR:
+    """
+    Levenberg-Marquardt regularisation in input space, R -> R + μI, i.e. a proximal cost ½μ‖u‖² on
+    the input step. Unlike a regulariser applied to Huu during the Riccati recursion, it does not
+    depend on the value function, so the regularised problem is still an LQR and the associative
+    scan solves it exactly. In the Riccati recursion it adds μI to every Huu.
+
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
+    mu : float
+        Regularisation strength.
+
+    Returns
+    -------
+    LQR
+        Regularised LQR parameters.
+    """
+    return lqr._replace(R=lqr.R + mu * jnp.eye(lqr.R.shape[-1], dtype=lqr.R.dtype))
+
+
+def plqr_backward_pass(model: LQRParams, mu: float = 0.0, pd_thresh: float = 1e-8) -> Tuple[CostToGo, Gains, Array]:
+    """
+    Parallel counterpart of :func:`diffilqrax.lqr.regularised_backward_pass`: associative Riccati scan
+    of the problem regularised with :func:`regularise_lqr`, and its optimal gains.
+
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters.
+    mu : float, optional
+        Regularisation strength, by default 0.0 (exact LQR solution).
+    pd_thresh : float, optional
+        Minimum eigenvalue of the regularised Huu for it to count as positive definite, by default 1e-8.
+
+    Returns
+    -------
+    Tuple[CostToGo, Gains, Array]
+        Expected change in cost terms (V: Σ ½ kᵀ Huu k with the unregularised Huu, v: Σ kᵀ hu), the
+        gains (u = Kx + k), and a flag that is True if the regularised Huu is positive definite at
+        every time step and the gains are finite.
+    """
+    reg = LQRParams(model.x0, regularise_lqr(model.lqr, mu))
+    etas, Js = associative_riccati_scan(reg)
+    gains, Huu_reg = optimal_gains(reg, etas, Js)
+    min_eval = jnp.min(jnp.linalg.eigvalsh(jax.lax.stop_gradient(Huu_reg)))
+    finite = jnp.logical_and(jnp.all(jnp.isfinite(gains.K)), jnp.all(jnp.isfinite(gains.k)))
+    is_pd = jnp.logical_and(min_eval > pd_thresh, finite)
+    # hu = -Huu_reg k, as in the sequential pass
+    kHk_reg = jnp.sum(gains.k * _bmv(Huu_reg, gains.k))
+    kHk = kHk_reg - mu * jnp.sum(gains.k**2)
+    return CostToGo(V=0.5 * kHk, v=-kHk_reg), gains, is_pd
+
+
+def build_associative_lin_dyn_elements(model: LQRParams, gains: Gains, alpha: float = 1.0) -> Tuple[Array, Array]:
     """
     Closed-loop affine dynamics elements x_{t+1} = F_t x_t + c_t under u_t = K_t x_t + α k_t. The first
     element absorbs the initial state.
@@ -166,29 +219,48 @@ def build_associative_lin_dyn_elements(
     Parameters
     ----------
     model : LQRParams
-        LQR model parameters.
-    etas : Array
-        Linear value functions.
-    Js : Array
-        Quadratic value functions.
+        LQR model parameters (only the dynamics and x0 are used).
+    gains : Gains
+        Feedback gains (K, k).
     alpha : float, optional
         Linesearch step on the feedforward term, by default 1.0.
 
     Returns
     -------
-    Tuple[Tuple[Array, Array], Gains]
-        Elements (F, c) and the gains (K, k).
+    Tuple[Array, Array]
+        Elements (F, c).
     """
     lqr = model.lqr
-    gains, _ = optimal_gains(model, etas, Js)
     Fs = lqr.A + lqr.B @ gains.K
     cs = lqr.a + alpha * _bmv(lqr.B, gains.k)
     cs = cs.at[0].add(Fs[0] @ model.x0)
     Fs = Fs.at[0].set(jnp.zeros_like(Fs[0]))
-    return (Fs, cs), gains
+    return Fs, cs
 
 
-def associative_opt_traj_scan(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> Tuple[Array, Array, Gains]:
+def closed_loop_scan(model: LQRParams, gains: Gains, alpha: float = 1.0) -> Array:
+    """
+    States x_1..x_T of the linear dynamics under u_t = K_t x_t + α k_t, by an associative scan.
+
+    Parameters
+    ----------
+    model : LQRParams
+        LQR model parameters (only the dynamics and x0 are used).
+    gains : Gains
+        Feedback gains (K, k).
+    alpha : float, optional
+        Linesearch step on the feedforward term, by default 1.0.
+
+    Returns
+    -------
+    Array
+        States x_1..x_T.
+    """
+    _, cs = associative_scan(dynamic_operator, build_associative_lin_dyn_elements(model, gains, alpha))
+    return cs
+
+
+def associative_opt_traj_scan(model: LQRParams, etas: Array, Js: Array, alpha: float = 1.0) -> Tuple[Array, Gains]:
     """
     Obtain the optimal state trajectory through an associative scan of the closed-loop dynamics.
 
@@ -205,12 +277,11 @@ def associative_opt_traj_scan(model: LQRParams, etas: Array, Js: Array, alpha: f
 
     Returns
     -------
-    Tuple[Array, Array, Gains]
-        Composed state maps, states x_1..x_T, and the gains with u_t = K_t x_t + α k_t.
+    Tuple[Array, Gains]
+        States x_1..x_T, and the gains with u_t = K_t x_t + α k_t.
     """
-    dyn_elements, gains = build_associative_lin_dyn_elements(model, etas, Js, alpha)
-    Fs, cs = associative_scan(dynamic_operator, dyn_elements)
-    return Fs, cs, gains
+    gains, _ = optimal_gains(model, etas, Js)
+    return closed_loop_scan(model, gains, alpha), gains
 
 
 @jax.jit
@@ -229,7 +300,7 @@ def solve_plqr(model: LQRParams) -> Tuple[Array, Array, Array]:
         State trajectory, control inputs, and adjoint variables.
     """
     etas, Js = associative_riccati_scan(model)
-    _, cs, gains = associative_opt_traj_scan(model, etas, Js)
+    cs, gains = associative_opt_traj_scan(model, etas, Js)
     Xs = jnp.r_[model.x0[None], cs]
     Us = _bmv(gains.K, Xs[:-1]) + gains.k
     # adjoints are the value function gradients λ_t = J_t x_t - η_t
