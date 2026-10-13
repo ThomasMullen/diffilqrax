@@ -11,6 +11,7 @@ from jax.numpy import matmul as mm
 from diffilqrax.lqr import (
     solve_lqr,
     solve_lqr_swap_x0,
+    lqr_adjoint_pass,
     bmm,
 )
 from diffilqrax.typs import (
@@ -271,18 +272,18 @@ dlqr.defvjp(fwd_dlqr, rev_dlqr)
 @partial(custom_vjp, nondiff_argnums=(0,))
 def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
     """
-    Solves the differential linear quadratic regulator (DLQR) problem. Custom VJP function for 
-    DLQR. Reverse mode uses an LQR solver to solve the reverse LQR problem of the gradients on 
-    state and input trajectory gradients.
+    Identity on a precomputed optimal trajectory, with implicit gradients wrt the LQR parameters.
+    Custom VJP function for DLQR: reverse mode solves the adjoint LQR problem of the gradients on
+    the state and input trajectories, linearised around ``tau_star``.
 
     Parameters
     ----------
     dims : ModelDims
         The dimensions of the model.
     params : LQRParams
-        The parameters of the model.
+        LQR whose optimum is ``tau_star`` (e.g. the local LQR of an iLQR solution).
     tau_star : Array
-        The optimal state-control trajectory.
+        The optimal state-control trajectory. Returned unchanged; it receives no gradient.
 
     Returns
     -------
@@ -296,7 +297,10 @@ def fwd_dllqr(
     dims: ModelDims, params: LQRParams, tau_star: Array
 ) -> Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]:
     """
-    Solves the forward differential linear quadratic regulator (DLQR) problem.
+    Forward pass of :func:`dllqr`: returns ``tau_star`` unchanged, as the primal does, and saves
+    the residuals for the reverse pass. The adjoints are evaluated at ``tau_star`` with
+    :func:`diffilqrax.lqr.lqr_adjoint_pass` rather than by re-solving the LQR, so the output does
+    not depend on whether gradients are taken, even if ``tau_star`` is not exactly optimal.
 
     Parameters
     ----------
@@ -310,16 +314,13 @@ def fwd_dllqr(
     Returns
     -------
     Tuple[Array, Tuple[LQRParams, Tuple[Array, Array, Array]]]
-        A tuple containing the optimal state-control trajectory and the updated parameters
-        and solution.
+        The state-control trajectory, and the offset LQR parameters with the trajectory and
+        adjoints for the reverse pass.
     """
-    lqr = params.lqr
-    sol = solve_lqr(params)
-    Xs_star, Us_star, Lambs = sol
-    tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    new_lqr = offset_lqr(lqr, Xs_star, Us_star)
-    new_params = LQRParams(params.x0, new_lqr)
-    return tau_star, (new_params, sol)  # check whether params or new_params
+    Xs_star, Us_star = tau_star[:, : dims.n], tau_star[:-1, dims.n :]
+    Lambs = lqr_adjoint_pass(Xs_star, Us_star, params)
+    new_params = LQRParams(params.x0, offset_lqr(params.lqr, Xs_star, Us_star))
+    return tau_star, (new_params, (Xs_star, Us_star, Lambs))
 
 
 def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:

@@ -88,3 +88,37 @@ def test_gauss_newton_exact_for_linear_dynamics(n, m):
     g_dir = jax.grad(direct_loss)(params)
     assert_grads_close(g_gn, g_exact, rtol=1e-10)
     assert_grads_close(g_gn, g_dir)
+
+
+@pytest.mark.parametrize("max_iter", [3, 10, MAX_ITER])
+def test_value_independent_of_differentiation(max_iter):
+    """dilqr returns the solver's trajectory whether or not it is differentiated, even when unconverged"""
+    model, params = rnn_problem(5, 3)
+    Us_init = 0.1 * jr.normal(jr.PRNGKey(0), (model.dims.horizon, model.dims.m))
+
+    def loss(p):
+        return jnp.sum(dilqr(model, p, Us_init, max_iter=max_iter) ** 2)
+
+    chex.assert_trees_all_close(jax.value_and_grad(loss)(params)[0], loss(params), rtol=1e-14)
+
+
+def test_warm_start_is_not_differentiated():
+    """Us_init gets no gradient, and a theta-dependent warm start neither changes the gradient nor
+    makes reverse mode store the solver iterations"""
+    model, params = rnn_problem(5, 3)
+    Us_init = 0.1 * jr.normal(jr.PRNGKey(0), (model.dims.horizon, model.dims.m))
+
+    def loss(theta, warm):
+        warm_start = Us_init + warm * 0.01 * jnp.sum(theta.Uh)
+        return jnp.sum(dilqr(model, params._replace(theta=theta), warm_start, max_iter=MAX_ITER) ** 2)
+
+    def loss_us(us):
+        return jnp.sum(dilqr(model, params, us, max_iter=MAX_ITER) ** 2)
+
+    assert jnp.all(jax.grad(loss_us)(Us_init) == 0.0)
+    assert_grads_close(jax.grad(loss)(params.theta, 1.0), jax.grad(loss)(params.theta, 0.0), rtol=1e-10)
+    temp_bytes = {
+        warm: jax.jit(jax.grad(loss)).lower(params.theta, warm).compile().memory_analysis().temp_size_in_bytes
+        for warm in (0.0, 1.0)
+    }
+    assert temp_bytes[1.0] <= 1.5 * temp_bytes[0.0], temp_bytes

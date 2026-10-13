@@ -81,8 +81,8 @@ def dilqr(model: System, params: iLQRParams, Us_init: Array, exact_hessian: bool
     exact_hessian : bool, optional
         If True (default), the implicit gradients use the Hessian of the Lagrangian, including
         the dynamics curvature λ^T ∇²f, and match direct differentiation. If False, only the cost
-        Hessians are used, as in the OCaml ``dilqr`` implementation; this is exact only for
-        linear dynamics.
+        Hessians are used (Gauss-Newton), as in the OCaml ``dilqr`` implementation with
+        ``~fixed_trajectory:true``; this is exact only for linear dynamics.
     **kwargs
         Additional keyword arguments for the iLQR solver.
 
@@ -90,9 +90,16 @@ def dilqr(model: System, params: iLQRParams, Us_init: Array, exact_hessian: bool
     -------
     Array
         The optimized state-control trajectory [(T+1)x(n+m)].
+
+    Notes
+    -----
+    The gradients are implicit: they are exact only if the solver has converged (see
+    ``kkt_tol`` and ``max_iter`` of :func:`diffilqrax.ilqr.ilqr_solver`). ``Us_init`` receives
+    no gradient, and the solver is never differentiated, so memory does not grow with the
+    number of iterations even if ``Us_init`` depends on the parameters (e.g. a warm start).
     """
-    sol = ilqr_solver(model, lax.stop_gradient(params), Us_init, **kwargs)
-    (Xs_star, Us_star, Lambs_star), _, _ = sol
+    sol = ilqr_solver(model, lax.stop_gradient(params), lax.stop_gradient(Us_init), **kwargs)
+    (Xs_star, Us_star, Lambs_star), _, _ = lax.stop_gradient(sol)
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, model.dims.m))]]
     local_lqr = approx_lqr_offset(model, Xs_star, Us_star, params)  ##equiv of g1
     if exact_hessian:
