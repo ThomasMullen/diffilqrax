@@ -4,9 +4,11 @@ Unit tests for the differentiable LQR solver
 
 from typing import NamedTuple
 import unittest
+import pytest
 import chex
 import jax
 from jax import Array
+from jax.test_util import check_grads
 import jax.random as jr
 import jax.numpy as jnp
 import numpy as onp
@@ -16,6 +18,7 @@ from diffilqrax.typs import LQRParams, ModelDims, LQR
 from diffilqrax.diff_lqr import dlqr
 from diffilqrax.lqr import solve_lqr, kkt
 from diffilqrax.utils import keygen, initialise_stable_dynamics
+from problems import random_lqr
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
 jax.config.update("jax_enable_x64", True)  # double precision
@@ -127,6 +130,18 @@ class Prms(NamedTuple):
     a: Array
 
 
+def kkt_solve(matvec, b):
+    """Tight GMRES solve of the (symmetric indefinite) LQR KKT system for jaxopt's implicit differentiation"""
+    return linear_solve.solve_gmres(matvec, b, tol=1e-14, restart=200, maxiter=2000)
+
+
+def sym_grads(g: Prms) -> Prms:
+    """Symmetric part of the Q and R gradients. A gradient wrt a symmetric matrix is only defined up to
+    a skew part, which does not change the loss; implicit (KKT) gradients are not symmetric otherwise."""
+    sym = lambda x: (x + jnp.swapaxes(x, -1, -2)) / 2
+    return g._replace(Q=sym(g.Q), R=sym(g.R))
+
+
 def state_kkt(Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray, params: LQRParams):
     """calculate KKT conditions for LQR problem"""
     Xs, Us, Lambs = Xs
@@ -176,7 +191,8 @@ class TestDLQR(unittest.TestCase):
             Xs_lqr = tau_lqr[:, : self.sys_dims.n]
             return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
-        @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
+        # GMRES rather than CG: the KKT system is symmetric indefinite, so CG only reaches ~1e-5
+        @implicit_diff.custom_root(state_kkt, solve=kkt_solve)
         def implicit_solve_lqr(Xs, Us, Lambs, params):
             Xs, Us, Lambs = solve_lqr(params)
             return Xs, Us, Lambs
@@ -185,7 +201,6 @@ class TestDLQR(unittest.TestCase):
             Xs_lqr, Us_lqr, _Us_lqr = implicit_solve_lqr(
                 None, None, None, replace_params(prms)
             )
-            print(Xs_lqr.shape)
             return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         def direct_loss(prms):
@@ -238,15 +253,68 @@ class TestDLQR(unittest.TestCase):
         chex.assert_trees_all_equal_shapes_and_dtypes(implicit_val, direct_val)
         chex.assert_trees_all_equal_shapes_and_dtypes(implicit_g, direct_g)
         # verify numerics
-        chex.assert_trees_all_close(lqr_val, direct_val, rtol=1e-3)
-        chex.assert_trees_all_close(lqr_g, direct_g, rtol=1e-3)
-        chex.assert_trees_all_close(implicit_val, direct_val, rtol = 1e-3)
-
-    # chex.assert_trees_all_close(implicit_g, direct_g, rtol = 1e-3)
+        chex.assert_trees_all_close(lqr_val, direct_val, rtol=1e-12)
+        chex.assert_trees_all_close(lqr_g, direct_g, rtol=1e-8, atol=1e-12)
+        chex.assert_trees_all_close(implicit_val, direct_val, rtol=1e-12)
+        chex.assert_trees_all_close(sym_grads(implicit_g), sym_grads(direct_g), rtol=1e-8, atol=1e-10)
 
     def tearDown(self):
         """Destruct test class"""
         print("Running tearDown method...")
+
+
+GRAD_DIMS = [
+    (5, 1),
+    (5, 5),
+    (20, 5),
+    (50, 15),
+    pytest.param(100, 30, marks=pytest.mark.slow),
+]
+
+
+def dlqr_losses(n: int, m: int, horizon: int = 30):
+    """Implicit (dlqr) and direct (autodiff through solve_lqr) losses of a random time-varying LQR"""
+    params = random_lqr(n, m, horizon, seed=1)
+    dims = ModelDims(n, m, horizon, dt=0.1)
+    weights = jr.normal(jr.PRNGKey(5), (horizon + 1, n + m))
+
+    def implicit_loss(p):
+        return jnp.sum(weights * jnp.sin(dlqr(dims, p, None)))
+
+    def direct_loss(p):
+        Xs, Us, _ = solve_lqr(p)
+        return jnp.sum(weights * jnp.sin(jnp.c_[Xs, jnp.r_[Us, jnp.zeros((1, m))]]))
+
+    return implicit_loss, direct_loss, params
+
+
+def sym_lqr_grads(g: LQRParams) -> LQRParams:
+    """Symmetric part of the Q, R and Qf gradients (see sym_grads)"""
+    sym = lambda x: (x + jnp.swapaxes(x, -1, -2)) / 2
+    return g._replace(lqr=g.lqr._replace(Q=sym(g.lqr.Q), R=sym(g.lqr.R), Qf=sym(g.lqr.Qf)))
+
+
+@pytest.mark.parametrize("n,m", GRAD_DIMS)
+def test_dlqr_matches_direct_gradient(n, m):
+    """dlqr implicit gradients equal direct autodiff for every LQR field and x0"""
+    implicit_loss, direct_loss, params = dlqr_losses(n, m)
+    v_imp, g_imp = jax.value_and_grad(implicit_loss)(params)
+    v_dir, g_dir = jax.value_and_grad(direct_loss)(params)
+    chex.assert_trees_all_close(v_imp, v_dir, rtol=1e-12)
+    chex.assert_trees_all_close(sym_lqr_grads(g_imp), sym_lqr_grads(g_dir), rtol=1e-8, atol=1e-12)
+
+
+@pytest.mark.parametrize("n,m", GRAD_DIMS[:3])
+def test_dlqr_check_grads(n, m):
+    """dlqr implicit gradients agree with central finite differences along random directions. Q, R and Qf
+    are symmetrised inside the loss so the random directions stay in the space of symmetric costs."""
+    implicit_loss, _, params = dlqr_losses(n, m)
+    sym = lambda x: (x + jnp.swapaxes(x, -1, -2)) / 2
+
+    def sym_loss(p):
+        return implicit_loss(p._replace(lqr=p.lqr._replace(Q=sym(p.lqr.Q), R=sym(p.lqr.R), Qf=sym(p.lqr.Qf))))
+
+    check_grads(sym_loss, (params,), order=1, modes=["rev"], eps=1e-6, atol=1e-7, rtol=1e-7)
 
 
 if __name__ == "__main__":

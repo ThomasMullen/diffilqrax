@@ -1,14 +1,15 @@
 """
 Generate OCaml dilqr reference solutions as test fixtures.
 
-Runs ``examples/pendulum_ref.exe`` and ``examples/rnn_ref.exe`` from a local dilqr checkout (built
-in the ``dilqr-ref`` opam switch) and saves their outputs to ``tests/fixtures/ocaml_*.npz``.
+Runs ``examples/pendulum_ref.exe``, ``examples/rnn_ref.exe`` and ``examples/rnn_grad_ref.exe`` from a
+local dilqr checkout (built in the ``dilqr-ref`` opam switch) and saves their outputs to
+``tests/fixtures/ocaml_*.npz``. The gradient fixtures cover the RNN sizes in ``GRAD_SIZES``.
 
 Usage:
     DILQR_DIR=/path/to/dilqr python benchmarks/make_ocaml_fixtures.py
 
 Build the executables first:
-    cd $DILQR_DIR && opam exec --switch dilqr-ref -- dune build ./examples/pendulum_ref.exe ./examples/rnn_ref.exe
+    cd $DILQR_DIR && opam exec --switch dilqr-ref -- dune build ./examples/pendulum_ref.exe ./examples/rnn_ref.exe ./examples/rnn_grad_ref.exe
 """
 
 import os
@@ -63,20 +64,59 @@ def make_pendulum(linesearch: bool) -> None:
     print(f"saved {name}.npz: cost {data['costs'][-1]:.12f} after {len(data['costs'])} evaluations")
 
 
+def write_params(pdir: Path, params: dict) -> None:
+    """Write problem parameters as full-precision tab-separated text for the OCaml programs"""
+    pdir.mkdir()
+    for key, value in params.items():
+        onp.savetxt(pdir / key, onp.atleast_2d(value), delimiter="\t", fmt="%.17g")
+
+
 def make_rnn() -> None:
     """Vanilla tanh RNN with parameters shared with tests/problems.vanilla_rnn"""
     params = vanilla_rnn_params()
     with tempfile.TemporaryDirectory() as tmp:
         pdir = Path(tmp) / "params"
         out = Path(tmp) / "out"
-        pdir.mkdir()
         out.mkdir()
-        for key, value in params.items():
-            onp.savetxt(pdir / key, onp.atleast_2d(value), delimiter="\t", fmt="%.17g")
+        write_params(pdir, params)
         elapsed = run_ocaml("rnn_ref.exe", out, "-p", str(pdir), "-linesearch")
         data = load_outputs(out)
     onp.savez(FIXTURES / "ocaml_rnn.npz", **data, **params, linesearch=True, seconds=elapsed)
     print(f"saved ocaml_rnn.npz: cost {data['costs'][-1]:.12f} after {len(data['costs'])} evaluations")
+
+
+GRAD_SIZES = [(5, 3), (20, 5), (50, 10), (100, 20)]
+
+
+def grad_fixture_name(n: int, linear: bool = False) -> str:
+    """File stem of an OCaml gradient fixture"""
+    return f"ocaml_rnn_grad{'_linear' if linear else ''}_n{n}"
+
+
+def make_rnn_grad(n: int, m: int, linear: bool = False) -> None:
+    """
+    Implicit gradients of sum(tau*^2) wrt W, B and x0 for tests/problems.vanilla_rnn(n, m, linear=linear).
+
+    ``grad_*`` come from dilqr as released (AD through the theta-dependent rollout of the tape);
+    ``grad_*_fixed`` from ``~fixed_trajectory:true`` (Gauss-Newton implicit gradients).
+    """
+    params = vanilla_rnn_params(n, m)
+    with tempfile.TemporaryDirectory() as tmp:
+        pdir = Path(tmp) / "params"
+        out = Path(tmp) / "out"
+        out.mkdir()
+        write_params(pdir, params)
+        args = ["-p", str(pdir), "-linesearch"] + (["-linear"] if linear else [])
+        elapsed = run_ocaml("rnn_grad_ref.exe", out, *args)
+        data = load_outputs(out)
+        for key in ("loss", "grad_W", "grad_B", "grad_x0", "grad_W_fixed", "grad_B_fixed", "grad_x0_fixed"):
+            data[key] = onp.loadtxt(out / key, ndmin=2)
+    data["loss"] = data["loss"].item()
+    data["grad_x0"] = data["grad_x0"].ravel()
+    data["grad_x0_fixed"] = data["grad_x0_fixed"].ravel()
+    name = grad_fixture_name(n, linear)
+    onp.savez(FIXTURES / f"{name}.npz", **data, **params, n=n, m=m, linear=linear, linesearch=True, seconds=elapsed)
+    print(f"saved {name}.npz: loss {data['loss']:.12f} in {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
@@ -84,3 +124,6 @@ if __name__ == "__main__":
     make_pendulum(linesearch=False)
     make_pendulum(linesearch=True)
     make_rnn()
+    make_rnn_grad(5, 3, linear=True)
+    for n_, m_ in GRAD_SIZES:
+        make_rnn_grad(n_, m_)

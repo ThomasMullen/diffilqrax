@@ -144,7 +144,7 @@ def build_ajoint_lqr(
         jnp.einsum("ij,ik->ijk", c_bar, tau_star)
     )  # factor of 2 included in symmetrization
     Q_bar, R_bar = C_bar[:, : dims.n, : dims.n], C_bar[:, dims.n :, dims.n :]
-    S_bar = 2*C_bar[:, : dims.n, dims.n :]# + C_bar[:, dims.n :, : dims.n].transpose(0, 2, 1))
+    S_bar = 2 * C_bar[:, : dims.n, dims.n :]
     A_bar, B_bar = F_bar[..., : dims.n], F_bar[..., dims.n :]
     LQR_bar = LQR(
         A=A_bar,
@@ -175,14 +175,14 @@ def dlqr(dims: ModelDims, params: LQRParams, tau_guess: Array) -> Array:
     params : LQRParams
         The parameters of the model.
     tau_guess : Array
-        The initial guess for the optimal control sequence.
+        Unused; kept for API compatibility. The LQR is solved exactly.
 
     Returns
     -------
     Array
         Concatenated optimal state and control sequence along axis=1.
     """
-    sol = solve_lqr(params)  #  tau_guess)
+    sol = solve_lqr(params)
     Xs_star, Us_star, _ = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     return tau_star
@@ -289,11 +289,7 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
     Array
         Concatenated optimal state and control sequence along axis=1.
     """
-    # sol = solve_lqr(params, dims)  #  tau_guess)
-    # Xs_star, Us_star, _ = sol
-    # tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
-    return tau_star  # jnp.nan_to_num(tau_star)*(1 - jnp.isnan(jnp.sum(tau_star)))
-    # return tau_star
+    return tau_star
 
 
 def fwd_dllqr(
@@ -346,7 +342,6 @@ def rev_dllqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     """
     params, sol = res
     Xs_star, Us_star, Lambs = sol
-    # isnotnan = 1 - jnp.isnan(jnp.sum(tau_bar))
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
     lqr_bar_problem = build_ajoint_lqr(dims, params, tau_star, Lambs, tau_bar)
 

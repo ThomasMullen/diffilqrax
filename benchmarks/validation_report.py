@@ -8,7 +8,12 @@ Figures (fig_dump/<timestamp>/):
   lbfgs_comparison.png     iLQR cost history vs the L-BFGS optimum for each control problem
   perturbation.png         J(U* + eps dU) - J(U*) vs eps with fitted log-log slopes
   gradients.png            implicit vs direct gradients, exact Hessian vs Gauss-Newton
+  gradient_methods.png     exact / Gauss-Newton / OCaml-style implicit gradient error vs direct, per problem
+  ocaml_gradients.png      OCaml dilqr implicit gradients vs Python, both cases, for n in 5..100
+  dlqr_gradients.png       dlqr implicit vs direct gradient relative error per LQR field
   summary.json             the key numbers behind the figures
+
+Memory and time of implicit vs unrolled gradients are in benchmarks/memory.py (memory.png/json).
 
 Run from the repository root:
     python benchmarks/validation_report.py [--skip-grid]
@@ -33,6 +38,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests"))
 # pylint: disable=wrong-import-position
 import problems as P
+from test_ocaml_reference import gauss_newton_loss, ocaml_rollout_loss
+from test_dlqr import dlqr_losses, sym_lqr_grads
 from diffilqrax import ilqr, lqr
 from diffilqrax.diff_ilqr import add_dynamics_curvature, dilqr
 from diffilqrax.typs import iLQRParams
@@ -234,6 +241,129 @@ def gradients(out_dir, summary):
     print(f"gradients: {summary['gradients']}")
 
 
+def rel_err(a, b) -> float:
+    """Normwise relative error ||a - b|| / ||b||"""
+    a, b = onp.asarray(a).ravel(), onp.asarray(b).ravel()
+    return float(onp.linalg.norm(a - b) / onp.linalg.norm(b))
+
+
+def exact_loss(model, params, Us_init):
+    """sum(tau*^2) with exact (Lagrangian Hessian) implicit gradients"""
+    return jnp.sum(dilqr(model, params, Us_init, max_iter=400) ** 2)
+
+
+def direct_loss(model, params, Us_init):
+    """sum(tau*^2) differentiated through the unrolled solver"""
+    (Xs, Us, _), _, _ = ilqr.ilqr_solver(model, params, Us_init, max_iter=400)
+    return jnp.sum(Xs**2) + jnp.sum(Us**2)
+
+
+def gradient_methods(out_dir, summary):
+    """Error of each implicit gradient against direct autodiff, wrt theta and x0, on several problems"""
+    cases = [(f"RNN n={n}", lambda n=n: P.rnn_problem(n, min(n, 5))) for n in (5, 10, 20)]
+    cases += [("tanh pendulum", lambda: P.pendulum_problem(horizon=50)), ("vanilla RNN n=20", P.vanilla_rnn)]
+    methods = {"exact": exact_loss, "gauss_newton": gauss_newton_loss, "ocaml_released": ocaml_rollout_loss}
+    summary["gradient_methods"] = {}
+    for label, builder in cases:
+        model, params = builder()
+        Us_init = 0.1 * jr.normal(jr.PRNGKey(0), (model.dims.horizon, model.dims.m))
+        g_dir = jax.grad(direct_loss, argnums=1)(model, params, Us_init)
+        flat_dir = onp.concatenate([onp.ravel(g_dir.x0), onp.ravel(g_dir.theta.Uh), onp.ravel(g_dir.theta.Wh)])
+        entry = {}
+        for name, fn in methods.items():
+            g = jax.grad(fn, argnums=1)(model, params, Us_init)
+            entry[name] = rel_err(onp.concatenate([onp.ravel(g.x0), onp.ravel(g.theta.Uh), onp.ravel(g.theta.Wh)]), flat_dir)
+        summary["gradient_methods"][label] = entry
+        print(f"gradient methods {label}: {entry}")
+    labels = list(summary["gradient_methods"])
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    width = 0.27
+    for i, name in enumerate(methods):
+        ax.bar(onp.arange(len(labels)) + i * width, [summary["gradient_methods"][l][name] for l in labels], width, label=name)
+    ax.set(
+        yscale="log",
+        xticks=onp.arange(len(labels)) + width,
+        xticklabels=labels,
+        ylabel="relative error vs direct autodiff",
+        title="Implicit gradient error wrt (x0, W, B)",
+    )
+    ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    fig.tight_layout()
+    fig.savefig(out_dir / "gradient_methods.png", dpi=150)
+    plt.close(fig)
+
+
+def ocaml_gradients(out_dir, summary):
+    """OCaml dilqr implicit gradients vs Python: fixed trajectory vs Gauss-Newton, released vs its emulation"""
+    sizes = [(5, 3), (20, 5), (50, 10), (100, 20)]
+    comparisons = {
+        "fixed vs python GN": ("_fixed", "gn"),
+        "released vs python emulation": ("", "rollout"),
+        "fixed vs python exact": ("_fixed", "exact"),
+        "released vs python exact": ("", "exact"),
+    }
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.5))
+    summary["ocaml_gradients"] = {}
+    for n, m in sizes:
+        path = REPO / "tests" / "fixtures" / f"ocaml_rnn_grad_n{n}.npz"
+        if not path.exists():
+            print(f"skipping OCaml gradients n={n}: {path.name} missing (run benchmarks/make_ocaml_fixtures.py)")
+            continue
+        ref = onp.load(path)
+        model, params = P.vanilla_rnn(n, m)
+        Us_init = jnp.zeros((model.dims.horizon, m))
+        grads = {
+            key: jax.grad(fn, argnums=1)(model, params, Us_init)
+            for key, fn in (("gn", gauss_newton_loss), ("rollout", ocaml_rollout_loss), ("exact", exact_loss))
+        }
+        flat = lambda g: onp.concatenate([onp.ravel(g.theta.Uh), onp.ravel(g.theta.Wh), onp.ravel(g.x0)])
+        flat_ref = lambda sfx, ref=ref: onp.concatenate(
+            [ref[f"grad_W{sfx}"].ravel(), ref[f"grad_B{sfx}"].ravel(), ref[f"grad_x0{sfx}"]]
+        )
+        summary["ocaml_gradients"][n] = {
+            label: rel_err(flat(grads[py]), flat_ref(sfx)) for label, (sfx, py) in comparisons.items()
+        }
+        summary["ocaml_gradients"][n]["ocaml_seconds"] = float(ref["seconds"])
+        axes[0].scatter(flat_ref("_fixed"), flat(grads["gn"]), s=6, label=f"n={n}")
+        axes[1].scatter(flat_ref(""), flat(grads["rollout"]), s=6, label=f"n={n}")
+        print(f"OCaml gradients n={n}: {summary['ocaml_gradients'][n]}")
+    for ax, title, ylabel in (
+        (axes[0], "case 1: OCaml fixed trajectory", "Python Gauss-Newton"),
+        (axes[1], "case 2: OCaml as released", "Python emulation of released"),
+    ):
+        lim = ax.get_xlim()
+        ax.plot(lim, lim, "k:", lw=1)
+        ax.set(title=title, xlabel="OCaml gradient entries (W, B, x0)", ylabel=ylabel)
+        ax.legend(fontsize=8)
+    ns = sorted(summary["ocaml_gradients"])
+    for label in comparisons:
+        axes[2].semilogy(ns, [max(summary["ocaml_gradients"][n][label], 1e-17) for n in ns], "o-", label=label)
+    axes[2].set(xlabel="n", ylabel="relative error", title="OCaml vs Python implicit gradients")
+    axes[2].legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out_dir / "ocaml_gradients.png", dpi=150)
+    plt.close(fig)
+
+
+def dlqr_gradients(out_dir, summary):
+    """dlqr custom-VJP gradients vs direct autodiff through solve_lqr, per LQR field (symmetric parts)"""
+    implicit_loss, direct_loss_lqr, params = dlqr_losses(20, 5)
+    g_imp = sym_lqr_grads(jax.grad(implicit_loss)(params))
+    g_dir = sym_lqr_grads(jax.grad(direct_loss_lqr)(params))
+    errs = {"x0": rel_err(g_imp.x0, g_dir.x0)}
+    errs.update({f: rel_err(getattr(g_imp.lqr, f), getattr(g_dir.lqr, f)) for f in g_dir.lqr._fields})
+    summary["dlqr_gradients"] = errs
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(list(errs), [max(v, 1e-18) for v in errs.values()])
+    ax.axhline(1e-8, ls=":", c="r", label="test tolerance")
+    ax.set(yscale="log", ylabel="relative error", title="dlqr implicit vs direct gradients (n=20, m=5, T=30)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out_dir / "dlqr_gradients.png", dpi=150)
+    plt.close(fig)
+    print(f"dlqr gradients: {errs}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--skip-grid", action="store_true", help="skip the (slow) dimension-grid heat-map")
@@ -244,6 +374,9 @@ def main():
     control_problems(out_dir, summary)
     ocaml_comparison(out_dir, summary)
     gradients(out_dir, summary)
+    gradient_methods(out_dir, summary)
+    ocaml_gradients(out_dir, summary)
+    dlqr_gradients(out_dir, summary)
     if not args.skip_grid:
         kkt_grid(out_dir, summary)
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

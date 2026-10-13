@@ -119,6 +119,13 @@ def rnn_problem(n: int = 8, m: int = 3, horizon: int = 30, seed: int = 7):
     return model, iLQRParams(x0=jr.normal(k3, (n,)), theta=theta)
 
 
+def linear_rnn_problem(n: int = 8, m: int = 3, horizon: int = 30, seed: int = 7):
+    """rnn_problem with linear dynamics x' = Uh x + Wh u: the Gauss-Newton and exact implicit gradients coincide"""
+    model, params = rnn_problem(n, m, horizon, seed)
+    model = System(model.cost, model.costf, lambda t, x, u, th: 0.5 * th.Uh @ x + th.Wh @ u, model.dims)
+    return model, params
+
+
 def ocaml_pendulum(friction: float = 1.0, horizon: int = 2000):
     """
     Exact port of dilqr examples/pendulum.ml: Euler-discretised pendulum with dt=5e-3.
@@ -154,19 +161,21 @@ def vanilla_rnn_params(n: int = 20, m: int = 5, horizon: int = 50, seed: int = 1
     return {"W": W, "B": B, "x0": x0, "target": target}
 
 
-def vanilla_rnn(n: int = 20, m: int = 5, horizon: int = 50, seed: int = 11):
+def vanilla_rnn(n: int = 20, m: int = 5, horizon: int = 50, seed: int = 11, linear: bool = False):
     """
     Vanilla tanh RNN x' = tanh(W x + B u) tracking phase-shifted sinusoids.
 
-    Running loss |x - target_t|^2 + 0.1 |u|^2, final loss |x|^2. Mirrors examples/rnn_ref.ml.
+    Running loss |x - target_t|^2 + 0.1 |u|^2, final loss |x|^2. Mirrors examples/rnn_ref.ml and
+    examples/rnn_grad_ref.ml; ``linear`` drops the tanh (rnn_grad_ref.ml -linear).
     """
+    act = (lambda z: z) if linear else jnp.tanh
     p = vanilla_rnn_params(n, m, horizon, seed)
     target = jnp.asarray(p["target"])
     theta = Theta(Uh=jnp.asarray(p["W"]), Wh=jnp.asarray(p["B"]), sigma=jnp.zeros(n), Q=target)
     model = System(
         lambda t, x, u, th: jnp.sum((x - th.Q[t]) ** 2) + 0.1 * jnp.sum(u**2),
         lambda x, th: jnp.sum(x**2),
-        lambda t, x, u, th: jnp.tanh(th.Uh @ x + th.Wh @ u),
+        lambda t, x, u, th: act(th.Uh @ x + th.Wh @ u),
         ModelDims(horizon=horizon, n=n, m=m, dt=0.1),
     )
     return model, iLQRParams(x0=jnp.asarray(p["x0"]), theta=theta)
