@@ -1,7 +1,7 @@
 .. _lqr_api:
 
-LQR
-===
+LQR (sequential)
+================
 
 .. automodule:: diffilqrax.lqr
    :members:

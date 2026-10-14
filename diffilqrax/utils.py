@@ -31,7 +31,7 @@ def initialise_stable_dynamics(
     key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
 ) -> Array:
     """
-    Generate a state matrix with stable dynamics (|eigenvalues| < 1) discrete dynamics.
+    Generate a state matrix with stable dynamics (all eigenvalues inside the unit circle) discrete dynamics.
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ def initialise_stable_time_varying_dynamics(
     key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
 ) -> Array:
     """
-    Generate a state matrix with stable dynamics (|eigenvalues| < 1).
+    Generate a state matrix with stable dynamics (all eigenvalues inside the unit circle).
 
     Parameters
     ----------

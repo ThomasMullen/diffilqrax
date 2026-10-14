@@ -77,6 +77,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
+docs/build/
 docs/_build/
 
 # PyBuilder
@@ -168,3 +169,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 CLAUDE.md
+
+# local-only reference fixture generators (fixtures themselves are tracked)
+benchmarks/make_ocaml_fixtures.py
+benchmarks/make_pdilqr_fixtures.py

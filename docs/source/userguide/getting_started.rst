@@ -3,139 +3,181 @@
 Getting started
 ===============
 
-
 Installation
 ------------
 
-To get started with this code, clone the repository and install the required dependencies. Then, you can run the main script to see the iLQR in action.
+diffilqrax needs Python 3.10 or later and depends only on ``jax``, ``numpy`` and ``jaxopt``.
+To install from a local clone with ``pip``:
 
 .. code-block:: bash
 
    git clone git@github.com:ThomasMullen/diffilqrax.git
    cd diffilqrax
-   python -m build
-   pip install -e .
+   pip install -e .              # library only
+   pip install -e ".[dev]"       # + test and lint tools
+   pip install -e ".[doc]"       # + documentation tools
 
-or, you can import from pip install
-
-.. code-block:: bash
-
-   pip install diffilqrax
-
-Dependencies
-^^^^^^^^^^^^
-diffiLQRax requires Python 3.10 or later. 
-It is built on top of JAX so the minimum requirements are:
+Or with `uv <https://docs.astral.sh/uv/>`_, which uses the committed ``uv.lock``:
 
 .. code-block:: bash
 
-    build
-    numpy
-    jax
-    jaxopt
-    chex
-    pytest
-    matplotlib
+   uv sync --extra dev            # creates .venv with the locked dependencies
+   uv run pytest tests/ -m "not slow"
 
+For GPU support, install the matching ``jax`` build first, as described in the
+`JAX installation guide <https://docs.jax.dev/en/latest/installation.html>`_.
 
-Quickstart
+.. note::
+
+   Importing a diffilqrax solver turns on JAX double precision (``jax_enable_x64``). The
+   default tolerances, for example ``kkt_tol=1e-10``, assume float64.
+
+Core types
 ----------
 
-Here is a simple example of how to use the LQR and iLQR solvers:
+All problem data is held in the small ``NamedTuple`` containers defined in :mod:`diffilqrax.typs`:
 
-.. code-block:: Python
+``ModelDims(n, m, horizon, dt)``
+    State dimension, input dimension, number of time steps :math:`T`, and the time step.
+
+``LQR(A, B, a, Q, q, R, r, S, Qf, qf)``
+    A time-varying LQR problem. The time-varying terms are stacked along a leading axis of length
+    :math:`T`: ``A`` has shape ``(T, n, n)``, ``B`` has shape ``(T, n, m)`` and ``S`` has shape
+    ``(T, n, m)``. The terminal terms ``Qf`` and ``qf`` have no time axis.
+
+``LQRParams(x0, lqr)``
+    Initial state and the ``LQR`` problem.
+
+``System(cost, costf, dynamics, dims)``
+    A non-linear problem. Every function takes the parameters ``theta`` as its last argument:
+    ``cost(t, x, u, theta)``, ``costf(x, theta)`` and ``dynamics(t, x, u, theta)``, which returns
+    :math:`x_{t+1}`. Derivatives are taken with JAX automatic differentiation.
+
+``iLQRParams(x0, theta)``
+    Initial state and an arbitrary pytree of parameters. Gradients are taken with respect to this
+    pytree.
+
+Solving an LQR problem
+----------------------
+
+This example drives a double integrator to the origin:
+
+.. code-block:: python
 
     import jax.numpy as jnp
-    from diffilqrax.typs import LQRParams
-    from diffilqrax import lqr
+    from diffilqrax.typs import LQR, LQRParams, ModelDims
+    from diffilqrax.lqr import solve_lqr
 
-    # Set-up LQR params e.g. cost & dynamics matrices
-    lqr_params = LQRParams(x_init=jnp.zeros(3), lqr=mat_params)
+    dims = ModelDims(n=2, m=1, horizon=50, dt=0.1)
+    T, n, m = dims.horizon, dims.n, dims.m
 
-    # Solve LQR problem
-    opt_xs, opt_us, opt_adjoints = lqr.solve(lqr_params)
+    A = jnp.array([[1.0, dims.dt], [0.0, 1.0]])
+    B = jnp.array([[0.0], [dims.dt]])
+    lqr = LQR(
+        A=jnp.tile(A, (T, 1, 1)), B=jnp.tile(B, (T, 1, 1)), a=jnp.zeros((T, n)),
+        Q=jnp.tile(jnp.eye(n), (T, 1, 1)), q=jnp.zeros((T, n)),
+        R=jnp.tile(0.1 * jnp.eye(m), (T, 1, 1)), r=jnp.zeros((T, m)),
+        S=jnp.zeros((T, n, m)),
+        Qf=10.0 * jnp.eye(n), qf=jnp.zeros(n),
+    )
+    params = LQRParams(x0=jnp.array([1.0, 0.0]), lqr=lqr)
 
-To use the differentiable solver, import :code:`diff_lqr` instead of :code:`lqr`. 
-To see the different available solvers, refer to the :doc:`design_principles`.
+    Xs, Us, lambdas = solve_lqr(params)   # shapes (T+1, n), (T, m), (T+1, n)
 
-.. code-block:: Python
+:func:`diffilqrax.plqr.solve_plqr` takes the same arguments and returns the same solution, computed
+with an associative scan.
 
-    import jax.numpy as jnp
-    import jax.random as jr
-    from diffilqrax import ilqr
-    from diffilqrax.typs import iLQRParams, Theta, ModelDims, System
-    from diffilqrax.utils import initialise_stable_dynamics, keygen
-    
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 5)
+Solving a non-linear problem with iLQR
+--------------------------------------
 
-    # Define model dimensionality
-    dims = ModelDims(8, 2, 100, dt=0.1)
+This example swings a pendulum up to :math:`\theta = \pi`:
 
-    # Define model parameters
-    Uh = initialise_stable_dynamics(next(skeys), dims.n, dims.horizon, 0.6)[0]
-    Wh = jr.normal(next(skeys), (dims.n, dims.m))
-    theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n), Q=jnp.eye(dims.n))
-    params = iLQRParams(x0=jr.normal(next(skeys), dims.n), theta=theta)
-    
-    # Initialise control sequence
-    Us = jnp.zeros((dims.horizon, dims.m))
+.. code-block:: python
 
-    # Define linesearch hyper-parameters
-    ls_kwargs = {
-        "beta":0.8,
-        "max_iter_linesearch":16,
-        "tol":1e0,
-        "alpha_min":0.0001,
-        }
+    from diffilqrax.typs import System, iLQRParams, PendulumParams
+    from diffilqrax.ilqr import ilqr_solver
 
-    # Set-up problem
-    def cost(t, x, u, theta):
-        return jnp.sum(x**2) + jnp.sum(u**2)
-
-    def costf(x, theta):
-        return jnp.sum(x**2)
+    dims = ModelDims(n=2, m=1, horizon=100, dt=0.05)
 
     def dynamics(t, x, u, theta):
-        return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+        angle, vel = x
+        acc = -theta.g / theta.l * jnp.sin(angle) + u[0] / (theta.m * theta.l**2)
+        return jnp.array([angle + dims.dt * vel, vel + dims.dt * acc])
+
+    def cost(t, x, u, theta):
+        return 0.01 * jnp.sum(u**2)
+
+    def costf(x, theta):
+        return 10.0 * ((x[0] - jnp.pi) ** 2 + x[1] ** 2)
 
     model = System(cost, costf, dynamics, dims)
+    params = iLQRParams(x0=jnp.zeros(2), theta=PendulumParams(m=1.0, l=1.0, g=9.81))
+    Us_init = jnp.zeros((dims.horizon, dims.m))
 
-    # Solve problem
-    (opt_xs, opt_us, opt_adjoints), total_cost = ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
+    (Xs, Us, lambdas), total_cost, cost_history = ilqr_solver(
+        model, params, Us_init, max_iter=200, kkt_tol=1e-6
+    )
 
-Build Documentation
--------------------
+The main options are:
 
-To build documentation on local device,
+- ``kkt_tol``: the solver stops when :math:`\max_t |\partial L / \partial u_t|` is below this value.
+- ``max_iter``: the maximum number of outer iterations.
+- line-search keyword arguments for :func:`~diffilqrax.ilqr.armijo_linesearch`: ``tau``, ``beta``,
+  ``alpha_min`` and ``max_iter_linesearch``.
+
+Regularisation of the input Hessian is adaptive, so it needs no tuning.
+
+Differentiating through the solver
+----------------------------------
+
+:func:`diffilqrax.diff_ilqr.dilqr` solves the same problem and returns
+:math:`\tau = [x_t, u_t]` as an array of shape ``(T+1, n+m)``. It defines a custom VJP, so
+``jax.grad`` gives exact implicit gradients with respect to ``x0`` and every leaf of ``theta``.
+JAX does not backpropagate through the solver iterations.
+
+.. code-block:: python
+
+    import jax
+    from diffilqrax.diff_ilqr import dilqr
+
+    def loss(theta):
+        tau = dilqr(model, iLQRParams(x0=jnp.zeros(2), theta=theta), Us_init, max_iter=200, kkt_tol=1e-6)
+        return jnp.sum(tau[:, dims.n:] ** 2)   # control effort of the optimal solution
+
+    grads = jax.grad(loss)(params.theta)       # a PendulumParams of gradients
+
+For LQR problems, :func:`diffilqrax.diff_lqr.dlqr` does the same job: ``dlqr(dims, params, None)``.
+
+Parallel solvers
+----------------
+
+:func:`diffilqrax.parallel_ilqr.pilqr_solver` and :func:`diffilqrax.parallel_dilqr.pdilqr` are
+drop-in replacements for ``ilqr_solver`` and ``dilqr``. They give the same solution, but the
+Riccati recursion becomes an associative scan:
+
+.. code-block:: python
+
+    from diffilqrax.parallel_ilqr import pilqr_solver
+
+    (Xs, Us, _), J, _ = pilqr_solver(model, params, Us_init, max_iter=200, kkt_tol=1e-6)
+
+With ``rollout="parallel"``, the non-linear rollout is also replaced, by multiple shooting, so each
+iteration has :math:`O(\log T)` depth. This is worthwhile on a GPU with long horizons. On a CPU the
+sequential solvers are usually faster. See :doc:`../examples/parallel_solvers` for a comparison.
+
+Next steps
+----------
+
+- :doc:`../examples/index` has worked notebooks, each ending with a *How to adapt* section.
+- :doc:`design_principles` gives an overview of the modules.
+- ``examples/`` in the repository has standalone scripts, such as the pendulum swing-up and a
+  4000-step tracking problem.
+
+Building the documentation locally
+----------------------------------
 
 .. code-block:: bash
 
-    cd doc
-    sphinx-build -b html ./source ./build
-
-This requires the following dependencies in additional to the :code:requirement_dev.txt :
-
-Documentation dependencies:
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: bash
-
-    sphinx
-    sphinx-autodoc-typehints
-    sphinx-gallery
-    pydata-sphinx-theme
-    sphinx_design
-    pydata-sphinx-theme
-    sphinx-autobuild
-    sphinx-autoapi
-    sphinxcontrib-video
-    sphinxcontrib-jupyter
-    sphinx-togglebutton
-    sphinx-tabs
-    sphinxcontrib-bibtex
-    numpydoc
-    nbsphinx
-
-Once you have installed these dependencies, you can build the documentation by running:
-
+   pip install -e ".[doc]"        # also needs the pandoc executable, e.g. brew install pandoc
+   make -C docs html              # or: sphinx-build -b html docs/source docs/build/html
+   open docs/build/html/index.html

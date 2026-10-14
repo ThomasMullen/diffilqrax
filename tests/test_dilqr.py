@@ -8,7 +8,6 @@ from pathlib import Path
 import chex
 import jax
 from jax import Array
-from jax import tree_map
 import jax.random as jr
 import jax.numpy as jnp
 import numpy as onp

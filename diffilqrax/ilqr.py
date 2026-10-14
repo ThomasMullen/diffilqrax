@@ -33,7 +33,7 @@ MU_MIN = 1e-6
 
 def increase_regularisation(delta: Array, mu: Array) -> Tuple[Array, Array]:
     """
-    Increase Levenberg-Marquardt regularisation, as in OCaml ``Regularisation.increase``.
+    Increase Levenberg-Marquardt regularisation: δ ← max(2, 2δ), μ ← max(μ_min, μδ).
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ def increase_regularisation(delta: Array, mu: Array) -> Tuple[Array, Array]:
 
 def decrease_regularisation(delta: Array, mu: Array) -> Tuple[Array, Array]:
     """
-    Decrease Levenberg-Marquardt regularisation, as in OCaml ``Regularisation.decrease``.
+    Decrease Levenberg-Marquardt regularisation: δ ← min(1/2, δ/2), μ ← μδ.
 
     Parameters
     ----------
@@ -407,8 +407,7 @@ def ilqr_solver(
 
     The non-linear system is approximated to be a local LQR problem. The optimal control gains are
     iteratively added to the x and u perturbations until the KKT conditions are satisfied. The
-    control flow follows the OCaml ``dilqr`` implementation: the input Hessian is regularised
-    with an adaptive Levenberg-Marquardt term until positive definite, and the step size is
+    input Hessian is regularised with an adaptive Levenberg-Marquardt term until positive definite, and the step size is
     chosen by an Armijo backtracking line search (see :func:`armijo_linesearch`). A rejected
     step increases the regularisation and retries; an accepted step decreases it.
 
@@ -421,7 +420,7 @@ def ilqr_solver(
     Us_init : Array
         The initial control trajectory.
     max_iter : int, optional
-        The maximum number of iterations, by default 100. The OCaml step schedule (first trial
+        The maximum number of iterations, by default 100. The default step schedule (first trial
         α = tau * alpha_init = 0.5) converges linearly at first, so harder problems may need more.
     convergence_thresh : float, optional
         Deprecated and ignored; convergence is determined by ``kkt_tol``.
@@ -466,7 +465,7 @@ def ilqr_solver(
     rollout = partial(ilqr_forward_pass, model, params)
 
     def backward_with_reg(lqr_params: LQR, delta: Array, mu: Array):
-        """backward pass, increasing mu until Huu_reg is positive definite (OCaml lqr.ml)"""
+        """backward pass, increasing mu until Huu_reg is positive definite"""
         dJ, gains, is_pd = lqr.regularised_backward_pass(lqr_params, mu)
 
         def reg_step(carry, _):
@@ -560,7 +559,7 @@ def armijo_linesearch(
     max_iter_linesearch: Optional[int] = None,
 ) -> Tuple[Array, Tuple[Array, Array], Array]:
     """
-    Armijo backtracking line search, following OCaml ``Linesearch.backtrack``.
+    Armijo backtracking line search.
 
     Step sizes α = tau * alpha_init, tau^2 * alpha_init, ... are tried until the cost reduction
     exceeds ``beta`` times the expected reduction, or α drops below ``alpha_min``. The expected

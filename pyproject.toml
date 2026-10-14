@@ -3,7 +3,7 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-dynamic = ["dependencies", "optional-dependencies", "version"]
+dynamic = ["version"]
 name = "diffilqrax"
 authors = [
   { name="Thomas Soares Mullen", email="thomasmullen96@gmail.com" },
@@ -13,7 +13,12 @@ description = "Differentiable iLQR algorithm for dynamical systems"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
-keywords = ["lqr", "ilqr", "optimal control", "Optimal Control", "kalman"]
+keywords = ["lqr", "ilqr", "optimal control", "differentiable control", "jax"]
+dependencies = [
+  "jax>=0.4.25",
+  "numpy",
+  "jaxopt",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   # Indicate who your project is intended for
@@ -28,20 +33,49 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3 :: Only",
 ]
 
 [tool.setuptools]
 packages = ["diffilqrax"]
 
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "chex",
+  "scipy",
+  "matplotlib",
+  "black",
+  "pylint",
+  "build",
+]
+doc = [
+  "sphinx>=7",
+  "pydata-sphinx-theme",
+  "sphinx-autodoc-typehints",
+  "sphinx-gallery",
+  "sphinx-design",
+  "nbsphinx",
+  "ipykernel",
+  "matplotlib",
+  "optax",  # used by the gradient-descent comparison notebook
+]
+
 [tool.setuptools.dynamic]
 version = {file = "diffilqrax/VERSION"}
-dependencies = {file = ["requirements.txt"]}
-optional-dependencies = { dev = { file = ["requirements_dev.txt"] }, doc = { file = ["requirements_doc.txt"] } }
+
+[tool.setuptools.package-data]
+diffilqrax = ["VERSION"]
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
 "Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax/issues"
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["fig_dump", ".*", "venv", "build", "dist"]
 markers = ["slow: large-dimension tests (deselect with '-m \"not slow\"')"]
+
+[tool.black]
+line-length = 127

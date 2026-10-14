@@ -6,9 +6,17 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.abspath("../.."))
+
 project = 'diffilqrax'
-copyright = '2024, Thomas Soares Mullen & Marine Schimel'
+copyright = '2024-2026, Thomas Soares Mullen & Marine Schimel'
 author = 'Thomas Soares Mullen & Marine Schimel'
+release = (Path(__file__).resolve().parents[2] / "diffilqrax" / "VERSION").read_text().strip()
+version = release
 
 
 # -- General configuration ---------------------------------------------------
@@ -38,7 +46,21 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = []
+exclude_patterns = ["build", "**.ipynb_checkpoints"]
+
+# notebooks are stored with their outputs; the docs build never executes them
+nbsphinx_execute = "never"
+
+autodoc_member_order = "bysource"
+napoleon_numpy_docstring = True
+napoleon_google_docstring = False
+napoleon_use_ivar = True  # NamedTuple fields are already documented by autodoc
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "jax": ("https://docs.jax.dev/en/latest/", None),
+}
 
 
 
@@ -54,14 +76,13 @@ html_theme_options = {
         "image_dark": "./_static/images/diffilqrax_logo_dm2_short2.png",
         "image_light": "./_static/images/diffilqrax_logo_dm2_short.png",
    },
-   # GitHub link in header
-    # "icon_links": [
-    #     {
-    #         "name": "GitHub",
-    #         "url": "https://github.com/ThomasMullen/diffilqrax",
-    #         "icon": "fa-brands fa-github",
-    #     }
-    # ],
+   "icon_links": [
+       {
+           "name": "GitHub",
+           "url": "https://github.com/ThomasMullen/diffilqrax",
+           "icon": "fa-brands fa-github",
+       }
+   ],
    # Navigation bar links
     # "navbar_links": [
     #     {"name": "Getting started", "url": "userguide/getting_started"},

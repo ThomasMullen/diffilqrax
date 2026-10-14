@@ -1,6 +1,5 @@
-
-Diffilqrax types
-================
+Data types
+==========
 
 .. automodule:: diffilqrax.typs
    :members:

@@ -1,6 +1,5 @@
-
-iLQR
-===============
+iLQR (sequential)
+=================
 
 .. automodule:: diffilqrax.ilqr
    :members:

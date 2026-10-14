@@ -1,4 +1,4 @@
-![DiffiLQRax logo](./doc/source/_static/images/diffilqrax_logo_banner_dm.png)
+![DiffiLQRax logo](./docs/source/_static/images/diffilqrax_logo_banner_dm.png)
 
 
 ![Pylint](https://github.com/ThomasMullen/diffilqrax/actions/workflows/pylint.yml/badge.svg)
@@ -11,74 +11,100 @@
 
 # Diffilqrax: Differentiable optimal control
 
-## Diffilqrax: What is it?
+## What is it?
 
-This repository contains an implementation of the iterative Linear Quadratic Regulator (iLQR) using the JAX library. The iLQR is a powerful algorithm used for optimal control, and this implementation is designed to be fully differentiable.
+Diffilqrax is a JAX library for LQR and iterative LQR (iLQR) optimal control. It provides:
 
-## Getting Started
+- **Sequential and parallel solvers.** The sequential solvers use a Riccati recursion
+  (`lqr.solve_lqr`, `ilqr.ilqr_solver`). The parallel solvers use an associative scan with
+  O(log T) depth (`plqr.solve_plqr`, `parallel_ilqr.pilqr_solver`).
+- **Robust iLQR.** It uses adaptive Levenberg–Marquardt regularisation and an Armijo line search,
+  and stops based on the KKT conditions.
+- **Exact implicit gradients.** `diff_lqr.dlqr`, `diff_ilqr.dilqr` and their parallel versions
+  `pdlqr` and `pdilqr` define custom VJPs, so `jax.grad` differentiates the optimal trajectory
+  with respect to the dynamics and cost parameters without backpropagating through the solver
+  iterations.
 
-To get started with this code, clone the repository and install the required dependencies. Then, you can run the main script to see the iLQR in action.
+## Installation
+
+From a local clone, with pip:
 
 ```bash
 git clone git@github.com:ThomasMullen/diffilqrax.git
 cd diffilqrax
-python -m build
-pip install -e .
+pip install -e .            # library
+pip install -e ".[dev]"     # + tests and linting
+pip install -e ".[doc]"     # + documentation
 ```
 
-or, you can import from pip install
+or with [uv](https://docs.astral.sh/uv/), using the committed `uv.lock`:
 
 ```bash
-pip install diffilqrax
+uv sync --extra dev
+uv run pytest tests/ -m "not slow"
 ```
 
-### Quick example
+Importing diffilqrax enables JAX double precision (`jax_enable_x64`).
+
+## Quick example
+
+This example swings a pendulum up from hanging down to upright:
 
 ```python
 import jax.numpy as jnp
-import jax.random as jr
-from diffilqrax import ilqr
-from diffilqrax.typs import iLQRParams, Theta, ModelDims, System
-from diffilqrax.utils import initialise_stable_dynamics, keygen
+from diffilqrax.ilqr import ilqr_solver
+from diffilqrax.diff_ilqr import dilqr
+from diffilqrax.typs import System, ModelDims, iLQRParams, PendulumParams
 
-dims = ModelDims(8, 2, 100, dt=0.1)
+dims = ModelDims(n=2, m=1, horizon=100, dt=0.05)
 
-key = jr.PRNGKey(seed=234)
-key, skeys = keygen(key, 5)
+def dynamics(t, x, u, theta):          # x = [angle, angular velocity]
+    acc = -theta.g / theta.l * jnp.sin(x[0]) + u[0] / (theta.m * theta.l**2)
+    return x + dims.dt * jnp.stack([x[1], acc])
 
-Uh = initialise_stable_dynamics(next(skeys), dims.n, dims.horizon, 0.6)[0]
-Wh = jr.normal(next(skeys), (dims.n, dims.m))
-theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(dims.n), Q=jnp.eye(dims.n))
-params = iLQRParams(x0=jr.normal(next(skeys), dims.n), theta=theta)
-Us = jnp.zeros((dims.horizon, dims.m))   
-# define linesearch hyper parameters
-ls_kwargs = {
-    "beta":0.8,
-    "max_iter_linesearch":16,
-    "tol":1e0,
-    "alpha_min":0.0001,
-    }
 def cost(t, x, u, theta):
-    return jnp.sum(x**2) + jnp.sum(u**2)
+    return 0.01 * jnp.sum(u**2)
 
 def costf(x, theta):
-    return jnp.sum(x**2)
-
-def dynamics(t, x, u, theta):
-    return jnp.tanh(theta.Uh @ x + theta.Wh @ u)
+    return 10.0 * ((x[0] - jnp.pi) ** 2 + x[1] ** 2)
 
 model = System(cost, costf, dynamics, dims)
-ilqr.ilqr_solver(params, model, Us, **ls_kwargs)
+params = iLQRParams(x0=jnp.zeros(2), theta=PendulumParams(m=1.0, l=1.0, g=9.81))
+Us_init = jnp.zeros((dims.horizon, dims.m))
+
+(Xs, Us, lambdas), total_cost, cost_history = ilqr_solver(model, params, Us_init, max_iter=200)
+
+# differentiable version: tau = [x_t, u_t], with implicit gradients w.r.t. params
+tau = dilqr(model, params, Us_init, max_iter=200)
+```
+
+More examples are in the documentation notebooks (`docs/source/examples/`) and in `examples/`.
+
+## Documentation
+
+Build the docs locally (this also needs `pandoc`, for example `brew install pandoc`):
+
+```bash
+pip install -e ".[doc]"
+make -C docs html
+open docs/build/html/index.html
+```
+
+## Tests
+
+```bash
+pytest tests/ -m "not slow"   # fast suite
+pytest tests/ -m slow          # large-dimension tests
 ```
 
 ## Design principle
 
-![DiffiLQRax Deisgn Principle](./doc/source/_static/images/diffilqrax_design_principle.png)
+![DiffiLQRax Deisgn Principle](./docs/source/_static/images/diffilqrax_design_principle.png)
 
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the Apache License 2.0. See the LICENSE file for details.
 
 ## Acknowledgments
 

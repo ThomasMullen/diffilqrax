@@ -187,7 +187,7 @@ def project_psd(mat: Array, delta: float = 0.0) -> Array:
 
 def project_psd_lqr(lqr: LQR, delta: float = 1e-6, which: str = "full") -> LQR:
     """
-    Convexify the local LQR stage by stage, as in ``primal_dual_ilqr.optimizers.regularize``. R is
+    Convexify the local LQR stage by stage. R is
     projected to eigenvalues ≥ δ and, if ``which == "full"``, the Schur complement Q - S R⁻¹Sᵀ and Qf
     too. The fully projected problem is a strictly convex LQR, so every element of the associative scan
     is valid and every Huu is positive definite without retries. Linear terms are untouched, so the

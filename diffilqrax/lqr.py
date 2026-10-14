@@ -165,8 +165,7 @@ def regularised_backward_pass(
     """
     LQR backward pass with Levenberg-Marquardt regularisation of the input Hessian.
 
-    Follows the OCaml ``dilqr`` backward pass: only ``Huu`` is regularised,
-    ``Huu_reg = Huu + mu B^T B``. The value function update uses the full form so it stays
+    Only ``Huu`` is regularised, ``Huu_reg = Huu + mu B^T B``. The value function update uses the full form so it stays
     consistent with the regularised gains, and the expected change in cost uses the
     unregularised ``Huu`` (Tassa et al., 2012). With ``mu=0`` this is the exact LQR solution.
 

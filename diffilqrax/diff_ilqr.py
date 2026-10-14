@@ -81,8 +81,7 @@ def dilqr(model: System, params: iLQRParams, Us_init: Array, exact_hessian: bool
     exact_hessian : bool, optional
         If True (default), the implicit gradients use the Hessian of the Lagrangian, including
         the dynamics curvature λ^T ∇²f, and match direct differentiation. If False, only the cost
-        Hessians are used (Gauss-Newton), as in the OCaml ``dilqr`` implementation with
-        ``~fixed_trajectory:true``; this is exact only for linear dynamics.
+        Hessians are used (Gauss-Newton); this is cheaper but exact only for linear dynamics.
     **kwargs
         Additional keyword arguments for the iLQR solver.
 

@@ -1,4 +1,3 @@
-
 Differentiable LQR
 ==================
 
