@@ -2,7 +2,7 @@
 Module contains functions for solving the differential linear quadratic regulator (DLQR) problem.
 """
 
-from typing import Tuple
+from typing import Callable, Tuple
 from functools import partial
 from jax import Array, custom_vjp
 import jax.numpy as jnp
@@ -58,7 +58,11 @@ def offset_lqr(lqr: LQR, x_stars: Array, u_stars: Array) -> LQR:
 
 
 def _get_qra_bar(
-    dims: ModelDims, params: LQRParams, tau_bar: Array, tau_bar_f: Array
+    dims: ModelDims,
+    params: LQRParams,
+    tau_bar: Array,
+    tau_bar_f: Array,
+    solve_swap_x0: Callable[[LQRParams], Tuple[Array, Array, Array]] = solve_lqr_swap_x0,
 ) -> Tuple[Array, Array, Array]:
     """
     Helper function to get gradients wrt to q, r, a. Variables q_bar, r_bar, a_bar from solving the
@@ -74,6 +78,9 @@ def _get_qra_bar(
         The tau_bar array.
     tau_bar_f : Array
         The tau_bar_f array.
+    solve_swap_x0 : Callable, optional
+        Solver of the reverse LQR problem with x0 = 0, returning (Xs, Us, Lambs), by default the
+        sequential :func:`diffilqrax.lqr.solve_lqr_swap_x0`.
 
     Returns
     -------
@@ -96,7 +103,7 @@ def _get_qra_bar(
         S=lqr.S,
     )
     swapped_params = LQRParams(params.x0, swapped_lqr)
-    q_bar, r_bar, a_bar = solve_lqr_swap_x0(swapped_params)
+    q_bar, r_bar, a_bar = solve_swap_x0(swapped_params)
     return (
         q_bar,
         jnp.r_[
@@ -113,7 +120,12 @@ def _get_qra_bar(
 
 
 def build_ajoint_lqr(
-    dims: ModelDims, params: LQRParams, tau_star: Array, lambs: Array, tau_bar: Array
+    dims: ModelDims,
+    params: LQRParams,
+    tau_star: Array,
+    lambs: Array,
+    tau_bar: Array,
+    solve_swap_x0: Callable[[LQRParams], Tuple[Array, Array, Array]] = solve_lqr_swap_x0,
 ) -> Array:
     """
     Helper function to build LQR problem with reverse gradients.
@@ -130,20 +142,18 @@ def build_ajoint_lqr(
         The adjoint variables.
     tau_bar : Array
         The gradients with respect to tau.
+    solve_swap_x0 : Callable, optional
+        Solver of the reverse LQR problem (see :func:`_get_qra_bar`), by default sequential.
 
     Returns
     -------
     LQRParams
         The LQR parameters with reverse gradients.
     """
-    q_bar, r_bar, a_bar = _get_qra_bar(dims, params, tau_bar[:-1], tau_bar[-1])
+    q_bar, r_bar, a_bar = _get_qra_bar(dims, params, tau_bar[:-1], tau_bar[-1], solve_swap_x0)
     c_bar = jnp.concatenate([q_bar, r_bar], axis=1)
-    F_bar = jnp.einsum("ij,ik->ijk", a_bar[1:], tau_star[:-1]) + jnp.einsum(
-        "ij,ik->ijk", lambs[1:], c_bar[:-1]
-    )
-    C_bar = symmetrise_tensor(
-        jnp.einsum("ij,ik->ijk", c_bar, tau_star)
-    )  # factor of 2 included in symmetrization
+    F_bar = jnp.einsum("ij,ik->ijk", a_bar[1:], tau_star[:-1]) + jnp.einsum("ij,ik->ijk", lambs[1:], c_bar[:-1])
+    C_bar = symmetrise_tensor(jnp.einsum("ij,ik->ijk", c_bar, tau_star))  # factor of 2 included in symmetrization
     Q_bar, R_bar = C_bar[:, : dims.n, : dims.n], C_bar[:, dims.n :, dims.n :]
     S_bar = 2 * C_bar[:, : dims.n, dims.n :]
     A_bar, B_bar = F_bar[..., : dims.n], F_bar[..., dims.n :]
@@ -223,23 +233,23 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     r"""
     Reverse mode for DLQR. Find the reverse gradient by solving LQR problem on the optimal
     trajectory and the gradients wrt to tau_star.
-    
+
     Notes
     -----
-    :math:`\overline{q}`, :math:`\overline{r}`, :math:`\overline{a}` from solving the reverse LQR 
-    problem where :math:`q_{\text{rev}} = \overline{x}`, :math:`r_{\text{rev}} = \overline{u}`, 
+    :math:`\overline{q}`, :math:`\overline{r}`, :math:`\overline{a}` from solving the reverse LQR
+    problem where :math:`q_{\text{rev}} = \overline{x}`, :math:`r_{\text{rev}} = \overline{u}`,
     :math:`a_{\text{rev}} = \overline{\lambda}` which is set to 0.
-    
-    Use :func:`build_ajoint_lqr` to build the reverse LQR problem with gradients. Where 
-    :math:`\overline{c} = [\overline{q}, \overline{r}]`, :math:`\overline{F}`, 
+
+    Use :func:`build_ajoint_lqr` to build the reverse LQR problem with gradients. Where
+    :math:`\overline{c} = [\overline{q}, \overline{r}]`, :math:`\overline{F}`,
     where :math:`F = [A, B]`, and :math:`\overline{C}` (where :math:`C = [Q, R]`) as,
-    
+
     .. math::
-    
+
         \overline{C} = 0.5 \left( \overline{c} \tau_{\star}^{T} + \tau_{\star} \overline{c}^T \right)
-    
+
     .. math::
-    
+
         \overline{F}_t = \lambda_{\star_{t+1}} \overline{c}^T + f_{t+1} \tau_{\star_t}^T
 
 
@@ -248,7 +258,7 @@ def rev_dlqr(dims: ModelDims, res, tau_bar) -> LQRParams:
     dims : ModelDims
         The dimensions of the model.
     res : Tuple[LQRParams, Tuple[Array, Array, Array]]
-        The result from the forward pass, that is, the tuple of LQR gradients and optimal tau 
+        The result from the forward pass, that is, the tuple of LQR gradients and optimal tau
         gradients.
     tau_bar : Array
         The gradients with respect to tau.

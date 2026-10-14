@@ -1,154 +1,136 @@
 """
-Unit tests for the differentiable iLQR solver
+Gradients of the differentiable parallel iLQR solver (pdilqr), for both adjoint solvers, against the
+sequential dilqr (itself validated against direct differentiation in test_gradients.py).
+
+pilqr_solver integrates a linearisation of the dynamics, so it only converges to the solution of the
+non-linear problem when the dynamics are linear. pdilqr is compared end-to-end on linear dynamics with
+non-quadratic costs; for non-linear dynamics the implicit-gradient path (Lagrangian Hessians and the parallel
+adjoint LQR) is checked on the ilqr solution through pdllqr.
 """
 
-import unittest
+import pytest
 import chex
 import jax
-from jax import Array
-import jax.random as jr
 import jax.numpy as jnp
-import numpy as onp
+import jax.random as jr
+from jax.test_util import check_grads
 
-from diffilqrax.parallel_dilqr import parallel_dilqr
-from diffilqrax.parallel_ilqr import pilqr_solver
-from diffilqrax.exact import quad_solve, exact_solve
-from diffilqrax.utils import keygen
-from diffilqrax.typs import (
-    iLQRParams,
-    System,
-    ParallelSystem,
-    ModelDims,
-    Thetax0,
-    Theta,
+from diffilqrax.typs import LQRParams
+from diffilqrax.ilqr import ilqr_solver, approx_lqr_offset
+from diffilqrax.diff_ilqr import dilqr, add_dynamics_curvature
+from diffilqrax.parallel_dilqr import pdilqr
+from diffilqrax.parallel_dlqr import pdllqr
+from problems import (
+    NONCONVEX_COSTS,
+    linear_nonconvex_problem,
+    linear_rnn_problem,
+    rnn_problem,
+    pendulum_problem,
+    van_der_pol,
+    inverted_pendulum,
+    as_parallel,
 )
-from diffilqrax.parallel_ilqr import parallel_forward_lin_integration_ilqr, parallel_feedback_lin_dyn_ilqr
-
+from test_gradients import assert_grads_close
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
-jax.config.update("jax_enable_x64", True)  # double precision
-jax.config.update("jax_disable_jit", False)  # double precision
+jax.config.update("jax_enable_x64", True)
 
-PRINTING_ON = True
+MAX_ITER = 300
+ADJOINTS = ["parallel", "sequential"]
 
+LINEAR_PROBLEMS = {
+    **{kind: (lambda kind=kind: linear_nonconvex_problem(kind)) for kind in NONCONVEX_COSTS},
+    "linear_rnn": lambda: linear_rnn_problem(5, 3),
+}
 
-def is_jax_array(arr: Array) -> bool:
-    """validate jax array type"""
-    return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
-
-
-class TestPDILQR(unittest.TestCase):
-    """Test LQR dimensions and dtypes"""
-
-    def setUp(self):
-        key = jr.PRNGKey(seed=234)
-        key, skeys = keygen(key, 3)
-        n = 5
-        m = 3
-        self.n = n
-        self.m = m
-        dt = 0.1
-        Uh = (
-            jax.random.normal(key, (n, n)) * 0.5 / jnp.sqrt(n)
-        )  # jnp.array([[1, dt], [-1 * dt, 1 - 0.5 * dt]])
-        Wh = (
-            jax.random.normal(key, (n, m)) * 0.5 / jnp.sqrt(m)
-        )  # jnp.array([[0, 0], [1, 0]]) * dt
-        L = jax.random.normal(key, (n, n)) * 0.5 / jnp.sqrt(n)
-        Q = L @ L.T
-        # initialise params
-        self.theta = Thetax0(x0=jnp.zeros(n), Q=Q, Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)))
-        self.params = iLQRParams(x0=jnp.array([0.3, 0.0]), theta=self.theta)
-
-        # define model
-        def cost(t: int, x: Array, u: Array, theta: Theta):
-            x_tgt = jnp.ones(self.n)
-            return (
-                jnp.sum(
-                    (x.squeeze() - x_tgt.squeeze())
-                    @ Q
-                    @ (x.squeeze() - x_tgt.squeeze()).T
-                )
-                + jnp.sum(jnp.log(1 + u**2))
-            ) + 0.3 * jnp.sum(x**4)
-
-        def costf(x: Array, theta: Theta):
-            # return jnp.sum(jnp.abs(x))
-            return jnp.sum(x**2)
-
-        def dynamics(t: int, x: Array, u: Array, theta: Theta):
-            return theta.Uh @ x + theta.Wh @ u
-
-        self.model = System(
-            cost, costf, dynamics, ModelDims(horizon=50, n=n, m=m, dt=dt)
-        )
-        self.parallel_model = ParallelSystem(self.model, parallel_forward_lin_integration_ilqr, parallel_feedback_lin_dyn_ilqr)
-        self.dims = chex.Dimensions(T=50, N=n, M=m, X=1)
-        self.Us_init = 0.1 * jr.normal(
-            next(skeys), (self.model.dims.horizon, self.model.dims.m)
-        )
-        # define linesearch parameters
-        self.ls_kwargs = {
-            "beta": 0.5,
-            "max_iter_linesearch": 16,
-            "tol": 0.1,
-            "alpha_min": 0.00001,
-        }
-
-    def test_pdilqr(self):
-        """test grads and values of dilqr with implicit and direct differentiation"""
-        # @jax.jit
-        def implicit_loss(p):
-            theta = Theta(Q=p.Q, Uh=p.Uh, Wh=p.Wh, sigma=jnp.zeros((self.n)))
-            params = iLQRParams(x0=p.x0, theta=theta)
-            tau_star = parallel_dilqr(
-                self.parallel_model,
-                params,
-                self.Us_init,
-                max_iter=70,
-                convergence_thresh=1e-8,
-                alpha_init=1.0,
-                use_linesearch=True,
-                verbose=True,
-                **self.ls_kwargs,
-            )
-            Us_lqr = tau_star[:, self.model.dims.n :]
-            x_tgt = jnp.ones(self.n).squeeze()
-            Xs_lqr = tau_star[:, : self.model.dims.n].squeeze() - x_tgt
-            return jnp.linalg.norm(Xs_lqr) ** 2 + jnp.linalg.norm(Us_lqr) ** 2
-
-        implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(self.theta)
-        chex.assert_trees_all_equal_shapes_and_dtypes(implicit_g, self.theta)
-
-        def direct_loss(prms):
-            theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
-            x_tgt = jnp.ones(self.n).squeeze()
-            params = iLQRParams(x0=prms.x0, theta=theta)
-            (Xs_stars, Us_stars, Lambs_stars), total_cost, costs = pilqr_solver(
-                self.parallel_model,
-                params,
-                self.Us_init,
-                max_iter=70,
-                convergence_thresh=1e-8,
-                alpha_init=1.0,
-                use_linesearch=True,
-                verbose=False,
-                **self.ls_kwargs,
-            )
-            return (
-                jnp.linalg.norm(Us_stars) ** 2
-                + jnp.linalg.norm(Xs_stars.squeeze() - x_tgt.squeeze()) ** 2
-            )
-
-        direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
-        chex.assert_trees_all_equal_shapes_and_dtypes(direct_g, self.theta)
-        chex.assert_trees_all_close(direct_val, implicit_val, rtol=2e-1)
-        chex.assert_trees_all_close(direct_g, implicit_g, rtol=2e-1)
-
-    def tearDown(self):
-        """Destruct test class"""
-        print("Running tearDown method...")
+NONLINEAR_PROBLEMS = {
+    "pendulum": lambda: pendulum_problem(horizon=50),
+    "van_der_pol": lambda: van_der_pol(horizon=60),
+    "inverted_pendulum": lambda: inverted_pendulum(horizon=100),
+    "rnn": lambda: rnn_problem(5, 3),
+}
 
 
-if __name__ == "__main__":
-    unittest.main()
+def init_inputs(model, seed: int = 0):
+    return 0.1 * jr.normal(jr.PRNGKey(seed + 100), (model.dims.horizon, model.dims.m))
+
+
+def value_and_grads(solve, params):
+    """Value and gradient wrt x0 and theta of the loss sum(tau**2)"""
+    return jax.value_and_grad(lambda p: jnp.sum(solve(p) ** 2))(params)
+
+
+@pytest.mark.parametrize("adjoint", ADJOINTS)
+@pytest.mark.parametrize("name", list(LINEAR_PROBLEMS))
+def test_pdilqr_matches_dilqr(name, adjoint):
+    """Linear dynamics: pdilqr has the value and gradients of dilqr"""
+    model, params = LINEAR_PROBLEMS[name]()
+    Us_init = init_inputs(model)
+    pmodel = as_parallel(model)
+    v_par, g_par = value_and_grads(lambda p: pdilqr(pmodel, p, Us_init, adjoint=adjoint, max_iter=MAX_ITER), params)
+    v_seq, g_seq = value_and_grads(lambda p: dilqr(model, p, Us_init, max_iter=MAX_ITER), params)
+    chex.assert_trees_all_close(v_par, v_seq, rtol=1e-8)
+    assert_grads_close(g_par, g_seq, rtol=1e-6)
+
+
+def test_pdilqr_adjoints_agree():
+    """The parallel and sequential adjoint solvers give the same gradients to round-off"""
+    model, params = LINEAR_PROBLEMS["track_log"]()
+    Us_init, pmodel = init_inputs(model), as_parallel(model)
+    g_par, g_seq = (
+        value_and_grads(lambda p, a=a: pdilqr(pmodel, p, Us_init, adjoint=a, max_iter=MAX_ITER), params)[1] for a in ADJOINTS
+    )
+    assert_grads_close(g_par, g_seq, rtol=1e-10)
+
+
+def test_pdilqr_check_grads():
+    """Implicit gradients agree with central finite differences wrt x0 and theta"""
+    model, params = LINEAR_PROBLEMS["linear_rnn"]()
+    Us_init, pmodel = init_inputs(model), as_parallel(model)
+    loss = lambda p: jnp.sum(pdilqr(pmodel, p, Us_init, max_iter=MAX_ITER, kkt_tol=1e-12) ** 2)
+    check_grads(loss, (params,), order=1, modes=["rev"], eps=1e-6, atol=1e-6, rtol=1e-6)
+
+
+def test_pdilqr_us_init_gets_no_gradient():
+    """Us_init is stop-gradiented, so a warm start that depends on the parameters adds no gradient"""
+    model, params = LINEAR_PROBLEMS["linear_rnn"]()
+    Us_init, pmodel = init_inputs(model), as_parallel(model)
+    loss = lambda p, us: jnp.sum(pdilqr(pmodel, p, us, max_iter=MAX_ITER) ** 2)
+    g = jax.grad(lambda p: loss(p, Us_init))(params)
+    g_warm = jax.grad(lambda p: loss(p, Us_init + jnp.sum(p.theta.Wh)))(params)
+    assert_grads_close(g_warm, g, rtol=1e-8)
+
+
+@pytest.mark.parametrize("exact_hessian", [True, False])
+@pytest.mark.parametrize("adjoint", ADJOINTS)
+@pytest.mark.parametrize("name", list(NONLINEAR_PROBLEMS))
+def test_pdllqr_nonlinear_matches_dilqr(name, adjoint, exact_hessian):
+    """Non-linear dynamics: the local LQR at the ilqr solution, with (exact) or without (Gauss-Newton) the
+    dynamics curvature, differentiated through pdllqr gives the gradients of dilqr. The Lagrangian Hessian is
+    indefinite on these problems, so this also checks that the parallel adjoint scan does not need a convex LQR."""
+    model, params = NONLINEAR_PROBLEMS[name]()
+    Us_init = init_inputs(model)
+    sol = ilqr_solver(model, params, Us_init, max_iter=400)
+    (Xs, Us, Lambs), _, _ = jax.lax.stop_gradient(sol)
+    tau = jnp.c_[Xs, jnp.r_[Us, jnp.zeros((1, model.dims.m))]]
+
+    def solve(p):
+        local = approx_lqr_offset(model, Xs, Us, p)
+        if exact_hessian:
+            local = add_dynamics_curvature(model, local, Xs, Us, Lambs, p)
+        return pdllqr(model.dims, LQRParams(p.x0, local), tau, adjoint=adjoint)
+
+    v_par, g_par = value_and_grads(solve, params)
+    v_seq, g_seq = value_and_grads(lambda p: dilqr(model, p, Us_init, exact_hessian=exact_hessian, max_iter=400), params)
+    chex.assert_trees_all_close(v_par, v_seq, rtol=1e-12)
+    assert_grads_close(g_par, g_seq, rtol=1e-8)
+
+
+@pytest.mark.xfail(strict=True, reason="pilqr_solver integrates linearised dynamics, so it does not solve non-linear problems")
+def test_pdilqr_nonlinear_dynamics():
+    """pdilqr on non-linear dynamics: should match dilqr once pilqr rolls out the non-linear dynamics"""
+    model, params = NONLINEAR_PROBLEMS["pendulum"]()
+    Us_init = init_inputs(model)
+    v_par, _ = value_and_grads(lambda p: pdilqr(as_parallel(model), p, Us_init, max_iter=MAX_ITER), params)
+    v_seq, _ = value_and_grads(lambda p: dilqr(model, p, Us_init, max_iter=MAX_ITER), params)
+    chex.assert_trees_all_close(v_par, v_seq, rtol=1e-8)

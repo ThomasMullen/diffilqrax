@@ -1,243 +1,90 @@
 """
-Unit tests for the differentiable LQR solver
+Gradients of the differentiable parallel LQR solver (pdlqr, pdllqr), for both adjoint solvers, against the
+sequential dlqr/dllqr and direct differentiation through solve_lqr.
 """
 
-from typing import NamedTuple
-import unittest
+import pytest
 import chex
-import numpy as onp
 import jax
-from jax import Array
-import jax.random as jr
 import jax.numpy as jnp
-from jaxopt import linear_solve, implicit_diff
+import jax.random as jr
+from jax.test_util import check_grads
 
-from diffilqrax.typs import LQRParams, ModelDims, LQR
-from diffilqrax.parallel_dlqr import pdlqr
-from diffilqrax.lqr import solve_lqr, kkt
-from diffilqrax.utils import keygen, initialise_stable_dynamics
+from diffilqrax.typs import ModelDims
+from diffilqrax.lqr import solve_lqr
+from diffilqrax.diff_lqr import dlqr, dllqr
+from diffilqrax.parallel_dlqr import pdlqr, pdllqr
+from problems import random_lqr
+from test_dlqr import GRAD_DIMS, sym_lqr_grads
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
-jax.config.update("jax_enable_x64", True)  # double precision
+jax.config.update("jax_enable_x64", True)
 
-PRINTING_ON = True
-
-
-def is_jax_array(arr: Array) -> bool:
-    """validate jax array type"""
-    return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
+ADJOINTS = ["parallel", "sequential"]
 
 
-def setup_lqr_time_varying(
-    dims: chex.Dimensions,
-    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3},
-) -> LQR:
-    """Setup LQR problem"""
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
-    # initialise dynamics
-    span_time_m = dims["TXX"]
-    span_time_v = dims["TX"]
-    A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
-    B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
-    a = jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
-    # define cost matrices
-    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
-    q = 2 * 1e-1 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
-    R = pen_weight["R"] * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
-    r = 1e-6 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = pen_weight["S"] * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
-    Qf = pen_weight["Q"] * jnp.eye(dims["N"][0])
-    qf = 2 * 1e-1 * jnp.ones(dims["N"])
-    # construct LQR
-    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
-    return lqr()
+def setup(n: int, m: int, horizon: int = 30):
+    """Random time-varying LQR with cross term, and a smooth loss of the state-input trajectory"""
+    params = random_lqr(n, m, horizon, seed=1)
+    dims = ModelDims(n, m, horizon, dt=0.1)
+    weights = jr.normal(jr.PRNGKey(5), (horizon + 1, n + m))
+    return dims, params, lambda tau: jnp.sum(weights * jnp.sin(tau))
 
 
-def setup_lqr(
-    dims: chex.Dimensions,
-    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3},
-) -> LQR:
-    """set up time invariant LQR problem"""
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
-    span_time_m = dims["TXX"]
-    span_time_v = dims["TX"]
-    A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
-    B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
-    a = jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
-    Qf = 1.0 * jnp.eye(dims["N"][0])
-    qf = 1.0 * jnp.ones(dims["N"])
-    Q = 1.0 * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
-    q = 0.0 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
-    R = 1.0 * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
-    r = 0.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = 0.0 * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
-    return LQR(A, B, a, Q, q, R, r, S, Qf, qf)()
+def test_invalid_adjoint():
+    dims, params, _ = setup(3, 2)
+    with pytest.raises(AssertionError):
+        pdlqr(dims, params, adjoint="banana")
 
 
-class TestLQR(unittest.TestCase):
-    """Test LQR dimensions and dtypes"""
+@pytest.mark.parametrize("adjoint", ADJOINTS)
+@pytest.mark.parametrize("n,m", GRAD_DIMS)
+def test_pdlqr_matches_dlqr(n, m, adjoint):
+    """Value and gradients wrt every LQR field and x0 equal the sequential dlqr and direct autodiff"""
+    dims, params, loss = setup(n, m)
+    v_par, g_par = jax.value_and_grad(lambda p: loss(pdlqr(dims, p, adjoint=adjoint)))(params)
+    v_seq, g_seq = jax.value_and_grad(lambda p: loss(dlqr(dims, p, None)))(params)
 
-    def setUp(self):
-        """set up LQR problem"""
-        self.dims = chex.Dimensions(T=60, N=2, M=2, X=1)
-        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
-        self.lqr = setup_lqr(self.dims)
-        self.x0 = jnp.array([2.0, 1.0])
-        Us = jnp.zeros(self.dims["TM"], dtype=float)
-        Us = Us.at[2].set(1.0)
-        self.Us = Us
-        self.params = LQRParams(self.x0, self.lqr)
-        # Verify that the average KKT conditions are satisfied
+    def direct(p):
+        Xs, Us, _ = solve_lqr(p)
+        return loss(jnp.c_[Xs, jnp.r_[Us, jnp.zeros((1, m))]])
 
-    def test_dlqr(self):
-        """test dlqr struct and shapes"""
-        @jax.jit
-        def loss(p):
-            Us_lqr = pdlqr(
-                ModelDims(*self.dims["NMT"], dt=0.1), p, jnp.array([2.0, 1.0])
-            )
-            return jnp.linalg.norm(p.lqr.A) + jnp.linalg.norm(Us_lqr)
-
-        _, g = jax.value_and_grad(loss)(self.params)
-        chex.assert_trees_all_equal_shapes_and_dtypes(g, self.params)
-
-    def tearDown(self):
-        """Destruct test class"""
-        print("Running tearDown method...")
+    g_dir = jax.grad(direct)(params)
+    chex.assert_trees_all_close(v_par, v_seq, rtol=1e-10)
+    chex.assert_trees_all_close(g_par, g_seq, rtol=1e-8, atol=1e-10)
+    chex.assert_trees_all_close(sym_lqr_grads(g_par), sym_lqr_grads(g_dir), rtol=1e-8, atol=1e-10)
 
 
-class State(NamedTuple):
-    """helper class for state"""
-    Xs: Array
-    Us: Array
-    Lambs: Array
+@pytest.mark.parametrize("adjoint", ADJOINTS)
+@pytest.mark.parametrize("n,m", GRAD_DIMS[:3])
+def test_pdlqr_check_grads(n, m, adjoint):
+    """Implicit gradients agree with central finite differences, with symmetric Q, R and Qf directions"""
+    dims, params, loss = setup(n, m)
+    sym = lambda x: (x + jnp.swapaxes(x, -1, -2)) / 2
+
+    def sym_loss(p):
+        p = p._replace(lqr=p.lqr._replace(Q=sym(p.lqr.Q), R=sym(p.lqr.R), Qf=sym(p.lqr.Qf)))
+        return loss(pdlqr(dims, p, adjoint=adjoint))
+
+    check_grads(sym_loss, (params,), order=1, modes=["rev"], eps=1e-6, atol=1e-7, rtol=1e-7)
 
 
-class Prms(NamedTuple):
-    """helper class for params"""
-    q: Array
-    r: Array
-    Q: Array
-    R: Array
-    A: Array
-    S: Array
-    x0: Array
-    a: Array
+@pytest.mark.parametrize("adjoint", ADJOINTS)
+def test_pdllqr_matches_dllqr(adjoint):
+    """pdllqr returns tau_star unchanged and has the gradients of dllqr"""
+    dims, params, loss = setup(8, 3)
+    Xs, Us, _ = solve_lqr(params)
+    tau_star = jnp.c_[Xs, jnp.r_[Us, jnp.zeros((1, 3))]]
+    v_par, g_par = jax.value_and_grad(lambda p: loss(pdllqr(dims, p, tau_star, adjoint=adjoint)))(params)
+    v_seq, g_seq = jax.value_and_grad(lambda p: loss(dllqr(dims, p, tau_star)))(params)
+    chex.assert_trees_all_equal(pdllqr(dims, params, tau_star, adjoint=adjoint), tau_star)
+    chex.assert_trees_all_close(v_par, v_seq, rtol=1e-12)
+    chex.assert_trees_all_close(g_par, g_seq, rtol=1e-8, atol=1e-10)
 
 
-def state_kkt(Xs: jnp.ndarray, Us: jnp.ndarray, Lambs: jnp.ndarray, params: LQRParams):
-    """calculate KKT conditions for LQR problem"""
-    Xs, Us, Lambs = Xs
-    dLdXs, dLdUs, dLdLambs = kkt(params, Xs, Us, Lambs)
-    return dLdXs, dLdUs, dLdLambs  # State(Xs=dLdXs, Us=dLdUs, Lambs=dLdLambs)
-
-
-class TestDLQR(unittest.TestCase):
-    """Test LQR dimensions and dtypes"""
-
-    def setUp(self):
-        """Instantiate dummy LQR"""
-        self.dims = chex.Dimensions(T=15, N=2, M=2, X=1)
-        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.1)
-        self.lqr = setup_lqr(self.dims)
-        self.x0 = jnp.array([100.0, 100.0])
-        Us = jnp.zeros(self.dims["TM"], dtype=float)
-        Us = Us.at[2].set(1.0)
-        self.Us = Us
-        self.params = LQRParams(self.x0, self.lqr)
-        # Verify that the average KKT conditions are satisfied
-
-    def test_dlqr(self):
-        """
-        test dlqr struct, shapes and solutions compared to direct gradients,
-        and implicit gradients
-        """
-        def replace_params(p:Prms)->LQRParams:
-            lqr = LQR(
-                A=p.A,
-                B=self.params.lqr.B,
-                a=p.a,
-                Q=p.Q,
-                q=p.q,
-                R=p.R,
-                r=p.r,
-                S=p.S,
-                Qf=self.params.lqr.Qf,
-                qf=self.params.lqr.qf,
-            )
-            return LQRParams(p.x0, lqr)
-
-        @jax.jit
-        def loss(prms):
-            tau_lqr = pdlqr(self.sys_dims, replace_params(prms), self.x0)
-            Us_lqr = tau_lqr[:, self.sys_dims.n :]
-            Xs_lqr = tau_lqr[:, : self.sys_dims.n]
-            return jnp.linalg.norm(Us_lqr) ** 2
-
-        @implicit_diff.custom_root(state_kkt, solve=linear_solve.solve_cg)
-        def implicit_solve_lqr(Xs, Us, Lambs, params):
-            Xs, Us, Lambs = solve_lqr(params)
-            return Xs, Us, Lambs
-
-        def implicit_loss(prms):
-            Xs_lqr, Us_lqr, _Us_lqr = implicit_solve_lqr(
-                None, None, None, replace_params(prms)
-            )
-            return jnp.linalg.norm(Us_lqr) ** 2
-
-        def direct_loss(prms):
-            Xs, Us, Lambs = solve_lqr(replace_params(prms))
-            return jnp.linalg.norm(Us) ** 2
-
-        prms = Prms(
-            a=self.params.lqr.a,
-            x0=jnp.array([100.0, 100.0]),
-            S=self.params.lqr.S,
-            A=self.params.lqr.A,
-            R=self.params.lqr.R,
-            Q=self.params.lqr.Q,
-            q=self.params.lqr.q,
-            r=self.params.lqr.r,
-        )  # 10*jnp.ones(self.dims["TNX"]), r = jnp.ones(self.dims["TNX"]))
-        lqr_val, lqr_g = jax.value_and_grad(loss)(prms)
-        implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(prms)
-        direct_val, direct_g = jax.value_and_grad(direct_loss)(prms)
-        if PRINTING_ON:
-            jax.debug.print(
-                (
-                    "\n|| Printing grads ||\n "
-                    "\n|| Printing  q ||\n"
-                    "implicit: {ig}\t direct: {dg}\t lqr: {lg}\n"
-                ),
-                ig=implicit_g.q[:4], dg=direct_g.q[:4], lg=lqr_g.q[:4]
-                )
-            jax.debug.print(
-                (
-                    "\n|| Printing  Q ||\n"
-                    "implicit: {ig}\t direct: {dg}\t lqr: {lg}\n"
-                ),
-                ig=implicit_g.Q[0,:2], dg=direct_g.Q[0,:2], lg=lqr_g.Q[0,:2]
-                )
-            jax.debug.print(
-                (
-                    "\n|| Printing  a ||\n"
-                    "implicit: {ig}\t direct: {dg}\t lqr: {lg}\n"
-                ),
-                ig=implicit_g.a[:2], dg=direct_g.a[:2], lg=lqr_g.a[:2]
-                )
-        chex.assert_trees_all_equal_shapes_and_dtypes(lqr_val, direct_val)
-        chex.assert_trees_all_equal_shapes_and_dtypes(lqr_g, direct_g)
-        chex.assert_trees_all_equal_shapes_and_dtypes(implicit_val, direct_val)
-        chex.assert_trees_all_equal_shapes_and_dtypes(implicit_g, direct_g)
-        chex.assert_trees_all_close(lqr_val, direct_val, rtol=1e-3)
-        chex.assert_trees_all_close(lqr_g, direct_g, rtol=1e-3)
-        
-    def tearDown(self):
-        """Destruct test class"""
-        print("Running tearDown method...")
-
-
-if __name__ == "__main__":
-    unittest.main()
+def test_pdlqr_jit_and_long_horizon():
+    """Both adjoints agree under jit on a long horizon, where the scans have many levels"""
+    dims, params, loss = setup(5, 2, horizon=1000)
+    grad_fn = jax.jit(lambda p, adjoint: jax.grad(lambda q: loss(pdlqr(dims, q, adjoint=adjoint)))(p), static_argnums=1)
+    grads = [grad_fn(params, a) for a in ADJOINTS]  # pylint: disable=not-callable
+    chex.assert_trees_all_close(*grads, rtol=1e-8, atol=1e-10)
