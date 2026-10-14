@@ -218,7 +218,7 @@ def project_psd_lqr(lqr: LQR, delta: float = 1e-6, which: str = "full") -> LQR:
     return lqr._replace(R=R, Q=Q, Qf=project_psd(lqr.Qf, delta))
 
 
-def plqr_backward_pass(model: LQRParams, mu: float = 0.0, pd_thresh: float = 1e-8) -> Tuple[CostToGo, Gains, Array]:
+def plqr_backward_pass(model: LQRParams, mu: float = 0.0, pd_thresh: float = 1e-8, return_values: bool = False) -> Tuple:
     """
     Parallel counterpart of :func:`diffilqrax.lqr.regularised_backward_pass`: associative Riccati scan
     of the problem regularised with :func:`regularise_lqr`, and its optimal gains.
@@ -231,13 +231,16 @@ def plqr_backward_pass(model: LQRParams, mu: float = 0.0, pd_thresh: float = 1e-
         Regularisation strength, by default 0.0 (exact LQR solution).
     pd_thresh : float, optional
         Minimum eigenvalue of the regularised Huu for it to count as positive definite, by default 1e-8.
+    return_values : bool, optional
+        Also return the value functions (η, J) of the regularised problem, by default False.
 
     Returns
     -------
-    Tuple[CostToGo, Gains, Array]
+    Tuple[CostToGo, Gains, Array] or Tuple[CostToGo, Gains, Array, Tuple[Array, Array]]
         Expected change in cost terms (V: Σ ½ kᵀ Huu k with the unregularised Huu, v: Σ kᵀ hu), the
         gains (u = Kx + k), and a flag that is True if the regularised Huu is positive definite at
-        every time step and the gains are finite.
+        every time step and the gains are finite. With ``return_values``, also (η, J) [(T+1)xn], [(T+1)xnxn],
+        whose costates λ_t = J_t x_t - η_t are the multipliers of the regularised problem.
     """
     reg = LQRParams(model.x0, regularise_lqr(model.lqr, mu))
     etas, Js = associative_riccati_scan(reg)
@@ -248,6 +251,8 @@ def plqr_backward_pass(model: LQRParams, mu: float = 0.0, pd_thresh: float = 1e-
     # hu = -Huu_reg k, as in the sequential pass
     kHk_reg = jnp.sum(gains.k * _bmv(Huu_reg, gains.k))
     kHk = kHk_reg - mu * jnp.sum(gains.k**2)
+    if return_values:
+        return CostToGo(V=0.5 * kHk, v=-kHk_reg), gains, is_pd, (etas, Js)
     return CostToGo(V=0.5 * kHk, v=-kHk_reg), gains, is_pd
 
 

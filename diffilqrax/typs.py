@@ -4,6 +4,7 @@ from typing import NamedTuple, Callable, Any, Union, Tuple, Optional
 from functools import partial
 from jax import lax, Array
 from jax.typing import ArrayLike
+
 # from flax import struct
 from diffilqrax.utils import linearise, quadratise
 
@@ -48,9 +49,7 @@ FCostFn = Callable[[Array, Optional[Any]], Array]
 DynFn = Callable[[int, Array, Array, Optional[Any]], Array]
 LinDynFn = Callable[[int, Array, Array, Optional[Any]], Tuple[Array, Array]]
 LinCostFn = Callable[[int, Array, Array, Optional[Any]], Tuple[Array, Array]]
-QuadCostFn = Callable[
-    [int, Array, Array, Optional[Any]], Tuple[Tuple[Array, Array], Tuple[Array, Array]]
-]
+QuadCostFn = Callable[[int, Array, Array, Optional[Any]], Tuple[Tuple[Array, Array], Tuple[Array, Array]]]
 
 
 class System:
@@ -230,20 +229,17 @@ class PendulumParams(NamedTuple):
 
 class ParallelSystem(NamedTuple):
     """
-    Overloaded ilqr system for parallel dynamics.
+    ilqr system for the parallel solvers (:func:`diffilqrax.parallel_ilqr.pilqr_solver`).
 
     Attributes
     ----------
     model : System
         iLQR problem with non-linear cost, costf, dynamics, dims.
-    parallel_dynamics : Callable
-        Take ilqr System, iLQRParams, Us, Xs and return Xs.
-    parallel_dynamics_feedback : Callable
-        Take ilqr System, iLQRParams, Us, Xs, Kx and return Xs.
+    parallel_dynamics, parallel_dynamics_feedback : Callable, optional
+        Deprecated and unused: pilqr_solver either rolls out the non-linear dynamics or uses multiple
+        shooting (``rollout``), so no linearised integrators are needed.
     """
 
     model: System
-    parallel_dynamics: Callable[[System, iLQRParams, Array, Array], Array]
-    parallel_dynamics_feedback: Callable[
-        [System, iLQRParams, Array, Array, Array, Array], Array
-    ]
+    parallel_dynamics: Optional[Callable] = None
+    parallel_dynamics_feedback: Optional[Callable] = None

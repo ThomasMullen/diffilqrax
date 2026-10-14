@@ -1,11 +1,8 @@
 """
-Gradients of the differentiable parallel iLQR solver (pdilqr), for both adjoint solvers, against the
-sequential dilqr (itself validated against direct differentiation in test_gradients.py).
-
-pilqr_solver integrates a linearisation of the dynamics, so it only converges to the solution of the
-non-linear problem when the dynamics are linear. pdilqr is compared end-to-end on linear dynamics with
-non-quadratic costs; for non-linear dynamics the implicit-gradient path (Lagrangian Hessians and the parallel
-adjoint LQR) is checked on the ilqr solution through pdllqr.
+Gradients of the differentiable parallel iLQR solver (pdilqr), for both adjoint solvers and both pilqr
+rollouts, against the sequential dilqr (itself validated against direct differentiation in test_gradients.py),
+on linear dynamics with non-quadratic costs and on non-linear dynamics. The implicit-gradient path through
+pdllqr is also checked on the ilqr solution, independently of the solver.
 """
 
 import pytest
@@ -126,11 +123,16 @@ def test_pdllqr_nonlinear_matches_dilqr(name, adjoint, exact_hessian):
     assert_grads_close(g_par, g_seq, rtol=1e-8)
 
 
-@pytest.mark.xfail(strict=True, reason="pilqr_solver integrates linearised dynamics, so it does not solve non-linear problems")
-def test_pdilqr_nonlinear_dynamics():
-    """pdilqr on non-linear dynamics: should match dilqr once pilqr rolls out the non-linear dynamics"""
-    model, params = NONLINEAR_PROBLEMS["pendulum"]()
+@pytest.mark.parametrize("exact_hessian", [True, False])
+@pytest.mark.parametrize("rollout", ["feedback", "parallel"])
+@pytest.mark.parametrize("adjoint", ADJOINTS)
+@pytest.mark.parametrize("name", list(NONLINEAR_PROBLEMS))
+def test_pdilqr_nonlinear_matches_dilqr(name, adjoint, rollout, exact_hessian):
+    """Non-linear dynamics end to end: pdilqr has the value and gradients of dilqr"""
+    model, params = NONLINEAR_PROBLEMS[name]()
     Us_init = init_inputs(model)
-    v_par, _ = value_and_grads(lambda p: pdilqr(as_parallel(model), p, Us_init, max_iter=MAX_ITER), params)
-    v_seq, _ = value_and_grads(lambda p: dilqr(model, p, Us_init, max_iter=MAX_ITER), params)
+    kw = dict(exact_hessian=exact_hessian, max_iter=400)
+    v_par, g_par = value_and_grads(lambda p: pdilqr(model, p, Us_init, adjoint=adjoint, rollout=rollout, **kw), params)
+    v_seq, g_seq = value_and_grads(lambda p: dilqr(model, p, Us_init, **kw), params)
     chex.assert_trees_all_close(v_par, v_seq, rtol=1e-8)
+    assert_grads_close(g_par, g_seq, rtol=1e-6)

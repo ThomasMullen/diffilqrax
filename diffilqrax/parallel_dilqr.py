@@ -6,7 +6,7 @@ Module solves the differential iterative linear quadratic regulator (DiLQR) prob
 from jax import Array, lax
 import jax.numpy as jnp
 
-from diffilqrax.typs import iLQRParams, LQRParams, ParallelSystem
+from diffilqrax.typs import iLQRParams, LQRParams, ParallelSystem, System
 from diffilqrax.ilqr import approx_lqr_offset
 from diffilqrax.diff_ilqr import add_dynamics_curvature
 from diffilqrax.parallel_ilqr import pilqr_solver
@@ -14,7 +14,7 @@ from diffilqrax.parallel_dlqr import pdllqr
 
 
 def pdilqr(
-    parallel_model: ParallelSystem,
+    parallel_model: ParallelSystem | System,
     params: iLQRParams,
     Us_init: Array,
     exact_hessian: bool = True,
@@ -27,8 +27,8 @@ def pdilqr(
 
     Parameters
     ----------
-    parallel_model : ParallelSystem
-        The parallel system model.
+    parallel_model : ParallelSystem | System
+        The system model.
     params : iLQRParams
         The iLQR parameters.
     Us_init : Array
@@ -40,7 +40,7 @@ def pdilqr(
         Solver of the adjoint LQR problem in the reverse pass: "parallel" (associative scan, default)
         or "sequential" (Riccati recursion). See :func:`diffilqrax.parallel_dlqr.pdllqr`.
     **kwargs
-        Additional keyword arguments for :func:`diffilqrax.parallel_ilqr.pilqr_solver`.
+        Additional keyword arguments for :func:`diffilqrax.parallel_ilqr.pilqr_solver`, e.g. ``rollout``.
 
     Returns
     -------
@@ -53,7 +53,7 @@ def pdilqr(
     ``max_iter`` of :func:`pilqr_solver`). ``Us_init`` receives no gradient and the solver is never
     differentiated.
     """
-    model = parallel_model.model
+    model = parallel_model.model if isinstance(parallel_model, ParallelSystem) else parallel_model
     sol = pilqr_solver(parallel_model, lax.stop_gradient(params), lax.stop_gradient(Us_init), **kwargs)
     (Xs_star, Us_star, Lambs_star), _, _ = lax.stop_gradient(sol)
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, model.dims.m))]]

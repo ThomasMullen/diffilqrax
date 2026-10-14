@@ -295,12 +295,8 @@ def linear_nonconvex_problem(kind: str = "track_log", n: int = 5, m: int = 3, ho
 
 
 def as_parallel(model: System) -> ParallelSystem:
-    """Wrap a System with the associative-scan (linearised) forward integrators"""
-    from diffilqrax import parallel_ilqr  # pylint: disable=import-outside-toplevel
-
-    return ParallelSystem(
-        model, parallel_ilqr.parallel_forward_lin_integration_ilqr, parallel_ilqr.parallel_feedback_lin_dyn_ilqr
-    )
+    """Wrap a System for the parallel solvers"""
+    return ParallelSystem(model)
 
 
 # --------------------------------------------------------------------------------------------
