@@ -153,3 +153,32 @@ def load_mean(prefix: PathLike, trial_id: int = 0) -> Dict[str, onp.ndarray]:
         "z": load_owl_txt(f(f"z.{trial_id}")),
         "o": load_owl_txt(f(f"o.{trial_id}.tail")),
     }
+
+
+REFERENCE_KEYS = (
+    "saved_u",
+    "saved_tail",
+    "fwd_z",
+    "fwd_o",
+    "cost_saved_u",
+    "ilqr_u",
+    "ilqr_z",
+    "ilqr_o",
+    "ilqr_cost",
+    "ilqr_cost_hist",
+)
+
+
+def load_reference(out_dir: PathLike) -> Dict[str, onp.ndarray]:
+    """
+    Load the full-precision outputs of ``examples/ocaml_mgu_ref.ml`` (zebrafish repository).
+
+    Arrays are stacked over trials: ``saved_u`` / ``ilqr_u`` (B, T, m), ``saved_tail`` (B, T - n_beg + 1, n_out),
+    ``fwd_z`` / ``ilqr_z`` (B, T, n), ``fwd_o`` / ``ilqr_o`` (B, T, n_out), ``cost_saved_u`` / ``ilqr_cost`` (B,)
+    and ``ilqr_cost_hist`` (B, max_iter + 1), nan-padded.
+    """
+    out_dir = Path(out_dir)
+    ref = {k: load_npy(out_dir / f"{k}.npy") for k in REFERENCE_KEYS}
+    for k in ("cost_saved_u", "ilqr_cost"):
+        ref[k] = ref[k].ravel()
+    return ref

@@ -7,9 +7,8 @@ Conventions follow the OCaml model with column-vector states:
 * for ``k < n_beg`` the dynamics only load the initial condition, ``x_{k+1} = x_k + beg_bs[k].T @ u_k``;
 * afterwards ``f = sigmoid(bf + uf.T @ x)``, ``h = phi(bh + uh.T @ (x * f)) + B.T @ u`` and
   ``x' = (1 - f) * x + f * h``, with ``B`` the row-normalised ``wh`` scaled by ``sqrt(n / m)``;
-* ``phi(a) = requad(a) - 1`` with ``requad(a) = (a + sqrt(a^2 + 4)) / 2``. The run directory is
-  suffixed ``_tanh`` but its saved trajectories are only consistent with requad (one-step residual
-  1e-3 vs 6 for tanh);
+* ``phi(a) = tanh(a)``. ``requad(a) = (a + sqrt(a^2 + 4)) / 2`` is kept for the OCaml default
+  ``requad(a) - 1``;
 * observation ``j`` (``j = 0 ... T - n_beg``) is read out from ``x_{j + n_beg}``,
   ``o_j ~ N(bias + c @ x_{j + n_beg}, diag(variances))``. The saved latents ``z`` are ``x_1 ... x_T``,
   so observation ``j`` corresponds to ``z[j + n_beg - 1]``.
@@ -80,7 +79,7 @@ def requad(a: jnp.ndarray) -> jnp.ndarray:
 
 def phi(a: jnp.ndarray) -> jnp.ndarray:
     """MGU2 candidate nonlinearity"""
-    return requad(a) - 1.0
+    return jnp.tanh(a)
 
 
 def n_beg_of(theta: MGU2Theta) -> int:
