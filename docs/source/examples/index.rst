@@ -78,6 +78,16 @@ Iterative LQR (iLQR)
          :alt: parallel solvers
          :class: gallery-thumbnail
 
+   .. grid-item-card::  iLQR inference: reconstructing a zebrafish tail bout
+      :link: ./zebrafish_tail_reconstruction
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: ../_static/nb_thumbnails/zebrafish_tail_reconstruction.png
+         :alt: zebrafish tail reconstruction
+         :class: gallery-thumbnail
+
 
 
 .. toctree::
@@ -89,3 +99,4 @@ Iterative LQR (iLQR)
    ilqr_vs_backpropagation
    gradients_through_ilqr
    parallel_solvers
+   zebrafish_tail_reconstruction

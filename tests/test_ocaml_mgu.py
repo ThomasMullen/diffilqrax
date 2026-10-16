@@ -1,13 +1,13 @@
 """
-Parity of the JAX MGU2 iLQR-VAE model (examples/ocaml_mgu) with the OCaml implementation.
+Parity of the JAX MGU2 iLQR-VAE model (``mgu2_model.py``) with the OCaml implementation.
 
-The fixture ``tests/fixtures/ocaml_mgu.npz`` is written by ``examples/ocaml_mgu/make_fixture.py`` from
-full-precision outputs of ``examples/ocaml_mgu_ref.ml`` (zebrafish repository): trained parameters,
+The fixture ``tests/fixtures/ocaml_mgu.npz`` is written by ``zebrafish/ocaml/make_fixture.py`` in the
+dilqr_jax_apps repository from full-precision outputs of ``examples/ocaml_mgu_ref.ml`` (zebrafish
+repository): trained parameters,
 inputs and observations of 3 test and 3 train trials, the OCaml rollout of those inputs, the OCaml
 iLQR objective, and a converged OCaml iLQR solve from ``u = 0``.
 """
 
-import sys
 from pathlib import Path
 
 import numpy as onp
@@ -18,9 +18,7 @@ import jax.numpy as jnp
 from diffilqrax import ilqr
 from diffilqrax.typs import iLQRParams
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "examples" / "ocaml_mgu"))
-from load_ocaml import OCamlParams  # pylint: disable=wrong-import-position
-from mgu2 import make_system, make_theta, readout, rollout, total_cost  # pylint: disable=wrong-import-position
+from mgu2_model import load_fixture, make_system, make_theta, readout, rollout, total_cost
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
 jax.config.update("jax_enable_x64", True)
@@ -36,12 +34,8 @@ WARM_U_TOL = 1e-5
 def ref():
     """Reference arrays and parameters"""
     if not FIXTURE.exists():
-        pytest.skip(f"{FIXTURE.name} missing; generate it with examples/ocaml_mgu/make_fixture.py")
-    data = dict(onp.load(FIXTURE))
-    params = OCamlParams(
-        **{k[len("param_") :]: (float(v) if k == "param_nu" else v) for k, v in data.items() if k.startswith("param_")}
-    )
-    return params, data
+        pytest.skip(f"{FIXTURE.name} missing; generate it with dilqr_jax_apps zebrafish/ocaml/make_fixture.py")
+    return load_fixture(FIXTURE)
 
 
 def converged_trials(data) -> list:
