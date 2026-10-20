@@ -37,7 +37,7 @@ def losses(model, params, exact_hessian: bool = True, seed: int = 0):
         return jnp.sum(tau**2)
 
     def direct_loss(p):
-        (Xs, Us, _), _, _ = ilqr_solver(model, p, Us_init, max_iter=MAX_ITER)
+        (Xs, Us, _), _, _ = ilqr_solver(model, p, Us_init, max_iter=MAX_ITER, loop="scan")  # unrolled reference
         return jnp.sum(Xs**2) + jnp.sum(Us**2)
 
     return implicit_loss, direct_loss, params

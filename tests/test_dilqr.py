@@ -133,6 +133,7 @@ class TestDILQR(unittest.TestCase):
                 alpha_init=alpha_init,
                 use_linesearch=linesearch,
                 verbose=False,
+                loop="scan",  # reverse mode through the unrolled iterations
             )
 
             if PRINTING_ON:

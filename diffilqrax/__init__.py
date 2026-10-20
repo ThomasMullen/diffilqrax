@@ -2,7 +2,19 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from diffilqrax import diff_ilqr, diff_lqr, ilqr, lqr, parallel_dilqr, parallel_dlqr, parallel_ilqr, plqr, typs, utils
+from diffilqrax import (
+    batch,
+    diff_ilqr,
+    diff_lqr,
+    ilqr,
+    lqr,
+    parallel_dilqr,
+    parallel_dlqr,
+    parallel_ilqr,
+    plqr,
+    typs,
+    utils,
+)
 
 try:
     __version__ = version("diffilqrax")
@@ -18,6 +30,7 @@ __all__ = [
     "parallel_ilqr",
     "parallel_dlqr",
     "parallel_dilqr",
+    "batch",
     "typs",
     "utils",
     "__version__",

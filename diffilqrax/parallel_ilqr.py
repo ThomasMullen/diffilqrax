@@ -20,11 +20,15 @@ from diffilqrax.ilqr import (
     approx_lqr,
     approx_lqr_offset,
     armijo_linesearch,
+    backtracking_search,
+    bounded_loop,
     ilqr_forward_pass,
     ilqr_simulate,
     kkt_input_residual,
     increase_regularisation,
     decrease_regularisation,
+    LINESEARCHES,
+    LOOPS,
 )
 from diffilqrax.typs import iLQRParams, System, Gains, LQR, LQRParams, ParallelSystem
 
@@ -91,6 +95,8 @@ def merit_linesearch(
     beta: float = 0.1,
     alpha_min: float = 1e-8,
     max_iter_linesearch: Optional[int] = None,
+    loop: str = "while",
+    n_parallel: int = 0,
 ) -> Tuple[Array, Tuple[Array, Array], Array]:
     """
     Armijo backtracking on the augmented Lagrangian merit φ = J + λᵀd + ρ/2 ‖d‖² along (X + α dX, U + α dU),
@@ -116,7 +122,7 @@ def merit_linesearch(
         Dynamics defects of the current trajectory.
     rho : float
         Penalty on the squared defects.
-    alpha_init, tau, beta, alpha_min, max_iter_linesearch
+    alpha_init, tau, beta, alpha_min, max_iter_linesearch, loop, n_parallel
         As in :func:`diffilqrax.ilqr.armijo_linesearch`.
 
     Returns
@@ -136,30 +142,18 @@ def merit_linesearch(
     slope = grad_dot_step - jnp.sum(lambs[1:] * defects) - rho * jnp.sum(defects**2)
     noise = 100.0 * jnp.finfo(jnp.result_type(merit_init)).eps * jnp.maximum(jnp.abs(merit_init), 1.0)
 
-    def backtrack_iter(carry):
-        X, U, cost, alpha, _, _ = carry
+    def trial(alpha):
         new_Xs, new_Us = Xs + alpha * dXs, Us + alpha * dUs
         new_cost = total_cost(model, params, new_Xs, new_Us)
         decrease = merit(new_cost, dynamics_defects(model, params, new_Xs, new_Us)) - merit_init
         below_noise = jnp.logical_and(-alpha * slope < noise, decrease < noise)
         accepted = jnp.logical_and(jnp.isfinite(decrease), jnp.logical_or(decrease <= beta * alpha * slope, below_noise))
         accepted = jnp.logical_and(accepted, slope < noise)
-        carry_on = jnp.logical_and(jnp.logical_not(accepted), alpha >= alpha_min)
-        return (
-            jnp.where(accepted, new_Xs, X),
-            jnp.where(accepted, new_Us, U),
-            jnp.where(accepted, new_cost, cost),
-            alpha * tau,
-            accepted,
-            carry_on,
-        )
+        return accepted, new_Xs, new_Us, new_cost
 
-    def loop_fun(carry, _):
-        return lax.cond(carry[-1], backtrack_iter, lambda x: x, carry), None
-
-    initial_carry = (Xs, Us, cost_init, tau * alpha_init, jnp.array(False), jnp.array(True))
-    (Xs_star, Us_star, cost_star, _, accepted, _), _ = lax.scan(loop_fun, initial_carry, None, length=max_iter_linesearch)
-    return accepted, (Xs_star, Us_star), cost_star
+    return backtracking_search(
+        trial, (Xs, Us, cost_init), tau * alpha_init, max_iter_linesearch, tau, alpha_min, loop, n_parallel
+    )
 
 
 def pilqr_solver(
@@ -180,6 +174,9 @@ def pilqr_solver(
     rollout: str = "feedback",
     defect_tol: Optional[float] = None,
     merit_rho: float = 1.0,
+    loop: str = "while",
+    linesearch: str = "backtrack",
+    return_converged: bool = False,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """
@@ -247,17 +244,31 @@ def pilqr_solver(
         ``rollout="parallel"``.
     merit_rho : float, optional
         Penalty ρ on the squared defects in the merit function of ``rollout="parallel"``, by default 1.0.
+    loop : str, optional
+        "while" (default) or "scan", as in :func:`diffilqrax.ilqr.ilqr_solver`. "while" is not reverse-mode
+        differentiable; use :func:`diffilqrax.parallel_dilqr.pdilqr` for gradients.
+    linesearch : str, optional
+        "backtrack" (default) or "parallel", as in :func:`diffilqrax.ilqr.ilqr_solver`.
+    return_converged : bool, optional
+        If True, also return whether the KKT residual (and the defects) of the solution are below the
+        tolerances, by default False.
     **linesearch_kwargs
-        Additional keyword arguments for the line search (tau, beta, alpha_min, max_iter_linesearch), see
-        :func:`diffilqrax.ilqr.armijo_linesearch`.
+        Additional keyword arguments for the line search (tau, beta, alpha_min, max_iter_linesearch,
+        n_parallel), see :func:`diffilqrax.ilqr.armijo_linesearch`.
 
     Returns
     -------
     Tuple[Tuple[Array, Array, Array], float, Array]
         A tuple containing the final state trajectory, control trajectory, and the adjoint
-        variables. Also returns the total cost of the trajectory and the cost history.
+        variables. Also returns the total cost of the trajectory and the cost history [max_iter],
+        which repeats the final cost after the last iteration. With ``return_converged=True`` a fourth
+        element, the boolean convergence flag, is appended.
     """
     assert rollout in ROLLOUTS, f"rollout must be one of {ROLLOUTS}, got {rollout}"
+    assert loop in LOOPS, f"loop must be one of {LOOPS}, got {loop}"
+    assert linesearch in LINESEARCHES, f"linesearch must be one of {LINESEARCHES}, got {linesearch}"
+    if linesearch == "parallel":
+        linesearch_kwargs.setdefault("n_parallel", 8)
     if "tol" in linesearch_kwargs:
         warnings.warn(
             "pilqr_solver now uses armijo_linesearch: the ratio-test kwargs (beta: step shrink factor, tol: "
@@ -270,8 +281,9 @@ def pilqr_solver(
     model = parallel_model.model if isinstance(parallel_model, ParallelSystem) else parallel_model
     defect_tol = kkt_tol if defect_tol is None else defect_tol
     (Xs_init, _), c_init = ilqr_simulate(model, Us_init, params)
-    # carry: (Xs, Us, total cost, delta, mu, iteration, carry_on)
-    initial_carry = (Xs_init, Us_init, c_init, jnp.ones_like(c_init), jnp.zeros_like(c_init), 0, True)
+    # carry: (Xs, Us, total cost, delta, mu, iteration, cost history, carry_on)
+    costs_init = jnp.zeros(max_iter, dtype=jnp.result_type(c_init))
+    initial_carry = (Xs_init, Us_init, c_init, jnp.ones_like(c_init), jnp.zeros_like(c_init), 0, costs_init, jnp.array(True))
     prollout = partial(ilqr_forward_pass, model, params)
 
     def backward_with_reg(lqr_params: LQRParams, delta: Array, mu: Array):
@@ -280,22 +292,29 @@ def pilqr_solver(
         if not regularise:
             return dJ, gains, is_pd, values, delta, mu
 
-        def reg_step(carry, _):
-            def retry(carry):
-                *_, delta, mu = carry
-                delta, mu = increase_regularisation(delta, mu)
-                return (*plqr_backward_pass(lqr_params, mu, return_values=True), delta, mu)
+        def needs_reg(carry):
+            return jnp.logical_and(jnp.logical_not(carry[2]), carry[5] < mu_max)
 
-            needs_reg = jnp.logical_and(jnp.logical_not(carry[2]), carry[5] < mu_max)
-            return lax.cond(needs_reg, retry, lambda c: c, carry), None
+        def retry(carry):
+            *_, delta, mu = carry
+            delta, mu = increase_regularisation(delta, mu)
+            return (*plqr_backward_pass(lqr_params, mu, return_values=True), delta, mu)
 
-        return lax.scan(reg_step, (dJ, gains, is_pd, values, delta, mu), None, length=max_reg_iter)[0]
+        return bounded_loop(needs_reg, retry, (dJ, gains, is_pd, values, delta, mu), max_reg_iter, loop)
 
     def feedback_step(gains, exp_dJ, old_Xs, old_Us, old_cost):
         """Sequential non-linear closed-loop rollout"""
         if use_linesearch:
             return armijo_linesearch(
-                prollout, gains, old_Xs, old_Us, alpha_init, cost_init=old_cost, expected_dJ=exp_dJ, **linesearch_kwargs
+                prollout,
+                gains,
+                old_Xs,
+                old_Us,
+                alpha_init,
+                cost_init=old_cost,
+                expected_dJ=exp_dJ,
+                loop=loop,
+                **linesearch_kwargs,
             )
         (new_Xs, new_Us), new_cost = prollout(gains, old_Xs, old_Us, alpha=1.0)
         noise = 100.0 * jnp.finfo(jnp.result_type(old_cost)).eps * jnp.maximum(jnp.abs(old_cost), 1.0)
@@ -307,11 +326,13 @@ def pilqr_solver(
         step = multiple_shooting_step(delta_lqr, gains, values)
         ls_kwargs = linesearch_kwargs if use_linesearch else {"tau": 1.0, "max_iter_linesearch": 1}
         alpha = alpha_init if use_linesearch else 1.0
-        return merit_linesearch(model, params, old_Xs, old_Us, step, lqr, old_cost, defects, merit_rho, alpha, **ls_kwargs)
+        return merit_linesearch(
+            model, params, old_Xs, old_Us, step, lqr, old_cost, defects, merit_rho, alpha, loop=loop, **ls_kwargs
+        )
 
     def plqr_iter(carry_tuple):
         """One parallel iLQR iteration: backward scan, line search, regularisation update"""
-        old_Xs, old_Us, old_cost, delta, mu, n_iter, _ = carry_tuple
+        old_Xs, old_Us, old_cost, delta, mu, n_iter, costs, _ = carry_tuple
         lqr = approx_lqr(model, old_Xs, old_Us, params)
         defects = dynamics_defects(model, params, old_Xs, old_Us)
         kkt_res = jnp.max(jnp.abs(kkt_input_residual(lqr)))
@@ -352,23 +373,27 @@ def pilqr_solver(
                     m=mu_new,
                     a=accepted,
                 )
-            return (new_Xs, new_Us, new_cost, delta_new, mu_new, n_iter + 1, jnp.logical_not(stop))
+            costs_new = costs.at[n_iter].set(new_cost)
+            return (new_Xs, new_Us, new_cost, delta_new, mu_new, n_iter + 1, costs_new, jnp.logical_not(stop))
 
         def stop(_):
-            return (old_Xs, old_Us, old_cost, delta, mu, n_iter, jnp.array(False))
+            return (old_Xs, old_Us, old_cost, delta, mu, n_iter, costs, jnp.array(False))
 
         return lax.cond(converged, stop, take_step, None)
 
-    def loop_fun(carry_tuple, _):
-        """if cond false return existing carry else run another iteration of plqr_iter"""
-        updated_carry = lax.cond(carry_tuple[-1], plqr_iter, lambda x: x, carry_tuple)
-        return updated_carry, updated_carry[2]
-
-    # scan through with max iterations
-    (Xs_star, Us_star, total_cost_star, *_, n_iters, _), costs = lax.scan(loop_fun, initial_carry, None, length=max_iter)
+    (Xs_star, Us_star, total_cost_star, _, _, n_iters, costs, _) = bounded_loop(
+        lambda c: c[-1], plqr_iter, initial_carry, max_iter, loop
+    )
+    # the history repeats the final cost after the last iteration
+    costs = jnp.where(jnp.arange(max_iter) < n_iters, costs, total_cost_star)
     if verbose:
         jax.debug.print("Ran {n}/{N} iterations, cost: {c}", n=n_iters, N=max_iter, c=total_cost_star)
     # adjoints λ_T = ∇Cf, λ_t = A_tᵀ λ_{t+1} + ∇_x C_t of the non-linear problem, by an associative scan
     lqr_stars = approx_lqr_offset(model, Xs_star, Us_star, params)
     Lambs_star = parallel_reverse_lin_integration(LQRParams(Xs_star[0], lqr_stars), Xs_star, Us_star)
-    return (Xs_star, Us_star, Lambs_star), total_cost_star, costs
+    out = ((Xs_star, Us_star, Lambs_star), total_cost_star, costs)
+    if not return_converged:
+        return out
+    kkt_res = jnp.max(jnp.abs(kkt_input_residual(approx_lqr(model, Xs_star, Us_star, params))))
+    max_defect = jnp.max(jnp.abs(dynamics_defects(model, params, Xs_star, Us_star)))
+    return (*out, jnp.logical_and(kkt_res < kkt_tol, max_defect < defect_tol))

@@ -3,6 +3,8 @@ Module solves the differential iterative linear quadratic regulator (DiLQR) prob
 (associative-scan) iLQR solver.
 """
 
+from typing import Tuple
+
 from jax import Array, lax
 import jax.numpy as jnp
 
@@ -51,11 +53,40 @@ def pdilqr(
     -----
     The gradients are implicit: they are exact only if the solver has converged (see ``kkt_tol`` and
     ``max_iter`` of :func:`pilqr_solver`). ``Us_init`` receives no gradient and the solver is never
-    differentiated.
+    differentiated, so it can run as a ``lax.while_loop`` (``loop="while"``, the default).
+    """
+    sol = pilqr_solver(parallel_model, lax.stop_gradient(params), lax.stop_gradient(Us_init), **kwargs)
+    return implicit_pdilqr(parallel_model, params, sol[0], exact_hessian, adjoint)
+
+
+def implicit_pdilqr(
+    parallel_model: ParallelSystem | System,
+    params: iLQRParams,
+    solution: Tuple[Array, Array, Array],
+    exact_hessian: bool = True,
+    adjoint: str = "parallel",
+) -> Array:
+    """
+    The differentiable part of :func:`pdilqr`: the optimal trajectory, with implicit gradients wrt ``params``.
+
+    Parameters
+    ----------
+    parallel_model : ParallelSystem | System
+        The system model.
+    params : iLQRParams
+        The iLQR parameters.
+    solution : Tuple[Array, Array, Array]
+        Optimal (Xs, Us, Lambs) of the solver for ``params``; they receive no gradient.
+    exact_hessian, adjoint
+        See :func:`pdilqr`.
+
+    Returns
+    -------
+    Array
+        The optimized state-control trajectory [(T+1)x(n+m)].
     """
     model = parallel_model.model if isinstance(parallel_model, ParallelSystem) else parallel_model
-    sol = pilqr_solver(parallel_model, lax.stop_gradient(params), lax.stop_gradient(Us_init), **kwargs)
-    (Xs_star, Us_star, Lambs_star), _, _ = lax.stop_gradient(sol)
+    Xs_star, Us_star, Lambs_star = lax.stop_gradient(solution)
     tau_star = jnp.c_[Xs_star, jnp.r_[Us_star, jnp.zeros(shape=(1, model.dims.m))]]
     local_lqr = approx_lqr_offset(model, Xs_star, Us_star, params)
     if exact_hessian:

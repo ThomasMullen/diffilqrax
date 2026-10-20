@@ -2,6 +2,8 @@
 Module solves the differential iterative linear quadratic regulator (DiLQR) problem.
 """
 
+from typing import Tuple
+
 from jax import Array, lax
 import jax
 import jax.numpy as jnp
@@ -95,10 +97,38 @@ def dilqr(model: System, params: iLQRParams, Us_init: Array, exact_hessian: bool
     The gradients are implicit: they are exact only if the solver has converged (see
     ``kkt_tol`` and ``max_iter`` of :func:`diffilqrax.ilqr.ilqr_solver`). ``Us_init`` receives
     no gradient, and the solver is never differentiated, so memory does not grow with the
-    number of iterations even if ``Us_init`` depends on the parameters (e.g. a warm start).
+    number of iterations even if ``Us_init`` depends on the parameters (e.g. a warm start). This is
+    why the solver can run as a ``lax.while_loop`` (``loop="while"``, the default), which is not
+    reverse-mode differentiable itself. The parameters must enter the problem through ``params``,
+    not through arrays the model closes over.
     """
     sol = ilqr_solver(model, lax.stop_gradient(params), lax.stop_gradient(Us_init), **kwargs)
-    (Xs_star, Us_star, Lambs_star), _, _ = lax.stop_gradient(sol)
+    return implicit_dilqr(model, params, sol[0], exact_hessian)
+
+
+def implicit_dilqr(
+    model: System, params: iLQRParams, solution: Tuple[Array, Array, Array], exact_hessian: bool = True
+) -> Array:
+    """
+    The differentiable part of :func:`dilqr`: the optimal trajectory, with implicit gradients wrt ``params``.
+
+    Parameters
+    ----------
+    model : System
+        The system model.
+    params : iLQRParams
+        The iLQR parameters.
+    solution : Tuple[Array, Array, Array]
+        Optimal (Xs, Us, Lambs) of the solver for ``params``; they receive no gradient.
+    exact_hessian : bool, optional
+        See :func:`dilqr`, by default True.
+
+    Returns
+    -------
+    Array
+        The optimized state-control trajectory [(T+1)x(n+m)].
+    """
+    Xs_star, Us_star, Lambs_star = lax.stop_gradient(solution)
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, model.dims.m))]]
     local_lqr = approx_lqr_offset(model, Xs_star, Us_star, params)  ##equiv of g1
     if exact_hessian:

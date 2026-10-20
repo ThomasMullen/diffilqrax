@@ -294,6 +294,42 @@ def linear_nonconvex_problem(kind: str = "track_log", n: int = 5, m: int = 3, ho
     return model, iLQRParams(x0=jnp.ones(n), theta=theta)
 
 
+# batch axes of (params, Us_init) for simulated_tracking: x0 and the references theta.Q per problem
+TRACKING_AXES = (iLQRParams(x0=0, theta=Theta(Uh=None, Wh=None, sigma=None, Q=0)), None)
+
+
+def simulated_tracking(system: str = "rnn", n_batch: int = 8, horizon: int = 30, lam: float = 1e-3, seed: int = 0):
+    """
+    Batch of tracking problems whose references are simulated from the system itself.
+
+    The true inputs are random smooth sums of sines and the references their rollouts from random initial
+    states, with the dynamics of ``rnn_problem`` (system="rnn") or ``pendulum_problem`` ("pendulum").
+    The cost is |x_t - ref_t|^2 + lam |u_t|^2 with final cost |x_T - ref_T|^2. The references [(T+1)xn]
+    are stored in ``theta.Q``, so only x0 and theta.Q have a batch axis (``TRACKING_AXES``).
+
+    Returns ``(model, params, Us_true)`` with batched params and true inputs [BxTxm].
+    """
+    builders = {"rnn": lambda: rnn_problem(horizon=horizon), "pendulum": lambda: pendulum_problem(horizon=horizon)}
+    base_model, base_params = builders[system]()
+    n, m = base_model.dims.n, base_model.dims.m
+    k1, k2, k3 = jr.split(jr.PRNGKey(seed), 3)
+    x0s = base_params.x0 + 0.3 * jr.normal(k1, (n_batch, n))
+    t = jnp.arange(horizon)[None, :, None, None]
+    freqs = jnp.arange(1, 4)[None, None, None, :]
+    amps = 0.5 * jr.normal(k2, (n_batch, 1, m, 3)) / freqs
+    phases = jr.uniform(k3, (n_batch, 1, m, 3), maxval=2 * jnp.pi)
+    Us_true = jnp.sum(amps * jnp.sin(2 * jnp.pi * freqs * t / horizon + phases), axis=-1)
+    simulate = lambda x0, us: ilqr.ilqr_simulate(base_model, us, iLQRParams(x0, base_params.theta))[0][0]
+    refs = jax.vmap(simulate)(x0s, Us_true)
+    model = System(
+        lambda t, x, u, th: jnp.sum((x - th.Q[t]) ** 2) + lam * jnp.sum(u**2),
+        lambda x, th: jnp.sum((x - th.Q[-1]) ** 2),
+        base_model.dynamics,
+        base_model.dims,
+    )
+    return model, iLQRParams(x0=x0s, theta=base_params.theta._replace(Q=refs)), Us_true
+
+
 def as_parallel(model: System) -> ParallelSystem:
     """Wrap a System for the parallel solvers"""
     return ParallelSystem(model)

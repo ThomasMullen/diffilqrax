@@ -67,6 +67,19 @@ Differentiable solvers
 
       :func:`~diffilqrax.parallel_dilqr.pdilqr`
 
+Batched solves
+--------------
+
+.. grid:: 1 2 2 2
+   :gutter: 2
+
+   .. grid-item-card:: batch
+      :link: modules/diffilqrax_batch
+      :link-type: doc
+
+      Many problems sharing one model: :func:`~diffilqrax.batch.batched_ilqr_solver` and
+      :func:`~diffilqrax.batch.batched_dilqr`, by ``vmap``, ``lax.map`` or ``shard_map``.
+
 Types and utilities
 -------------------
 
@@ -96,5 +109,6 @@ Types and utilities
    modules/diffilqrax_dilqr
    modules/diffilqrax_pdlqr
    modules/diffilqrax_pdilqr
+   modules/diffilqrax_batch
    modules/diffilqrax_typs
    modules/diffilqrax_utils

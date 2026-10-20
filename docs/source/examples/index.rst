@@ -88,6 +88,16 @@ Iterative LQR (iLQR)
          :alt: zebrafish tail reconstruction
          :class: gallery-thumbnail
 
+   .. grid-item-card::  Batched iLQR: many tracking problems at once
+      :link: ./batched_ilqr
+      :link-type: doc
+      :shadow: none
+      :class-card: example-gallery
+
+      .. image:: ../_static/nb_thumbnails/batched_ilqr.png
+         :alt: batched iLQR scaling
+         :class: gallery-thumbnail
+
 
 
 .. toctree::
@@ -100,3 +110,4 @@ Iterative LQR (iLQR)
    gradients_through_ilqr
    parallel_solvers
    zebrafish_tail_reconstruction
+   batched_ilqr
