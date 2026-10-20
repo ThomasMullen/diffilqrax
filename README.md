@@ -24,6 +24,14 @@ Diffilqrax is a JAX library for LQR and iterative LQR (iLQR) optimal control. It
   `pdlqr` and `pdilqr` define custom VJPs, so `jax.grad` differentiates the optimal trajectory
   with respect to the dynamics and cost parameters without backpropagating through the solver
   iterations.
+- **Batched solves.** `batch.batched_ilqr_solver` and `batch.batched_dilqr` solve many problems
+  that share a model, with `vmap`, chunked `lax.map` or `shard_map` across devices.
+
+> **Note on reverse mode.** The solvers run as a `lax.while_loop` by default (`loop="while"`), so
+> `jax.grad` cannot backpropagate through `ilqr_solver` or `pilqr_solver` directly. To get gradients
+> of the solution, use `dilqr`, `pdilqr` or `batched_dilqr`. To backpropagate through the
+> iterations themselves, pass `loop="scan"`. This stores every iteration and always runs all
+> `max_iter` of them under `vmap`.
 
 ## Installation
 
@@ -96,6 +104,8 @@ open docs/build/html/index.html
 pytest tests/ -m "not slow"   # fast suite
 pytest tests/ -m slow          # large-dimension tests
 ```
+
+The tests run on the CPU by default. Set `DIFFILQRAX_TEST_PLATFORM=gpu` to run them on a GPU instead.
 
 ## Design principle
 

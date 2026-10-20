@@ -4,6 +4,7 @@ solution across the dimension grid, KKT conditions, the cross-term change of var
 associativity of the scan operators, and cross-checks against primal_dual_ilqr (arXiv:2403.00748).
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,7 @@ from diffilqrax.plqr import (
 from diffilqrax.typs import LQRParams, ModelDims
 from problems import DIMS, SLOW_SIZE, random_lqr, exact_lqr_inputs, lqr_total_cost
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -111,6 +112,22 @@ def test_plqr_float32():
     assert all(x.dtype == jnp.float32 for x in sol)
     ref = lqr.solve_lqr(jax.tree.map(lambda x: x.astype(jnp.float64), params))
     assert_solutions_close(sol, ref, rtol=1e-4)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("horizon", [256, 1024, 4096, 16384])
+@pytest.mark.parametrize("gain", [1.0, 2.5], ids=["stable", "unstable"])
+def test_plqr_long_horizon_accuracy(horizon, gain):
+    """The error of the associative scan does not grow with the horizon, in double and single precision, for
+    stable dynamics (spectral radius ~0.6) and unstable ones (~1.5). For unstable dynamics the open-loop
+    adjoint recursions of both solvers amplify round-off like 1.5^T, so only the states and inputs are compared"""
+    params = random_lqr(5, 3, horizon=horizon)
+    params = params._replace(lqr=params.lqr._replace(A=gain * params.lqr.A))
+    ref = lqr.solve_lqr(params)
+    n_compared = 3 if gain == 1.0 else 2
+    assert_solutions_close(solve_plqr(params)[:n_compared], ref[:n_compared], rtol=1e-13)
+    sol32 = solve_plqr(jax.tree.map(lambda x: x.astype(jnp.float32), params))
+    assert_solutions_close(sol32[:n_compared], ref[:n_compared], rtol=1e-5)
 
 
 # --------------------------------------------------------------------------------------------

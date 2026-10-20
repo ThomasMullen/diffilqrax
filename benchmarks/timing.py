@@ -38,7 +38,6 @@ from diffilqrax.diff_ilqr import dilqr
 from diffilqrax.typs import iLQRParams
 
 jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
 
 
 def timeit(fn, *args, repeats: int = 5):
@@ -140,6 +139,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--quick", action="store_true", help="small sizes for a fast smoke run")
     args = parser.parse_args()
+    # pinned here rather than at import, so that importing timeit does not move other benchmarks to the CPU
+    jax.config.update("jax_default_device", jax.devices("cpu")[0])
     sizes = {
         "lqr_n": [5, 10, 20, 50, 100, 200],
         "lqr_m": [1, 5, 10, 20, 50],

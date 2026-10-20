@@ -5,6 +5,7 @@ the quadratic growth of the cost around the optimum, the expected cost change mo
 sparsity costs, and float32 behaviour.
 """
 
+import os
 import pytest
 import chex
 import jax
@@ -34,7 +35,7 @@ from problems import (
     perturbation_slope,
 )
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 KKT_ATOL = 1e-8

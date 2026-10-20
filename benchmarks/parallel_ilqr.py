@@ -40,16 +40,12 @@ PROBLEMS = {
     "pendulum": lambda T: pendulum_problem(horizon=T),
     "rnn": lambda T: rnn_problem(8, 3, horizon=T),
 }
+INFO = dict(max_iter=MAX_ITER, return_info=True)
 METHODS = {
-    "ilqr": lambda model, params, U0: ilqr_solver(model, params, U0, max_iter=MAX_ITER),
-    "pilqr feedback": lambda model, params, U0: pilqr_solver(model, params, U0, max_iter=MAX_ITER, rollout="feedback"),
-    "pilqr parallel": lambda model, params, U0: pilqr_solver(model, params, U0, max_iter=MAX_ITER, rollout="parallel"),
+    "ilqr": lambda model, params, U0: ilqr_solver(model, params, U0, **INFO),
+    "pilqr feedback": lambda model, params, U0: pilqr_solver(model, params, U0, rollout="feedback", **INFO),
+    "pilqr parallel": lambda model, params, U0: pilqr_solver(model, params, U0, rollout="parallel", **INFO),
 }
-
-
-def iterations(costs, J) -> int:
-    """Iterations until the cost is within round-off of its final value"""
-    return int(jnp.argmax(jnp.abs(costs - J) <= 1e-10 * jnp.abs(J))) + 1
 
 
 def run(horizons, repeats: int):
@@ -62,7 +58,7 @@ def run(horizons, repeats: int):
             line = f"{problem:9s} T={T:6}"
             for method, solve in METHODS.items():
                 fn = jax.jit(lambda p, u, solve=solve, model=model: solve(model, p, u))
-                compile_t, run_t, ((Xs, Us, Lambs), J, costs) = timeit(fn, params, U0, repeats=repeats)
+                compile_t, run_t, ((Xs, Us, Lambs), J, _, converged, n_iters) = timeit(fn, params, U0, repeats=repeats)
                 kkt = max(float(jnp.max(jnp.abs(r))) for r in nonlinear_kkt(model, params, Xs, Us, Lambs))
                 rows.append(
                     dict(
@@ -71,7 +67,8 @@ def run(horizons, repeats: int):
                         T=T,
                         n=model.dims.n,
                         m=model.dims.m,
-                        iterations=iterations(costs, J),
+                        iterations=int(n_iters),
+                        converged=bool(converged),
                         cost=float(J),
                         kkt=kkt,
                         max_defect=float(jnp.max(jnp.abs(dynamics_defects(model, params, Xs, Us)))),
@@ -111,10 +108,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--quick", action="store_true", help="small sweep for a smoke test")
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--out-dir", type=Path, default=None, help="output directory, by default fig_dump/<timestamp>")
     args = parser.parse_args()
     horizons = (64, 256) if args.quick else (64, 256, 1024, 4096, 16384)
     rows = run(horizons, args.repeats)
-    out_dir = REPO / "fig_dump" / datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = args.out_dir or REPO / "fig_dump" / datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "parallel_ilqr.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))

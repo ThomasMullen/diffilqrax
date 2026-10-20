@@ -14,6 +14,11 @@ the solver over the batch:
   multiple of the number of devices. After ``jax.distributed.initialize()``, ``jax.devices()`` spans every
   host, so the same call runs on a multi-host cluster.
 
+Slow elements (stragglers) cost the most under "vmap" and "shard". When the same batch is solved repeatedly,
+e.g. once per training epoch, ``return_info=True`` gives the iterations each element needed. Sorting the
+batch by them and solving with "map" in chunks of ``batch_size`` groups similar elements together. Starting
+each solve from the previous solution (``Us_init``) usually cuts the iterations.
+
 Gradients of :func:`batched_dilqr` are the implicit gradients of :func:`diffilqrax.diff_ilqr.dilqr`, attached
 after the batched solve, so ``jax.grad`` of a loss summed over the batch works with every strategy without
 differentiating the solver loops.
@@ -167,7 +172,8 @@ def batched_ilqr_solver(
     strategy, batch_size, devices, inner
         See :func:`batch_map`.
     **solver_kwargs
-        Keyword arguments of the solver, e.g. ``max_iter``, ``kkt_tol``, ``linesearch``.
+        Keyword arguments of the solver, e.g. ``max_iter``, ``kkt_tol``, ``linesearch``. With
+        ``return_info=True`` the outputs end with the per-problem convergence flags and iteration counts.
 
     Returns
     -------

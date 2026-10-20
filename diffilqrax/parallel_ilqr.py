@@ -29,6 +29,7 @@ from diffilqrax.ilqr import (
     decrease_regularisation,
     LINESEARCHES,
     LOOPS,
+    stationary,
 )
 from diffilqrax.typs import iLQRParams, System, Gains, LQR, LQRParams, ParallelSystem
 
@@ -48,6 +49,30 @@ def dynamics_defects(model: System, params: iLQRParams, Xs: Array, Us: Array) ->
     """Dynamics defects d_t = f(x_t, u_t) - x_{t+1} [Txn], evaluated in parallel over time"""
     tps = jnp.arange(model.dims.horizon)
     return jax.vmap(model.dynamics, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, params.theta) - Xs[1:]
+
+
+def value_function_grad(delta_lqr: LQR, values: Tuple[Array, Array]) -> Array:
+    """
+    Gradient hu_t = r_t + B_tᵀ λ_{t+1} of the cost-to-go wrt u_t at the current iterate, with the costates
+    λ_{t+1} = J_{t+1} a_t - η_{t+1} of the local LQR in deviation coordinates (δx = δu = 0, so δx_{t+1} = a_t).
+    It vanishes at every t if and only if dL/dU does, but unlike the open-loop adjoint it stays bounded when the
+    linearised dynamics are unstable.
+
+    Parameters
+    ----------
+    delta_lqr : LQR
+        Local LQR in deviation coordinates, with the dynamics defects as offsets ``a``.
+    values : Tuple[Array, Array]
+        Value functions (η, J) [(T+1)xn], [(T+1)xnxn] from :func:`diffilqrax.plqr.plqr_backward_pass`.
+
+    Returns
+    -------
+    Array
+        hu [Txm].
+    """
+    etas, Js = values
+    lambs_next = jnp.einsum("tij,tj->ti", Js[1:], delta_lqr.a) - etas[1:]
+    return delta_lqr.r + jnp.einsum("tji,tj->ti", delta_lqr.B, lambs_next)
 
 
 def multiple_shooting_step(delta_lqr: LQR, gains: Gains, values: Tuple[Array, Array]) -> Tuple[Array, Array, Array]:
@@ -177,6 +202,7 @@ def pilqr_solver(
     loop: str = "while",
     linesearch: str = "backtrack",
     return_converged: bool = False,
+    return_info: bool = False,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """
@@ -221,8 +247,10 @@ def pilqr_solver(
         Whether to adapt the regularisation μ, by default True. If False, μ = 0 and the solver stops
         at the first step that does not decrease the cost.
     kkt_tol : float, optional
-        Converged when max|dL/dU| falls below this tolerance (and the defects below ``defect_tol``), by
-        default 1e-10.
+        Converged when max|dL/dU| and max|hu| both fall below this tolerance (and the defects below
+        ``defect_tol``), by default 1e-10. hu is the gradient of the cost-to-go wrt the inputs of the
+        unregularised local LQR (:func:`value_function_grad`); where the open-loop adjoint of dL/dU overflows,
+        max|hu| decides alone (:func:`diffilqrax.ilqr.stationary`).
     mu_max : float, optional
         Stop when the regularisation exceeds this value without an accepted step, by default 1e10.
     max_reg_iter : int, optional
@@ -250,8 +278,10 @@ def pilqr_solver(
     linesearch : str, optional
         "backtrack" (default) or "parallel", as in :func:`diffilqrax.ilqr.ilqr_solver`.
     return_converged : bool, optional
-        If True, also return whether the KKT residual (and the defects) of the solution are below the
-        tolerances, by default False.
+        If True, also return whether the solution passes the convergence test, by default False.
+    return_info : bool, optional
+        If True, also return the convergence flag (as ``return_converged``) and the number of iterations run,
+        by default False. Takes precedence over ``return_converged``.
     **linesearch_kwargs
         Additional keyword arguments for the line search (tau, beta, alpha_min, max_iter_linesearch,
         n_parallel), see :func:`diffilqrax.ilqr.armijo_linesearch`.
@@ -262,7 +292,8 @@ def pilqr_solver(
         A tuple containing the final state trajectory, control trajectory, and the adjoint
         variables. Also returns the total cost of the trajectory and the cost history [max_iter],
         which repeats the final cost after the last iteration. With ``return_converged=True`` a fourth
-        element, the boolean convergence flag, is appended.
+        element, the boolean convergence flag, is appended; with ``return_info=True`` the flag and the
+        integer number of iterations are appended.
     """
     assert rollout in ROLLOUTS, f"rollout must be one of {ROLLOUTS}, got {rollout}"
     assert loop in LOOPS, f"loop must be one of {LOOPS}, got {loop}"
@@ -285,10 +316,28 @@ def pilqr_solver(
     costs_init = jnp.zeros(max_iter, dtype=jnp.result_type(c_init))
     initial_carry = (Xs_init, Us_init, c_init, jnp.ones_like(c_init), jnp.zeros_like(c_init), 0, costs_init, jnp.array(True))
     prollout = partial(ilqr_forward_pass, model, params)
+    delta_x0 = jnp.zeros_like(params.x0)
 
-    def backward_with_reg(lqr_params: LQRParams, delta: Array, mu: Array):
-        """parallel backward pass, increasing mu until Huu_reg is positive definite"""
-        dJ, gains, is_pd, values = plqr_backward_pass(lqr_params, mu, return_values=True)
+    def stationarity(Xs: Array, Us: Array):
+        """local LQR, defects, unregularised backward pass of the deviation LQR, and the convergence test"""
+        lqr = approx_lqr(model, Xs, Us, params)
+        # deviation coordinates: the defects are the dynamics offsets (zero along a feedback rollout)
+        defects = dynamics_defects(model, params, Xs, Us)
+        delta_lqr = lqr._replace(a=defects)
+        unregularised = plqr_backward_pass(LQRParams(delta_x0, delta_lqr), 0.0, return_values=True)
+        hu_max = jnp.max(jnp.abs(value_function_grad(delta_lqr, unregularised[-1])))
+        dLdU_max = jnp.max(jnp.abs(kkt_input_residual(lqr)))
+        max_defect = jnp.max(jnp.abs(defects))
+        converged = jnp.logical_and(stationary(hu_max, dLdU_max, kkt_tol), max_defect < defect_tol)
+        return lqr, delta_lqr, unregularised, hu_max, dLdU_max, max_defect, converged
+
+    def backward_with_reg(lqr_params: LQRParams, delta: Array, mu: Array, unregularised: Optional[Tuple] = None):
+        """parallel backward pass, increasing mu until Huu_reg is positive definite; reuses a given mu = 0 pass"""
+        if unregularised is None:
+            first = plqr_backward_pass(lqr_params, mu, return_values=True)
+        else:
+            first = lax.cond(mu == 0.0, lambda: unregularised, lambda: plqr_backward_pass(lqr_params, mu, return_values=True))
+        dJ, gains, is_pd, values = first
         if not regularise:
             return dJ, gains, is_pd, values, delta, mu
 
@@ -333,18 +382,16 @@ def pilqr_solver(
     def plqr_iter(carry_tuple):
         """One parallel iLQR iteration: backward scan, line search, regularisation update"""
         old_Xs, old_Us, old_cost, delta, mu, n_iter, costs, _ = carry_tuple
-        lqr = approx_lqr(model, old_Xs, old_Us, params)
-        defects = dynamics_defects(model, params, old_Xs, old_Us)
-        kkt_res = jnp.max(jnp.abs(kkt_input_residual(lqr)))
-        max_defect = jnp.max(jnp.abs(defects))
-        converged = jnp.logical_and(kkt_res < kkt_tol, max_defect < defect_tol)
+        # convergence test on the unregularised, unprojected local LQR
+        lqr, delta_lqr, unregularised, hu_max, dLdU_max, max_defect, converged = stationarity(old_Xs, old_Us)
+        defects = delta_lqr.a
 
         def take_step(_):
-            # deviation coordinates: the defects are the dynamics offsets (zero along a feedback rollout)
-            local_lqr = lqr._replace(a=defects)
-            local_lqr = local_lqr if make_psd is None else project_psd_lqr(local_lqr, psd_delta, make_psd)
-            delta_params = LQRParams(jnp.zeros_like(params.x0), local_lqr)
-            exp_dJ, gains, _, values, delta_new, mu_new = backward_with_reg(delta_params, delta, mu)
+            if make_psd is None:
+                local_lqr, reuse = delta_lqr, unregularised
+            else:
+                local_lqr, reuse = project_psd_lqr(delta_lqr, psd_delta, make_psd), None
+            exp_dJ, gains, _, values, delta_new, mu_new = backward_with_reg(LQRParams(delta_x0, local_lqr), delta, mu, reuse)
             if rollout == "feedback":
                 accepted, (new_Xs, new_Us), new_cost = feedback_step(gains, exp_dJ, old_Xs, old_Us, old_cost)
             else:
@@ -365,10 +412,11 @@ def pilqr_solver(
                 stop = jnp.logical_or(stop, jnp.logical_and(accepted, small))
             if verbose:
                 jax.debug.print(
-                    "it={i} J={j:.12e} max|dLdU|={g:.3e} max|d|={d:.3e} mu={m:.1e} accepted={a}",
+                    "it={i} J={j:.12e} max|dLdU|={g:.3e} max|hu|={h:.3e} max|d|={d:.3e} mu={m:.1e} accepted={a}",
                     i=n_iter + 1,
                     j=new_cost,
-                    g=kkt_res,
+                    g=dLdU_max,
+                    h=hu_max,
                     d=max_defect,
                     m=mu_new,
                     a=accepted,
@@ -381,7 +429,7 @@ def pilqr_solver(
 
         return lax.cond(converged, stop, take_step, None)
 
-    (Xs_star, Us_star, total_cost_star, _, _, n_iters, costs, _) = bounded_loop(
+    Xs_star, Us_star, total_cost_star, _, _, n_iters, costs, _ = bounded_loop(
         lambda c: c[-1], plqr_iter, initial_carry, max_iter, loop
     )
     # the history repeats the final cost after the last iteration
@@ -392,8 +440,7 @@ def pilqr_solver(
     lqr_stars = approx_lqr_offset(model, Xs_star, Us_star, params)
     Lambs_star = parallel_reverse_lin_integration(LQRParams(Xs_star[0], lqr_stars), Xs_star, Us_star)
     out = ((Xs_star, Us_star, Lambs_star), total_cost_star, costs)
-    if not return_converged:
+    if not (return_converged or return_info):
         return out
-    kkt_res = jnp.max(jnp.abs(kkt_input_residual(approx_lqr(model, Xs_star, Us_star, params))))
-    max_defect = jnp.max(jnp.abs(dynamics_defects(model, params, Xs_star, Us_star)))
-    return (*out, jnp.logical_and(kkt_res < kkt_tol, max_defect < defect_tol))
+    converged = stationarity(Xs_star, Us_star)[-1]
+    return (*out, converged, n_iters) if return_info else (*out, converged)

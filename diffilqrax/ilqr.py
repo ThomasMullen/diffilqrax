@@ -205,6 +205,33 @@ def decrease_regularisation(delta: Array, mu: Array) -> Tuple[Array, Array]:
     return delta, mu
 
 
+def stationary(hu_max: Array, dLdU_max: Array, tol: float) -> Array:
+    """
+    Convergence test of the iLQR solvers: max|dL/dU| and max|hu| below ``tol``, or max|hu| alone where dL/dU
+    is not finite.
+
+    Both vanish exactly at a stationary point, but away from it dL/dU = hu + B^T (λ - v) carries hu back
+    through the open-loop dynamics: with unstable dynamics a small max|hu| leaves a much larger max|dL/dU|, so
+    both are required. Over long unstable horizons the open-loop adjoint λ overflows and dL/dU is never finite;
+    there the bounded max|hu| decides alone.
+
+    Parameters
+    ----------
+    hu_max : Array
+        max_t |hu_t| of the unregularised backward pass.
+    dLdU_max : Array
+        max_t |dL/dU_t| from :func:`kkt_input_residual`.
+    tol : float
+        Tolerance.
+
+    Returns
+    -------
+    Array
+        Boolean convergence flag.
+    """
+    return jnp.logical_and(hu_max < tol, jnp.logical_or(dLdU_max < tol, jnp.logical_not(jnp.isfinite(dLdU_max))))
+
+
 def kkt_input_residual(lqr_lin: LQR) -> Array:
     """
     Gradient of the total non-linear cost wrt the inputs, i.e. the dL/dU KKT residual.
@@ -282,14 +309,14 @@ def compute_lqr_params(
     theta = params.theta
     tps = jnp.arange(model.dims.horizon)
 
-    (Fx, Fu) = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
-    (Cx, Cu) = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
+    Fx, Fu = time_map(model.lin_dyn)(tps, Xs[:-1], Us, theta)
+    Cx, Cu = time_map(model.lin_cost)(tps, Xs[:-1], Us, theta)
     (Cxx, Cxu), (_, Cuu) = time_map(model.quad_cost)(tps, Xs[:-1], Us, theta)
     fCx = jax.jacrev(model.costf)(Xs[-1], theta)
     fCxx = jax.jacfwd(jax.jacrev(model.costf))(Xs[-1], theta)
 
     def _get_diff_dyn(t, x, u, theta):
-        (Fx, Fu) = model.lin_dyn(t, x, u, theta)
+        Fx, Fu = model.lin_dyn(t, x, u, theta)
         return model.dynamics(t, x, u, theta) - Fx @ x - Fu @ u
 
     # the flags are static, so only the selected branch is traced
@@ -318,9 +345,7 @@ def compute_lqr_params(
     )()
 
 
-def approx_lqr_offset(
-    model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams
-) -> LQR:
+def approx_lqr_offset(model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """
     Approximate non-linear model as LQR with offset.
 
@@ -340,14 +365,10 @@ def approx_lqr_offset(
     LQR
         The LQR parameters.
     """
-    return compute_lqr_params(
-        model, Xs, Us, params, include_dyn_offset=True, include_cost_offset=True
-    )
+    return compute_lqr_params(model, Xs, Us, params, include_dyn_offset=True, include_cost_offset=True)
 
 
-def approx_lqr(
-    model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams
-) -> LQR:
+def approx_lqr(model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """
     Approximate non-linear model as LQR without offset.
 
@@ -367,14 +388,10 @@ def approx_lqr(
     LQR
         The LQR parameters.
     """
-    return compute_lqr_params(
-        model, Xs, Us, params, include_dyn_offset=False, include_cost_offset=False
-    )
+    return compute_lqr_params(model, Xs, Us, params, include_dyn_offset=False, include_cost_offset=False)
 
 
-def approx_lqr_dyn(
-    model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams
-) -> LQR:
+def approx_lqr_dyn(model: System | ParallelSystem, Xs: Array, Us: Array, params: iLQRParams) -> LQR:
     """
     Approximate non-linear model as LQR with dynamic offset.
 
@@ -394,14 +411,10 @@ def approx_lqr_dyn(
     LQR
         The LQR parameters.
     """
-    return compute_lqr_params(
-        model, Xs, Us, params, include_dyn_offset=True, include_cost_offset=False
-    )
+    return compute_lqr_params(model, Xs, Us, params, include_dyn_offset=True, include_cost_offset=False)
 
 
-def ilqr_simulate(
-    model: System, Us: Array, params: iLQRParams
-) -> Tuple[Tuple[Array, Array], float]:
+def ilqr_simulate(model: System, Us: Array, params: iLQRParams) -> Tuple[Tuple[Array, Array], float]:
     """
     Simulate forward trajectory and cost with nonlinear parameters.
 
@@ -506,6 +519,7 @@ def ilqr_solver(
     loop: str = "while",
     linesearch: str = "backtrack",  # pylint: disable=redefined-outer-name
     return_converged: bool = False,
+    return_info: bool = False,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """
@@ -539,8 +553,11 @@ def ilqr_solver(
         is taken with α = 1 and a step that increases the cost is rejected, increasing the
         regularisation instead.
     kkt_tol : float, optional
-        Converged when max|dL/dU| falls below this tolerance, by default 1e-10. Use ~1e-4 for
-        float32.
+        Converged when max|dL/dU| (:func:`kkt_input_residual`) and max|hu| both fall below this tolerance,
+        by default 1e-10. Use ~1e-4 for float32. hu is the gradient of the cost-to-go wrt the inputs from the
+        unregularised backward pass (:func:`diffilqrax.lqr.regularised_backward_pass`); it vanishes if and only
+        if dL/dU does, and stays finite when the open-loop adjoint of dL/dU overflows (unstable dynamics, long
+        horizons), where the test falls back to max|hu| alone (:func:`stationary`).
     mu_max : float, optional
         Stop when the regularisation exceeds this value without an accepted step, by default 1e10.
     max_reg_iter : int, optional
@@ -556,7 +573,10 @@ def ilqr_solver(
         (default 8) step sizes at once and keeps the largest accepted one, which takes the same step but
         needs fewer sequential rollouts (useful on GPU). Ignored if ``use_linesearch`` is False.
     return_converged : bool, optional
-        If True, also return whether the KKT residual of the solution is below ``kkt_tol``, by default False.
+        If True, also return whether the solution passes the convergence test, by default False.
+    return_info : bool, optional
+        If True, also return the convergence flag (as ``return_converged``) and the number of iterations run,
+        by default False. Takes precedence over ``return_converged``.
     **linesearch_kwargs
         Additional keyword arguments for :func:`armijo_linesearch` (tau, beta, alpha_min,
         max_iter_linesearch, n_parallel).
@@ -567,7 +587,8 @@ def ilqr_solver(
         A tuple containing the final state trajectory, control trajectory, and the adjoint
         variables. Also returns the total cost of the trajectory and the cost history [max_iter + 1],
         which repeats the final cost after the last iteration. With ``return_converged=True`` a fourth
-        element, the boolean convergence flag, is appended.
+        element, the boolean convergence flag, is appended; with ``return_info=True`` the flag and the
+        integer number of iterations are appended.
 
     Notes
     -----
@@ -595,8 +616,15 @@ def ilqr_solver(
 
     rollout = partial(ilqr_forward_pass, model, params)
 
-    def backward_with_reg(lqr_params: LQR, delta: Array, mu: Array):
-        """backward pass, increasing mu until Huu_reg is positive definite"""
+    def stationarity(Xs: Array, Us: Array):
+        """local LQR, its unregularised backward pass, max|hu|, max|dL/dU| and the convergence test"""
+        lqr_params = approx_lqr(model, Xs, Us, params)
+        *unregularised, hu_max = lqr.regularised_backward_pass(lqr_params, 0.0, return_grad=True)
+        dLdU_max = jnp.max(jnp.abs(kkt_input_residual(lqr_params)))
+        return lqr_params, tuple(unregularised), hu_max, dLdU_max, stationary(hu_max, dLdU_max, kkt_tol)
+
+    def backward_with_reg(lqr_params: LQR, delta: Array, mu: Array, unregularised: Tuple):
+        """backward pass, increasing mu until Huu_reg is positive definite; reuses the mu = 0 pass"""
 
         def needs_reg(carry):
             return jnp.logical_and(jnp.logical_not(carry[2]), carry[4] < mu_max)
@@ -606,19 +634,17 @@ def ilqr_solver(
             delta, mu = increase_regularisation(delta, mu)
             return (*lqr.regularised_backward_pass(lqr_params, mu), delta, mu)
 
-        init = (*lqr.regularised_backward_pass(lqr_params, mu), delta, mu)
-        return bounded_loop(needs_reg, retry, init, max_reg_iter, loop)
+        first = lax.cond(mu == 0.0, lambda: unregularised, lambda: lqr.regularised_backward_pass(lqr_params, mu))
+        return bounded_loop(needs_reg, retry, (*first, delta, mu), max_reg_iter, loop)
 
     def lqr_iter(carry_tuple):
         """lqr iteration update function"""
         old_Xs, old_Us, old_cost, delta, mu, n_iter, costs, _ = carry_tuple
-        # approximate dyn and loss to LQR around current trajectory
-        lqr_params = approx_lqr(model, old_Xs, old_Us, params)
-        kkt_res = jnp.max(jnp.abs(kkt_input_residual(lqr_params)))
-        converged = kkt_res < kkt_tol
+        # approximate dyn and loss to LQR around current trajectory, and test for convergence
+        lqr_params, unregularised, hu_max, dLdU_max, converged = stationarity(old_Xs, old_Us)
 
         def take_step(_):
-            exp_cost_red, gains, _, delta_new, mu_new = backward_with_reg(lqr_params, delta, mu)
+            exp_cost_red, gains, _, delta_new, mu_new = backward_with_reg(lqr_params, delta, mu, unregularised)
             if use_linesearch:
                 accepted, (new_Xs, new_Us), new_cost = armijo_linesearch(
                     rollout,
@@ -636,9 +662,7 @@ def ilqr_solver(
                 (new_Xs, new_Us), new_cost = rollout(gains, old_Xs, old_Us, alpha=1.0)
                 noise = 100.0 * jnp.finfo(jnp.result_type(old_cost)).eps * jnp.maximum(jnp.abs(old_cost), 1.0)
                 accepted = jnp.logical_and(jnp.isfinite(new_cost), old_cost - new_cost > -noise)
-            delta_new, mu_new = lax.cond(
-                accepted, decrease_regularisation, increase_regularisation, delta_new, mu_new
-            )
+            delta_new, mu_new = lax.cond(accepted, decrease_regularisation, increase_regularisation, delta_new, mu_new)
             new_Xs = jnp.where(accepted, new_Xs, old_Xs)
             new_Us = jnp.where(accepted, new_Us, old_Us)
             new_cost = jnp.where(accepted, new_cost, old_cost)
@@ -646,8 +670,13 @@ def ilqr_solver(
             stuck = jnp.logical_and(jnp.logical_not(accepted), mu_new >= mu_max)
             if verbose:
                 jax.debug.print(
-                    "it={i} J={j:.12e} max|dLdU|={g:.3e} mu={m:.1e} accepted={a}",
-                    i=n_iter + 1, j=new_cost, g=kkt_res, m=mu_new, a=accepted,
+                    "it={i} J={j:.12e} max|dLdU|={g:.3e} max|hu|={h:.3e} mu={m:.1e} accepted={a}",
+                    i=n_iter + 1,
+                    j=new_cost,
+                    g=dLdU_max,
+                    h=hu_max,
+                    m=mu_new,
+                    a=accepted,
                 )
             costs_new = costs.at[n_iter].set(new_cost)
             return (new_Xs, new_Us, new_cost, delta_new, mu_new, n_iter + 1, costs_new, jnp.logical_not(stuck))
@@ -657,7 +686,7 @@ def ilqr_solver(
 
         return lax.cond(converged, stop, take_step, None)
 
-    (Xs_star, Us_star, total_cost, _, _, n_iters, costs, _) = bounded_loop(
+    Xs_star, Us_star, total_cost, _, _, n_iters, costs, _ = bounded_loop(
         lambda c: c[-1], lqr_iter, initial_carry, max_iter, loop
     )
     # the history repeats the final cost after the last iteration
@@ -667,10 +696,10 @@ def ilqr_solver(
     lqr_params_stars = approx_lqr_offset(model, Xs_star, Us_star, params)
     Lambs_star = lqr.lqr_adjoint_pass(Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars))
     out = ((Xs_star, Us_star, Lambs_star), total_cost, jnp.concatenate([jnp.array([c_init]), costs]))
-    if not return_converged:
+    if not (return_converged or return_info):
         return out
-    converged = jnp.max(jnp.abs(kkt_input_residual(approx_lqr(model, Xs_star, Us_star, params)))) < kkt_tol
-    return (*out, converged)
+    converged = stationarity(Xs_star, Us_star)[-1]
+    return (*out, converged, n_iters) if return_info else (*out, converged)
 
 
 def armijo_linesearch(
@@ -751,9 +780,7 @@ def armijo_linesearch(
         expected_red = lqr.calc_expected_change(expected_dJ, alpha=alpha)
         actual_red = cost_init - new_cost
         below_noise = jnp.logical_and(expected_red < noise, actual_red > -noise)
-        accepted = jnp.logical_and(
-            jnp.isfinite(new_cost), jnp.logical_or(actual_red > beta * expected_red, below_noise)
-        )
+        accepted = jnp.logical_and(jnp.isfinite(new_cost), jnp.logical_or(actual_red > beta * expected_red, below_noise))
         return accepted, new_Xs, new_Us, new_cost
 
     return backtracking_search(
@@ -881,9 +908,7 @@ def linesearch(
     def loop_fun(carry_tuple: Tuple[Array, Array, float, float, int, bool], _):
         """if cond false return existing carry else run another rollout with new alpha"""
         # assign function given carry_on condition
-        updated_carry = lax.cond(
-            carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple
-        )
+        updated_carry = lax.cond(carry_tuple[-1], backtrack_iter, lambda x: x, carry_tuple)
         return updated_carry, (updated_carry[2], updated_carry[3])
 
     # scan through with max iterations

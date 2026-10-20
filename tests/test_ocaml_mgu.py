@@ -8,6 +8,7 @@ inputs and observations of 3 test and 3 train trials, the OCaml rollout of those
 iLQR objective, and a converged OCaml iLQR solve from ``u = 0``.
 """
 
+import os
 from pathlib import Path
 
 import numpy as onp
@@ -20,7 +21,7 @@ from diffilqrax.typs import iLQRParams
 
 from mgu2_model import load_fixture, make_system, make_theta, readout, rollout, total_cost
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ocaml_mgu.npz"

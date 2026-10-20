@@ -3,16 +3,17 @@ Long-horizon iLQR with the sequential and the parallel (associative-scan) solver
 sine target over T = 4000 steps.
 
 Run from the repository root:
-    python examples/long_horizon.py [--horizon 4000]
+    python examples/long_horizon.py [--horizon 4000] [--out-dir DIR]
 
 Solves with ilqr_solver and with pilqr_solver using the "feedback" rollout (parallel backward pass,
 sequential non-linear rollout) and the "parallel" rollout (multiple shooting: everything is an associative
 scan or a vmap). Prints the wall time, iterations, cost and KKT residual of each, and saves a plot of the
-solutions to fig_dump/<timestamp>/long_horizon.png. On a CPU the parallel solvers are not faster; on a GPU
+solutions and a CSV of the results to fig_dump/<timestamp>/ (or --out-dir). On a CPU the parallel solvers are not faster; on a GPU
 the "parallel" rollout has O(log T) depth per iteration.
 """
 
 import argparse
+import csv
 import time
 from datetime import datetime
 from pathlib import Path
@@ -55,32 +56,52 @@ def make_problem(horizon: int):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--horizon", type=int, default=4000)
+    parser.add_argument("--out-dir", type=Path, default=None, help="output directory, by default fig_dump/<timestamp>")
     args = parser.parse_args()
     model, params = make_problem(args.horizon)
     Us_init = jnp.zeros((args.horizon, M))
+    info = dict(max_iter=200, return_info=True)
     solvers = {
-        "ilqr": lambda p, u: ilqr_solver(model, p, u, max_iter=200),
-        "pilqr feedback": lambda p, u: pilqr_solver(model, p, u, max_iter=200, rollout="feedback"),
-        "pilqr parallel": lambda p, u: pilqr_solver(model, p, u, max_iter=200, rollout="parallel"),
+        "ilqr": lambda p, u: ilqr_solver(model, p, u, **info),
+        "pilqr feedback": lambda p, u: pilqr_solver(model, p, u, rollout="feedback", **info),
+        "pilqr parallel": lambda p, u: pilqr_solver(model, p, u, rollout="parallel", **info),
     }
-    print(f"device: {jax.devices()[0]}, T = {args.horizon}")
-    solutions = {}
+    device = str(jax.devices()[0])
+    print(f"device: {device}, T = {args.horizon}")
+    solutions, rows = {}, []
     for name, solve in solvers.items():
         solve = jax.jit(solve)
         jax.block_until_ready(solve(params, Us_init))  # compile  # pylint: disable=not-callable
         start = time.perf_counter()
-        (Xs, Us, _), J, costs = jax.block_until_ready(solve(params, Us_init))  # pylint: disable=not-callable
+        (Xs, Us, _), J, _, converged, n_iters = jax.block_until_ready(solve(params, Us_init))  # pylint: disable=not-callable
         seconds = time.perf_counter() - start
-        iters = int(jnp.argmax(jnp.abs(costs - J) <= 1e-10 * jnp.abs(J))) + 1
+        iters = int(n_iters)
         kkt = float(jnp.max(jnp.abs(kkt_input_residual(approx_lqr(model, Xs, Us, params)))))
         defect = float(jnp.max(jnp.abs(dynamics_defects(model, params, Xs, Us))))
         print(
             f"{name:15s} {seconds:7.3f}s  iterations {iters:3d}  cost {float(J):.10f}  max|dL/dU| {kkt:.1e}  max defect {defect:.1e}"
         )
         solutions[name] = (Xs, Us)
+        rows.append(
+            dict(
+                method=name,
+                T=args.horizon,
+                seconds=seconds,
+                iterations=iters,
+                converged=bool(converged),
+                cost=float(J),
+                kkt=kkt,
+                max_defect=defect,
+                device=device,
+            )
+        )
 
-    out_dir = Path("fig_dump") / datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = args.out_dir or Path("fig_dump") / datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "long_horizon.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
     fig, axs = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
     for (name, (Xs, Us)), style in zip(solutions.items(), ("-", "--", ":")):
         axs[0].plot(Xs[:, 0], style, label=name)

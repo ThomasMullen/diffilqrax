@@ -3,6 +3,7 @@ Gradient tests for the differentiable iLQR solver: implicit (custom VJP) gradien
 differences and against direct differentiation through the unrolled solver, wrt both x0 and theta.
 """
 
+import os
 import pytest
 import chex
 import jax
@@ -14,7 +15,7 @@ from diffilqrax.ilqr import ilqr_solver
 from diffilqrax.diff_ilqr import dilqr
 from problems import rnn_problem, linear_rnn_problem, pendulum_problem, van_der_pol, inverted_pendulum
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 MAX_ITER = 400

@@ -27,9 +27,7 @@ def bmm(arr1: Array, arr2: Array) -> Array:
 
 
 # LQR struct
-LQRBackParams = Tuple[
-    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike
-]
+LQRBackParams = Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike]
 
 
 def simulate_trajectory(
@@ -103,9 +101,7 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
         nlamb = aT @ lamb + Q @ x + q + S @ u
         return nlamb, nlamb
 
-    lambs = lax.scan(
-        adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
-    )[1]
+    lambs = lax.scan(adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True)[1]
     return jnp.vstack([lambs, lambf[None]])
 
 
@@ -161,7 +157,8 @@ def regularised_backward_pass(
     lqr: LQR,
     mu: float = 0.0,
     pd_thresh: float = 1e-8,
-) -> Tuple[CostToGo, Gains, Array]:
+    return_grad: bool = False,
+) -> Tuple:
     """
     LQR backward pass with Levenberg-Marquardt regularisation of the input Hessian.
 
@@ -177,22 +174,26 @@ def regularised_backward_pass(
         Regularisation strength, by default 0.0.
     pd_thresh : float, optional
         Minimum eigenvalue of ``Huu_reg`` for it to count as positive definite, by default 1e-8.
+    return_grad : bool, optional
+        Also return max_t |hu_t|, by default False. hu_t = r_t + B_t^T (v_{t+1} + V_{t+1} a_t) is the gradient
+        of the cost-to-go wrt u_t; it vanishes at every t if and only if dL/dU does, but v is propagated
+        through the closed loop A + BK, so it stays bounded for unstable open-loop dynamics.
 
     Returns
     -------
-    Tuple[CostToGo, Gains, Array]
+    Tuple[CostToGo, Gains, Array] or Tuple[CostToGo, Gains, Array, Array]
         Expected change in cost terms (V: 0.5 k^T Huu k, v: k^T hu summed over time), the optimal
         feedback gains, and a boolean flag that is True if ``Huu_reg`` is positive definite at
-        every time step.
+        every time step. With ``return_grad``, also max_t |hu_t|.
     """
     a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
     n_dim, _ = lqr.B[0].shape
 
     def riccati_step(
-        carry: Tuple[CostToGo, CostToGo, Array], inps: RiccatiStepParams
-    ) -> Tuple[Tuple[CostToGo, CostToGo, Array], Gains]:
+        carry: Tuple[CostToGo, CostToGo, Array, Array], inps: RiccatiStepParams
+    ) -> Tuple[Tuple[CostToGo, CostToGo, Array, Array], Gains]:
         AT, BT, (A, B, a, Q, q, R, r, S) = inps
-        curr_val, cost_step, is_pd = carry
+        curr_val, cost_step, is_pd, hu_max = carry
         V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
         Huu = symmetrise_matrix(R + BT @ V @ B)
         Hxx = symmetrise_matrix(Q + AT @ V @ A)
@@ -202,10 +203,9 @@ def regularised_backward_pass(
         Huu_reg = symmetrise_matrix(Huu + mu * BT @ B)
         min_eval = jnp.min(jnp.linalg.eigvalsh(lax.stop_gradient(Huu_reg)))
         is_pd = jnp.logical_and(is_pd, min_eval > pd_thresh)
+        hu_max = jnp.maximum(hu_max, jnp.max(jnp.abs(hu)))
         K, k = jnp.hsplit(-solve(Huu_reg, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim])
-        k = k.reshape(
-            -1,
-        )
+        k = k.reshape(-1)
 
         # Find value iteration at current time
         V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
@@ -215,15 +215,17 @@ def regularised_backward_pass(
         dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
         dj = dj + (k.T @ hu).squeeze()
 
-        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj), is_pd), Gains(K, k)
+        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj), is_pd, hu_max), Gains(K, k)
 
-    (_, dJ, is_pd), Ks = lax.scan(
+    (_, dJ, is_pd, hu_max), Ks = lax.scan(
         riccati_step,
-        init=(CostToGo(lqr.Qf, lqr.qf), CostToGo(0.0, 0.0), jnp.array(True)),
+        init=(CostToGo(lqr.Qf, lqr.qf), CostToGo(0.0, 0.0), jnp.array(True), jnp.zeros((), lqr.r.dtype)),
         xs=(a_transp, b_transp, lqr[:-2]),
         reverse=True,
     )
 
+    if return_grad:
+        return dJ, Ks, is_pd, hu_max
     return dJ, Ks, is_pd
 
 
@@ -247,9 +249,7 @@ def lqr_backward_pass(
     return dJ, Ks
 
 
-def kkt(
-    params: LQRParams, Xs: Array, Us: Array, Lambs: Array
-) -> Tuple[Array, Array, Array]:
+def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array) -> Tuple[Array, Array, Array]:
     """
     Define KKT conditions for LQR problem.
 
@@ -272,21 +272,11 @@ def kkt(
     AT = params.lqr.A.transpose(0, 2, 1)
     BT = params.lqr.B.transpose(0, 2, 1)
     ST = params.lqr.S.transpose(0, 2, 1)
-    dLdXs = (
-        bmm(params.lqr.Q, Xs[:-1])
-        + bmm(params.lqr.S, Us[:])
-        + params.lqr.q
-        + bmm(AT, Lambs[1:])
-        - Lambs[:-1]
-    )
+    dLdXs = bmm(params.lqr.Q, Xs[:-1]) + bmm(params.lqr.S, Us[:]) + params.lqr.q + bmm(AT, Lambs[1:]) - Lambs[:-1]
     dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
     dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
-    dLdUs = (
-        bmm(ST, Xs[:-1]) + bmm(params.lqr.R, Us[:]) + params.lqr.r + bmm(BT, Lambs[1:])
-    )
-    dLdLambs = (
-        bmm(params.lqr.A, Xs[:-1]) + bmm(params.lqr.B, Us[:]) + params.lqr.a - Xs[1:]
-    )
+    dLdUs = bmm(ST, Xs[:-1]) + bmm(params.lqr.R, Us[:]) + params.lqr.r + bmm(BT, Lambs[1:])
+    dLdLambs = bmm(params.lqr.A, Xs[:-1]) + bmm(params.lqr.B, Us[:]) + params.lqr.a - Xs[1:]
     dLdLamb0 = params.x0 - Xs[0]
     dLdLambs = jnp.concatenate([dLdLamb0[None], dLdLambs])
     return dLdXs, dLdUs, dLdLambs

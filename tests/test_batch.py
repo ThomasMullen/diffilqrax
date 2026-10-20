@@ -101,6 +101,22 @@ def test_return_converged():
     assert bool(converged) and not bool(truncated)
 
 
+@pytest.mark.parametrize("parallel", [False, True])
+def test_batched_return_info(parallel):
+    """Per-problem convergence flags and iteration counts of a batch equal those of the unbatched solves"""
+    model, params, _ = simulated_tracking("rnn", n_batch=5)
+    solver = pilqr_solver if parallel else ilqr_solver
+    solve = jax.jit(lambda p: solver(model, p, zero_inputs(model), max_iter=MAX_ITER, return_info=True))
+    refs = [solve(take(params, i)) for i in range(5)]
+    out = batch.batched_ilqr_solver(
+        model, params, zero_inputs(model), TRACKING_AXES, parallel=parallel, max_iter=MAX_ITER, return_info=True
+    )
+    converged, n_iters = out[-2:]
+    assert bool(jnp.all(converged))
+    onp.testing.assert_array_equal(n_iters, [int(r[-1]) for r in refs])
+    assert len(set(onp.asarray(n_iters).tolist())) > 1  # the batch runs until its slowest problem stops
+
+
 def test_unknown_loop_raises():
     model, params = PROBLEMS["rnn"]()
     with pytest.raises(AssertionError):
@@ -219,8 +235,7 @@ def test_reverse_mode_through_while_loop_raises():
 # sharding over (fake CPU) devices
 # --------------------------------------------------------------------------------------------
 
-SHARD_SCRIPT = textwrap.dedent(
-    """
+SHARD_SCRIPT = textwrap.dedent("""
     import jax, jax.numpy as jnp, chex
     jax.config.update("jax_enable_x64", True)
     assert len(jax.devices()) == 4, jax.devices()
@@ -238,8 +253,7 @@ SHARD_SCRIPT = textwrap.dedent(
     g_ref = jax.grad(batched_tracking_loss(model, params))(UhWh)
     assert_grads_close(jax.grad(batched_tracking_loss(model, params, "shard"))(UhWh), g_ref, rtol=1e-8)
     print("ok")
-    """
-)
+    """)
 
 
 def test_shard_strategy():

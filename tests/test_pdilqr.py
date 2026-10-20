@@ -5,6 +5,7 @@ on linear dynamics with non-quadratic costs and on non-linear dynamics. The impl
 pdllqr is also checked on the ilqr solution, independently of the solver.
 """
 
+import os
 import pytest
 import chex
 import jax
@@ -29,7 +30,7 @@ from problems import (
 )
 from test_gradients import assert_grads_close
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 MAX_ITER = 300

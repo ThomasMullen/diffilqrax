@@ -27,9 +27,7 @@ def keygen(key, nkeys):
     return keys[0], (k for k in keys[1:])
 
 
-def initialise_stable_dynamics(
-    key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
-) -> Array:
+def initialise_stable_dynamics(key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6) -> Array:
     """
     Generate a state matrix with stable dynamics (all eigenvalues inside the unit circle) discrete dynamics.
 
@@ -54,9 +52,7 @@ def initialise_stable_dynamics(
     return jnp.tile(mat, (T, 1, 1))
 
 
-def initialise_stable_time_varying_dynamics(
-    key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
-) -> Array:
+def initialise_stable_time_varying_dynamics(key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6) -> Array:
     """
     Generate a state matrix with stable dynamics (all eigenvalues inside the unit circle).
 

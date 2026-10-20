@@ -15,9 +15,7 @@ from diffilqrax.lqr import bmm
 from diffilqrax.utils import quadratise
 
 
-def add_dynamics_curvature(
-    model: System, local_lqr: LQR, Xs: Array, Us: Array, Lambs: Array, params: iLQRParams
-) -> LQR:
+def add_dynamics_curvature(model: System, local_lqr: LQR, Xs: Array, Us: Array, Lambs: Array, params: iLQRParams) -> LQR:
     """
     Replace the cost Hessians of the local LQR with the Hessians of the Lagrangian.
 
@@ -51,9 +49,7 @@ def add_dynamics_curvature(
     def lamb_dyn(t, x, u, lamb):
         return lamb @ model.dynamics(t, x, u, params.theta)
 
-    (Hxx, Hxu), (_, Huu) = jax.vmap(quadratise(lamb_dyn), in_axes=(0, 0, 0, 0))(
-        tps, Xs[:-1], Us, lax.stop_gradient(Lambs[1:])
-    )
+    (Hxx, Hxu), (_, Huu) = jax.vmap(quadratise(lamb_dyn), in_axes=(0, 0, 0, 0))(tps, Xs[:-1], Us, lax.stop_gradient(Lambs[1:]))
     return LQR(
         A=local_lqr.A,
         B=local_lqr.B,

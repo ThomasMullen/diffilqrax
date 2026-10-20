@@ -17,6 +17,7 @@ Implicit gradients are compared in two cases:
    behaviour.
 """
 
+import os
 from pathlib import Path
 
 import numpy as onp
@@ -33,7 +34,7 @@ from diffilqrax.diff_lqr import dllqr
 from diffilqrax.typs import iLQRParams, LQRParams
 from problems import ocaml_pendulum, vanilla_rnn, vanilla_rnn_params
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 FIXTURES = Path(__file__).parent / "fixtures"

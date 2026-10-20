@@ -200,6 +200,7 @@ def main():
     parser.add_argument("--quick", action="store_true", help="small sweep for a smoke test")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--grad", action="store_true", help="time gradients of the differentiable solvers")
+    parser.add_argument("--out-dir", type=Path, default=None, help="output directory, by default fig_dump/<timestamp>")
     args = parser.parse_args()
     if args.grad:
         if args.quick:
@@ -221,7 +222,7 @@ def main():
                 "m": [(50, m, 1024) for m in (1, 5, 15, 30)],
             }
         rows, name, plot_fn = run(sweeps, args.repeats), "parallel_lqr", plot
-    out_dir = REPO / "fig_dump" / datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = args.out_dir or REPO / "fig_dump" / datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))

@@ -1,7 +1,7 @@
 """
 This module contains the exact solution to the LQR problem by converting sequential time evolution
 into closed matrix form then inverting the matrix to get the optimal control sequence. The function
-quad_solve uses the conjugate gradient method to solve the linear system Ax = b where A = big_G, 
+quad_solve uses the conjugate gradient method to solve the linear system Ax = b where A = big_G,
 b = -big_g. The function exact_solve uses numpy's linear solver to solve the same linear system.
 """
 
@@ -16,7 +16,7 @@ import jaxopt
 
 from diffilqrax.typs import ModelDims, LQRParams
 
-#jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
+# jax.config.update("jax_enable_x64", True)  # sets float to 64 precision by default
 
 
 def t_span_mpartial(arr: Array, dims: ModelDims) -> Array:
@@ -51,14 +51,7 @@ def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Ar
     F0 = block_diag(*[matrix_power(A, j) for j in range(dims.horizon)])
     F = np.block(
         [
-            [
-                (
-                    np.linalg.matrix_power(A, i - j - 1) @ B
-                    if j < i
-                    else np.zeros((dims.n, dims.m))
-                )
-                for j in range(dims.horizon)
-            ]
+            [(np.linalg.matrix_power(A, i - j - 1) @ B if j < i else np.zeros((dims.n, dims.m))) for j in range(dims.horizon)]
             for i in range(dims.horizon)
         ]
     )
@@ -77,19 +70,27 @@ def quad_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Ar
     big_x0 = t_span_vpartial(x0, dims)
 
     big_G = 2 * (F.T @ big_Q @ F + big_R)
-    big_g = (
-        F.T @ big_q
-        + (F.T @ big_Q @ F0 @ big_x0)
-        + (big_x0.T @ F0.T @ big_Q.T @ F)
-        + big_r
-    )
+    big_g = F.T @ big_q + (F.T @ big_Q @ F0 @ big_x0) + (big_x0.T @ F0.T @ big_Q.T @ F) + big_r
 
     def matvec(x):
         return big_G @ x
 
     us_star = jaxopt.linear_solve.solve_cg(matvec, -big_g)
     xs_star = F0 @ big_x0 + F @ us_star
-    return xs_star.reshape((dims.horizon,dims.n,)), us_star.reshape((dims.horizon, dims.m,))[:-1]
+    return (
+        xs_star.reshape(
+            (
+                dims.horizon,
+                dims.n,
+            )
+        ),
+        us_star.reshape(
+            (
+                dims.horizon,
+                dims.m,
+            )
+        )[:-1],
+    )
 
 
 def exact_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, Array]:
@@ -113,14 +114,7 @@ def exact_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, A
     F0 = block_diag(*[matrix_power(A, j) for j in range(dims.horizon)])
     F = np.block(
         [
-            [
-                (
-                    np.linalg.matrix_power(A, i - j - 1) @ B
-                    if j < i
-                    else np.zeros((dims.n, dims.m))
-                )
-                for j in range(dims.horizon)
-            ]
+            [(np.linalg.matrix_power(A, i - j - 1) @ B if j < i else np.zeros((dims.n, dims.m))) for j in range(dims.horizon)]
             for i in range(dims.horizon)
         ]
     )
@@ -133,12 +127,20 @@ def exact_solve(params: LQRParams, dims: ModelDims, x0: Array) -> Tuple[Array, A
 
     big_G = 2 * (F.T @ big_Q @ F + big_R)
     big_G = 0.5 * (big_G + big_G.T)
-    big_g = (
-        F.T @ big_q
-        + (F.T @ big_Q @ F0 @ big_x0)
-        + (big_x0.T @ F0.T @ big_Q.T @ F)
-        + big_r
-    )
+    big_g = F.T @ big_q + (F.T @ big_Q @ F0 @ big_x0) + (big_x0.T @ F0.T @ big_Q.T @ F) + big_r
     us_star = np.linalg.solve(big_G, -big_g)
     xs_star = F0 @ big_x0 + F @ us_star
-    return xs_star.reshape((dims.horizon,dims.n,)), us_star.reshape((dims.horizon, dims.m,))[:-1]
+    return (
+        xs_star.reshape(
+            (
+                dims.horizon,
+                dims.n,
+            )
+        ),
+        us_star.reshape(
+            (
+                dims.horizon,
+                dims.m,
+            )
+        )[:-1],
+    )

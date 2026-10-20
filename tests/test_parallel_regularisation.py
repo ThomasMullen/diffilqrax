@@ -7,6 +7,7 @@ unchanged and let pilqr converge where the unregularised local LQR is indefinite
 projection of the local LQR (make_psd) must also leave the solution unchanged.
 """
 
+import os
 import pytest
 import chex
 import jax
@@ -18,7 +19,7 @@ from diffilqrax.parallel_ilqr import pilqr_solver
 from diffilqrax.plqr import plqr_backward_pass, regularise_lqr, project_psd, project_psd_lqr
 from problems import NONCONVEX_COSTS, random_lqr, linear_nonconvex_problem, as_parallel
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 MAX_ITER = 200

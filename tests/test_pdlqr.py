@@ -3,6 +3,7 @@ Gradients of the differentiable parallel LQR solver (pdlqr, pdllqr), for both ad
 sequential dlqr/dllqr and direct differentiation through solve_lqr.
 """
 
+import os
 import pytest
 import chex
 import jax
@@ -17,7 +18,7 @@ from diffilqrax.parallel_dlqr import pdlqr, pdllqr
 from problems import random_lqr
 from test_dlqr import GRAD_DIMS, sym_lqr_grads
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 ADJOINTS = ["parallel", "sequential"]

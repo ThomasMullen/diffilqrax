@@ -126,6 +126,21 @@ def linear_rnn_problem(n: int = 8, m: int = 3, horizon: int = 30, seed: int = 7)
     return model, params
 
 
+def unstable_rnn_problem(horizon: int = 2000, gain: float = 1.5, amp: float = 0.1, seed: int = 7):
+    """rnn_problem with spectral radius ``gain`` and a small target, so the optimum stays in the linear range of
+    tanh: the linearised dynamics are unstable along it and the open-loop adjoint overflows for long horizons"""
+    model, params = rnn_problem(8, 3, horizon, seed)
+    n = model.dims.n
+    Uh = gain / jnp.max(jnp.abs(jnp.linalg.eigvals(params.theta.Uh))) * params.theta.Uh
+    params = params._replace(theta=params.theta._replace(Uh=Uh), x0=0.1 * params.x0)
+
+    def cost(t, x, u, th):
+        target = amp * jnp.sin(t / 5.0) * jnp.ones(n)
+        return jnp.sum((x - target) ** 2) + 0.1 * jnp.sum(u**2) + 0.05 * jnp.sum(u**4)
+
+    return System(cost, model.costf, model.dynamics, model.dims), params
+
+
 def ocaml_pendulum(friction: float = 1.0, horizon: int = 2000):
     """
     Exact port of dilqr examples/pendulum.ml: Euler-discretised pendulum with dt=5e-3.

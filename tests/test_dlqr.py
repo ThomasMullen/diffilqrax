@@ -2,6 +2,7 @@
 Unit tests for the differentiable LQR solver
 """
 
+import os
 from typing import NamedTuple
 import unittest
 import pytest
@@ -20,7 +21,7 @@ from diffilqrax.lqr import solve_lqr, kkt
 from diffilqrax.utils import keygen, initialise_stable_dynamics
 from problems import random_lqr
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)  # double precision
 
 PRINTING_ON = True
@@ -68,7 +69,7 @@ def setup_lqr(
     span_time_v = dims["TX"]
     A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
     B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
-    a = 0*jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
+    a = 0 * jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
     Qf = 1.0 * jnp.eye(dims["N"][0])
     qf = 1.0 * jnp.ones(dims["N"])
     Q = 1.0 * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
@@ -96,11 +97,10 @@ class TestLQR(unittest.TestCase):
 
     def test_dlqr(self):
         """test dlqr struct and shapes"""
+
         @jax.jit
         def loss(p):
-            Us_lqr = dlqr(
-                ModelDims(*self.dims["NMT"], dt=0.1), p, jnp.array([2.0, 1.0])
-            )
+            Us_lqr = dlqr(ModelDims(*self.dims["NMT"], dt=0.1), p, jnp.array([2.0, 1.0]))
             return jnp.linalg.norm(p.lqr.A) + jnp.linalg.norm(Us_lqr)
 
         _, g = jax.value_and_grad(loss)(self.params)
@@ -113,6 +113,7 @@ class TestLQR(unittest.TestCase):
 
 class State(NamedTuple):
     """helper class for state"""
+
     Xs: Array
     Us: Array
     Lambs: Array
@@ -120,6 +121,7 @@ class State(NamedTuple):
 
 class Prms(NamedTuple):
     """helper class for params"""
+
     q: Array
     r: Array
     Q: Array
@@ -169,7 +171,8 @@ class TestDLQR(unittest.TestCase):
         test dlqr struct, shapes and solutions compared to direct gradients,
         and implicit gradients
         """
-        def replace_params(p:Prms)->LQRParams:
+
+        def replace_params(p: Prms) -> LQRParams:
             lqr = LQR(
                 A=p.A,
                 B=self.params.lqr.B,
@@ -198,9 +201,7 @@ class TestDLQR(unittest.TestCase):
             return Xs, Us, Lambs
 
         def implicit_loss(prms):
-            Xs_lqr, Us_lqr, _Us_lqr = implicit_solve_lqr(
-                None, None, None, replace_params(prms)
-            )
+            Xs_lqr, Us_lqr, _Us_lqr = implicit_solve_lqr(None, None, None, replace_params(prms))
             return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         def direct_loss(prms):

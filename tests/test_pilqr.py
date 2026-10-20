@@ -4,6 +4,7 @@ non-linear rollout) and "parallel" (multiple shooting with a merit line search).
 sequential ilqr_solver and primal_dual_ilqr (arXiv:2403.00748) and satisfy the KKT conditions.
 """
 
+import os
 from pathlib import Path
 import pytest
 import chex
@@ -12,12 +13,14 @@ import jax.numpy as jnp
 import jax.random as jr
 import numpy as onp
 
-from diffilqrax.ilqr import ilqr_solver, ilqr_simulate, approx_lqr
-from diffilqrax.parallel_ilqr import pilqr_solver, dynamics_defects, multiple_shooting_step, total_cost
+from diffilqrax.ilqr import ilqr_solver, ilqr_simulate, approx_lqr, kkt_input_residual
+from diffilqrax.lqr import regularised_backward_pass
+from diffilqrax.parallel_ilqr import pilqr_solver, dynamics_defects, multiple_shooting_step, total_cost, value_function_grad
 from diffilqrax.plqr import plqr_backward_pass
 from diffilqrax.typs import LQRParams
 from problems import (
     rnn_problem,
+    unstable_rnn_problem,
     linear_rnn_problem,
     pendulum_problem,
     van_der_pol,
@@ -27,7 +30,7 @@ from problems import (
     as_parallel,
 )
 
-jax.config.update("jax_default_device", jax.devices("cpu")[0])
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
 
 MAX_ITER = 400
@@ -184,3 +187,52 @@ def test_parallel_rollout_unstable_long_horizon():
     (Xp, Up, _), Jp, _ = pilqr_solver(model, params, Us_init, max_iter=60, rollout="parallel")
     chex.assert_trees_all_close(Jp, J, rtol=1e-10)
     assert float(jnp.max(jnp.abs(dynamics_defects(model, params, Xp, Up)))) < 1e-10
+
+
+def max_hu(model, params, Us) -> tuple:
+    """max|hu| of the unregularised sequential and parallel backward passes, and max|dL/dU|, along a rollout"""
+    (Xs, _), _ = ilqr_simulate(model, Us, params)
+    lqr = approx_lqr(model, Xs, Us, params)
+    hu_seq = regularised_backward_pass(lqr, 0.0, return_grad=True)[-1]
+    delta_lqr = lqr._replace(a=dynamics_defects(model, params, Xs, Us))
+    values = plqr_backward_pass(LQRParams(jnp.zeros_like(params.x0), delta_lqr), 0.0, return_values=True)[-1]
+    hu_par = jnp.max(jnp.abs(value_function_grad(delta_lqr, values)))
+    return float(hu_seq), float(hu_par), float(jnp.max(jnp.abs(kkt_input_residual(lqr))))
+
+
+def test_value_function_grad():
+    """Away from the optimum the sequential and parallel max|hu| agree; at the optimum both, and dL/dU, vanish"""
+    model, params = PROBLEMS["pendulum"]()
+    hu_seq, hu_par, dLdU = max_hu(model, params, init_inputs(model))
+    assert hu_seq > 1e-3 and dLdU > 1e-3
+    chex.assert_trees_all_close(hu_par, hu_seq, rtol=1e-8)
+    (_, Us, _), _, _ = ilqr_solver(model, params, init_inputs(model), max_iter=MAX_ITER)
+    assert max(max_hu(model, params, Us)) < 1e-9
+
+
+def test_stopping_test_unstable_long_horizon():
+    """Linearised dynamics with spectral radius 1.5 along the optimum over T = 2000: the open-loop adjoint, and so
+    dL/dU, overflows, but max|hu| stays finite, so every solver stops through the convergence test"""
+    model, params = unstable_rnn_problem(horizon=2000)
+    Us_init = jnp.zeros((2000, 3))
+    (Xs, Us, _), J, _, converged, n_iters = ilqr_solver(model, params, Us_init, max_iter=100, return_info=True)
+    assert bool(converged) and int(n_iters) < 100
+    assert not bool(jnp.all(jnp.isfinite(kkt_input_residual(approx_lqr(model, Xs, Us, params)))))
+    for rollout in ROLLOUTS:
+        _, Jp, _, converged, n_iters = pilqr_solver(model, params, Us_init, max_iter=100, rollout=rollout, return_info=True)
+        assert bool(converged) and int(n_iters) < 100, rollout
+        chex.assert_trees_all_close(Jp, J, rtol=1e-10)
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_return_info(parallel):
+    """return_info appends the convergence flag of return_converged and the number of iterations; a run stopped
+    by max_iter reports not converged"""
+    model, params = PROBLEMS["pendulum"]()
+    solver = pilqr_solver if parallel else ilqr_solver
+    *out, converged, n_iters = solver(model, params, init_inputs(model), max_iter=MAX_ITER, return_info=True)
+    *out_c, converged_c = solver(model, params, init_inputs(model), max_iter=MAX_ITER, return_converged=True)
+    chex.assert_trees_all_close(out, out_c)
+    assert bool(converged) and bool(converged_c) and 0 < int(n_iters) < MAX_ITER
+    *_, converged, n_iters = solver(model, params, init_inputs(model), max_iter=2, return_info=True)
+    assert not bool(converged) and int(n_iters) == 2
