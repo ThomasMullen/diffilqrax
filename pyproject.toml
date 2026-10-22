@@ -56,6 +56,7 @@ doc = [
   "sphinx-autodoc-typehints",
   "sphinx-gallery",
   "sphinx-design",
+  "sphinxcontrib-bibtex",
   "nbsphinx",
   "ipykernel",
   "matplotlib",

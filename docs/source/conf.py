@@ -39,11 +39,15 @@ extensions = [
     # "IPython.sphinxext.ipython_console_highlighting",  # lowercase didn't work
     # "numpydoc",
     # "myst_nb",
-    # "sphinxcontrib.bibtex",
+    "sphinxcontrib.bibtex",
     "sphinx_design",
     # "sphinx_design_elements",
     # "sphinx.ext.autosectionlabel",
 ]
+
+bibtex_bibfiles = ["refs.bib"]          # required, path relative to conf.py
+bibtex_default_style = "unsrt"          # or "plain", "alpha"
+bibtex_reference_style = "author_year"  # or "label" for [1]-style numbers
 
 templates_path = ['_templates']
 exclude_patterns = ["build", "**.ipynb_checkpoints"]

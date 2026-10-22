@@ -60,7 +60,35 @@ All problem data is held in the small ``NamedTuple`` containers defined in :mod:
 Solving an LQR problem
 ----------------------
 
-This example drives a double integrator to the origin:
+Consider optimal control for a double integrator driving point mass to rest state.
+The linear state dynamics are
+
+.. math::
+    :label: dynamics
+
+    x_{t+1} = A x_t + B u_t, \qquad
+    A = \begin{pmatrix} 1 & \delta t \\ 0 & 1 \end{pmatrix}, \quad
+    B = \begin{pmatrix} \tfrac12 \delta t^2 \\ \delta t \end{pmatrix}.
+
+The solver is searching for a control sequence that minimises quadratic cost
+
+.. math::
+    \min_{u_{0:T-1}} \; J = \tfrac{1}{2} x_T^\top Q_f x_T
+   + \tfrac{1}{2} \sum_{t=0}^{T-1} \left( x_t^\top Q x_t + r\, u_t^2 \right), \\
+    Q = \begin{pmatrix} 1 & \delta t \\ 0 & 1 \end{pmatrix}, \quad
+    Q_f = \begin{pmatrix} 10 & \delta t \\ 0 & 10 \end{pmatrix}, \quad
+    R = \begin{pmatrix} 0.1 & \delta t \\ 0 & 0.1 \end{pmatrix}, \quad
+
+subject to :eq:`dynamics`, with :math:`Q, Q_f \succeq 0` and :math:`r > 0`.
+
+The solution is a linear feedback law :math:`u_t = -K_t x_t`, where the gains
+follow from the backward Riccati recursion, starting at :math:`V_T = Q_f`:
+
+.. math::
+
+   K_t &= \left( r + B_d^\top V_{t+1} B_d \right)^{-1} B_d^\top V_{t+1} A_d \\
+   V_t &= Q + A_d^\top V_{t+1} \left( A_d - B_d K_t \right)
+
 
 .. code-block:: python
 
@@ -74,15 +102,16 @@ This example drives a double integrator to the origin:
     A = jnp.array([[1.0, dims.dt], [0.0, 1.0]])
     B = jnp.array([[0.0], [dims.dt]])
     lqr = LQR(
-        A=jnp.tile(A, (T, 1, 1)), B=jnp.tile(B, (T, 1, 1)), a=jnp.zeros((T, n)),
+        A=jnp.tile(A, (T, 1, 1)), a=jnp.zeros((T, n)),
+        B=jnp.tile(B, (T, 1, 1)),
         Q=jnp.tile(jnp.eye(n), (T, 1, 1)), q=jnp.zeros((T, n)),
-        R=jnp.tile(0.1 * jnp.eye(m), (T, 1, 1)), r=jnp.zeros((T, m)),
         S=jnp.zeros((T, n, m)),
+        R=jnp.tile(0.1 * jnp.eye(m), (T, 1, 1)), r=jnp.zeros((T, m)),
         Qf=10.0 * jnp.eye(n), qf=jnp.zeros(n),
     )
     params = LQRParams(x0=jnp.array([1.0, 0.0]), lqr=lqr)
 
-    Xs, Us, lambdas = solve_lqr(params)   # shapes (T+1, n), (T, m), (T+1, n)
+    Xs, Us, lambdas = solve_lqr(params) # shapes (T+1, n), (T, m), (T+1, n)
 
 :func:`diffilqrax.plqr.solve_plqr` takes the same arguments and returns the same solution, computed
 with an associative scan.
@@ -94,29 +123,36 @@ This example swings a pendulum up to :math:`\theta = \pi`:
 
 .. code-block:: python
 
+    import jax
+    import jax.numpy as jnp
     from diffilqrax.typs import System, iLQRParams, PendulumParams
     from diffilqrax.ilqr import ilqr_solver
 
+    DAMPING, U_MAX = 0.1, 3.0
     dims = ModelDims(n=2, m=1, horizon=100, dt=0.05)
 
     def dynamics(t, x, u, theta):
-        angle, vel = x
-        acc = -theta.g / theta.l * jnp.sin(angle) + u[0] / (theta.m * theta.l**2)
-        return jnp.array([angle + dims.dt * vel, vel + dims.dt * acc])
+        """Euler step; x = [angle, angular velocity], angle 0 is hanging down"""
+        acc = -theta.g / theta.l * jnp.sin(x[0]) - DAMPING * x[1] + u[0] / (theta.m * theta.l**2)
+        return x + DT * jnp.stack([x[1], acc])
 
     def cost(t, x, u, theta):
-        return 0.01 * jnp.sum(u**2)
+        """Small running cost on angle, velocity and torque, plus a smooth barrier at |u| = U_MAX"""
+        barrier = jax.nn.softplus(5.0 * (u - U_MAX)) ** 2 + jax.nn.softplus(5.0 * (-u - U_MAX)) ** 2
+        return 0.1 * (1.0 + jnp.cos(x[0])) + 0.01 * x[1] ** 2 + 0.01 * jnp.sum(u**2) + jnp.sum(barrier)
 
     def costf(x, theta):
-        return 10.0 * ((x[0] - jnp.pi) ** 2 + x[1] ** 2)
+        """Be upright (angle ±pi) and still at the final time"""
+        return 50.0 * (1.0 + jnp.cos(x[0])) + 5.0 * x[1] ** 2
 
+    # Construct problem
     model = System(cost, costf, dynamics, dims)
-    params = iLQRParams(x0=jnp.zeros(2), theta=PendulumParams(m=1.0, l=1.0, g=9.81))
-    Us_init = jnp.zeros((dims.horizon, dims.m))
-
-    (Xs, Us, lambdas), total_cost, cost_history = ilqr_solver(
-        model, params, Us_init, max_iter=200, kkt_tol=1e-6
-    )
+    params = iLQRParams(x0=jnp.array([0.1, 0.0]), theta=PendulumParams(m=1.0, l=1.0, g=9.8))
+    Us_init = 0.5 * jr.normal(jr.PRNGKey(0), (dims.horizon, dims.u))
+    
+    # Solve problem
+    (Xs, Us, lambdas), total_cost, cost_log = ilqr_solver(model, params, Us_init, max_iter=300)
+    
 
 The main options are:
 

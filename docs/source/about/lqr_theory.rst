@@ -83,3 +83,9 @@ and the terminal cost term,
 
    \ell_T(x_T) = x_T^T Q_T x_T + x_T^T q_T.
 
+
+References
+------------------------
+
+.. bibliography::
+   :all:
