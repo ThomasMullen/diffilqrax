@@ -1,317 +1,446 @@
-"""Solve iLQR with parallel dynamics using associative scans"""
+"""Solve iLQR with parallel (associative-scan) LQR subproblems"""
 
-from typing import Tuple, Any
+import math
+import warnings
+from typing import Tuple, Optional
 from functools import partial
 import jax
 from jax import Array
 from jax import lax
 import jax.numpy as jnp
 
-from diffilqrax.lqr import lqr_adjoint_pass
 from diffilqrax.lqr import bmm
 from diffilqrax.plqr import (
-    associative_opt_traj_scan,
-    associative_riccati_scan,
-    build_fwd_lin_dyn_elements,
-    get_dcosts,
-    dynamic_operator,
+    closed_loop_scan,
+    parallel_reverse_lin_integration,
+    plqr_backward_pass,
+    project_psd_lqr,
 )
-from diffilqrax.ilqr import approx_lqr, linesearch, approx_lqr_dyn
-from diffilqrax.typs import (
-    iLQRParams,
-    System,
-    CostToGo,
-    LQRParams,
-    ParallelSystem,
+from diffilqrax.ilqr import (
+    approx_lqr,
+    approx_lqr_offset,
+    armijo_linesearch,
+    backtracking_search,
+    bounded_loop,
+    ilqr_forward_pass,
+    ilqr_simulate,
+    kkt_input_residual,
+    increase_regularisation,
+    decrease_regularisation,
+    LINESEARCHES,
+    LOOPS,
+    stationary,
 )
+from diffilqrax.typs import iLQRParams, System, Gains, LQR, LQRParams, ParallelSystem
 
 jax.config.update("jax_enable_x64", True)  # double precision
 
+ROLLOUTS = ("feedback", "parallel")
 
-def parallel_forward_lin_integration_ilqr(
-    model: System, params: iLQRParams, Us_init: Array, a_term: Array
-) -> Array:
+
+def total_cost(model: System, params: iLQRParams, Xs: Array, Us: Array) -> Array:
+    """Total cost of a state-input trajectory, evaluated in parallel over time"""
+    tps = jnp.arange(model.dims.horizon)
+    costs = jax.vmap(model.cost, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, params.theta)
+    return jnp.sum(costs) + model.costf(Xs[-1], params.theta)
+
+
+def dynamics_defects(model: System, params: iLQRParams, Xs: Array, Us: Array) -> Array:
+    """Dynamics defects d_t = f(x_t, u_t) - x_{t+1} [Txn], evaluated in parallel over time"""
+    tps = jnp.arange(model.dims.horizon)
+    return jax.vmap(model.dynamics, in_axes=(0, 0, 0, None))(tps, Xs[:-1], Us, params.theta) - Xs[1:]
+
+
+def value_function_grad(delta_lqr: LQR, values: Tuple[Array, Array]) -> Array:
     """
-    Perform associative scan for forward linear dynamics.
+    Gradient hu_t = r_t + B_tᵀ λ_{t+1} of the cost-to-go wrt u_t at the current iterate, with the costates
+    λ_{t+1} = J_{t+1} a_t - η_{t+1} of the local LQR in deviation coordinates (δx = δu = 0, so δx_{t+1} = a_t).
+    It vanishes at every t if and only if dL/dU does, but unlike the open-loop adjoint it stays bounded when the
+    linearised dynamics are unstable.
 
     Parameters
     ----------
-    model : System
-        The system model.
-    params : iLQRParams
-        The iLQR parameters.
-    Us_init : Array
-        The initial control sequence.
-    a_term : Array
-        The affine term for the dynamics.
+    delta_lqr : LQR
+        Local LQR in deviation coordinates, with the dynamics defects as offsets ``a``.
+    values : Tuple[Array, Array]
+        Value functions (η, J) [(T+1)xn], [(T+1)xnxn] from :func:`diffilqrax.plqr.plqr_backward_pass`.
 
     Returns
     -------
     Array
-        The state trajectory.
+        hu [Txm].
     """
-    x0 = params.x0
-    lqr_params = approx_lqr(
-        model,
-        jnp.r_[x0[None, ...], jnp.zeros((Us_init.shape[0], x0.shape[0]))],
-        Us_init,
-        params,
-    )
-    dyn_elements = build_fwd_lin_dyn_elements(
-        LQRParams(x0, lqr_params), Us_init, a_term
-    )
-    c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
-    return c_bs
+    etas, Js = values
+    lambs_next = jnp.einsum("tij,tj->ti", Js[1:], delta_lqr.a) - etas[1:]
+    return delta_lqr.r + jnp.einsum("tji,tj->ti", delta_lqr.B, lambs_next)
 
 
-def parallel_feedback_lin_dyn_ilqr(
-    model: System, params: iLQRParams, Us_init: Array, a_term: Array, Kx: Array
-) -> Array:
+def multiple_shooting_step(delta_lqr: LQR, gains: Gains, values: Tuple[Array, Array]) -> Tuple[Array, Array, Array]:
     """
-    Perform associative scan for forward linear dynamics with feedback.
+    Full step of the local LQR in deviation coordinates (δx_0 = 0, dynamics offsets a = defects), by an
+    associative scan, and its multipliers λ_t = J_t δx_t - η_t from the value functions. Unlike the open-loop
+    adjoint recursion λ_t = A_tᵀ λ_{t+1} + ..., this does not overflow when the linearised dynamics are
+    unstable over a long horizon.
 
     Parameters
     ----------
-    model : System
-        The system model.
-    params : iLQRParams
-        The iLQR parameters.
-    Us_init : Array
-        The initial control sequence.
-    a_term : Array
-        The affine term for the dynamics.
-    Kx : Array
-        The feedback gain matrix.
+    delta_lqr : LQR
+        Local LQR around the current trajectory with the dynamics defects as offsets ``a``.
+    gains : Gains
+        Gains of ``delta_lqr`` (δu = K δx + k), from :func:`diffilqrax.plqr.plqr_backward_pass`.
+    values : Tuple[Array, Array]
+        Value functions (η, J) of ``delta_lqr`` (regularised as for ``gains``), from
+        :func:`diffilqrax.plqr.plqr_backward_pass` with ``return_values=True``.
 
     Returns
     -------
-    Array
-        The state trajectory.
+    Tuple[Array, Array, Array]
+        State step [(T+1)xn], input step [Txm] and multipliers λ [(T+1)xn] of the linearised dynamics
+        (λ_{t+1} belongs to the constraint f(x_t, u_t) - x_{t+1} = 0).
     """
-    lqr_params = approx_lqr(
-        model,
-        jnp.r_[params.x0[None], jnp.zeros((model.dims.horizon, model.dims.n))],
-        Us_init,
-        params,
-    )
-    lqr_params = lqr_params._replace(A=lqr_params.A - bmm(lqr_params.B, Kx))
-    dyn_elements = build_fwd_lin_dyn_elements(
-        LQRParams(params.x0, lqr_params), Us_init, a_term
-    )
-    c_as, c_bs = jax.lax.associative_scan(dynamic_operator, dyn_elements)
-    return c_bs
+    model = LQRParams(jnp.zeros_like(delta_lqr.a[0]), delta_lqr)
+    dXs = jnp.r_[model.x0[None], closed_loop_scan(model, gains, 1.0)]
+    dUs = bmm(gains.K, dXs[:-1]) + gains.k
+    etas, Js = values
+    return dXs, dUs, bmm(Js, dXs) - etas
 
 
-def pilqr_forward_pass(
-    parallel_model: ParallelSystem | Any,
+def merit_linesearch(
+    model: System,
     params: iLQRParams,
-    values: CostToGo,
     Xs: Array,
     Us: Array,
-    alpha: float = 1.0,
-) -> Tuple[Tuple[Array, Array], float]:
+    step: Tuple[Array, Array, Array],
+    lqr: LQR,
+    cost_init: Array,
+    defects: Array,
+    rho: float,
+    alpha_init: float,
+    tau: float = 0.5,
+    beta: float = 0.1,
+    alpha_min: float = 1e-8,
+    max_iter_linesearch: Optional[int] = None,
+    loop: str = "while",
+    n_parallel: int = 0,
+) -> Tuple[Array, Tuple[Array, Array], Array]:
     """
-    Perform a forward pass of the parallel iLQR algorithm.
+    Armijo backtracking on the augmented Lagrangian merit φ = J + λᵀd + ρ/2 ‖d‖² along (X + α dX, U + α dU),
+    with the multipliers λ of the local LQR. Its slope at α = 0 is -pᵀHp - ρ‖d‖², negative whenever the
+    (regularised) local LQR is strictly convex, for any ρ ≥ 0. Step sizes follow
+    :func:`diffilqrax.ilqr.armijo_linesearch`: tau * alpha_init, tau² * alpha_init, ...
 
     Parameters
     ----------
-    parallel_model : ParallelSystem | Any
-        The parallel system model.
+    model : System
+        The system model.
     params : iLQRParams
         The iLQR parameters.
-    values : CostToGo
-        The cost-to-go values.
-    Xs : Array
-        The state trajectory.
-    Us : Array
-        The control trajectory.
-    alpha : float, optional
-        The linesearch parameter, by default 1.0.
+    Xs, Us : Array
+        Current (not necessarily feasible) state and input trajectories.
+    step : Tuple[Array, Array, Array]
+        (dX, dU, λ) from :func:`multiple_shooting_step`.
+    lqr : LQR
+        Local LQR without offsets (gradients q = Cx, r = Cu, qf = Cfx), from :func:`approx_lqr`.
+    cost_init : Array
+        Cost of the current trajectory.
+    defects : Array
+        Dynamics defects of the current trajectory.
+    rho : float
+        Penalty on the squared defects.
+    alpha_init, tau, beta, alpha_min, max_iter_linesearch, loop, n_parallel
+        As in :func:`diffilqrax.ilqr.armijo_linesearch`.
 
     Returns
     -------
-    Tuple[Tuple[Array, Array], float]
-        A tuple containing the updated state trajectory and control trajectory, and the total cost
-        of the trajectory.
+    Tuple[Array, Tuple[Array, Array], Array]
+        Whether a step was accepted, the (accepted or initial) state and input trajectories, and their cost.
     """
-    model = parallel_model.model
+    dXs, dUs, lambs = step
+    if max_iter_linesearch is None:
+        max_iter_linesearch = int(math.floor(math.log(alpha_min / (tau * alpha_init)) / math.log(tau))) + 2
 
-    lqr_mats = approx_lqr_dyn(model, Xs, Us, params)
-    dyn_bias = lqr_mats.a
-    # this is the model from delta_x, so delta_x0 = 0
-    lqr_model = LQRParams(
-        x0=jnp.zeros_like(params.x0), lqr=lqr_mats._replace(a=jnp.zeros_like(dyn_bias))
-    )
-    # this is a parallel lin scan anyway b
-    _, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(
-        lqr_model, values.v, values.V, alpha
-    )
+    def merit(cost, d):
+        return cost + jnp.sum(lambs[1:] * d) + 0.5 * rho * jnp.sum(d**2)
 
-    # dyn with Ks edit to linear dyn, u + k + K@x as constant term
-    # can define function to include feedback + edit the dynamcis to have (A - K)x
-    delta_Xs = jnp.r_[jnp.zeros_like(params.x0)[None], cs]
-    # Potentially we could return it as output of the parallel scan
-    # δu_= B @ Kv @ (v - V@c) - Kx@x
-    # where u = u_ + offset (eq 64 in https://arxiv.org/abs/2104.03186)
-    delta_Us = ks - bmm(Ks, delta_Xs[:-1]) + offsets
-    Kxxs = bmm(Ks, Xs[:-1]) + ks + offsets
-    # NOTE: in the case of a linear system, equivalent to `parallel_feedback_lin_dyn_ilqr`
-    new_Xs = parallel_model.parallel_dynamics_feedback(
-        model, params, Us + Kxxs, dyn_bias, Ks
+    merit_init = merit(cost_init, defects)
+    grad_dot_step = jnp.sum(lqr.q * dXs[:-1]) + jnp.sum(lqr.r * dUs) + jnp.dot(lqr.qf, dXs[-1])
+    slope = grad_dot_step - jnp.sum(lambs[1:] * defects) - rho * jnp.sum(defects**2)
+    noise = 100.0 * jnp.finfo(jnp.result_type(merit_init)).eps * jnp.maximum(jnp.abs(merit_init), 1.0)
+
+    def trial(alpha):
+        new_Xs, new_Us = Xs + alpha * dXs, Us + alpha * dUs
+        new_cost = total_cost(model, params, new_Xs, new_Us)
+        decrease = merit(new_cost, dynamics_defects(model, params, new_Xs, new_Us)) - merit_init
+        below_noise = jnp.logical_and(-alpha * slope < noise, decrease < noise)
+        accepted = jnp.logical_and(jnp.isfinite(decrease), jnp.logical_or(decrease <= beta * alpha * slope, below_noise))
+        accepted = jnp.logical_and(accepted, slope < noise)
+        return accepted, new_Xs, new_Us, new_cost
+
+    return backtracking_search(
+        trial, (Xs, Us, cost_init), tau * alpha_init, max_iter_linesearch, tau, alpha_min, loop, n_parallel
     )
-    # this should define the dynamics incorporating the feedback term that says how to handle
-    # delta_X (current state - initial traj) we assume Ks@initial_traj is already passed as
-    # input so only care about the current state and the parallel_dynamics_feedback function
-    # should define how to handle that
-    new_Us = Us + delta_Us
-    # new_Xs = parallel_model.parallel_dynamics(model, params,  new_Us,  lqr_model_with_a.lqr.a)
-    total_cost = jnp.sum(
-        jax.vmap(model.cost, in_axes=(0, 0, 0, None))(
-            jnp.arange(model.dims.horizon), new_Xs[:-1], new_Us, params.theta
-        )
-    )
-    total_cost += model.costf(new_Xs[-1], params.theta)
-    return (new_Xs, new_Us), total_cost
 
 
 def pilqr_solver(
-    parallel_model: ParallelSystem,
+    parallel_model: ParallelSystem | System,
     params: iLQRParams,
     Us_init: Array,
     max_iter: int = 40,
-    convergence_thresh: float = 1e-6,
+    convergence_thresh: Optional[float] = None,
     alpha_init: float = 1.0,
     verbose: bool = False,
     use_linesearch: bool = True,
+    regularise: bool = True,
+    kkt_tol: float = 1e-10,
+    mu_max: float = 1e10,
+    max_reg_iter: int = 20,
+    make_psd: Optional[str] = None,
+    psd_delta: float = 1e-6,
+    rollout: str = "feedback",
+    defect_tol: Optional[float] = None,
+    merit_rho: float = 1.0,
+    loop: str = "while",
+    linesearch: str = "backtrack",
+    return_converged: bool = False,
+    return_info: bool = False,
     **linesearch_kwargs,
 ) -> Tuple[Tuple[Array, Array, Array], float, Array]:
     """
-    Solve the parallel iterative Linear Quadratic Regulator (iLQR) problem.
+    Solve the iterative Linear Quadratic Regulator (iLQR) problem with parallel LQR subproblems.
+
+    The backward pass is an associative Riccati scan of the local LQR problem regularised with
+    R -> R + μI (:func:`diffilqrax.plqr.plqr_backward_pass`), which keeps it an exact LQR so the scan
+    applies. μ is adapted as in :func:`diffilqrax.ilqr.ilqr_solver`: it is increased until every Huu is
+    positive definite, increased after a rejected step and decreased after an accepted one.
+
+    The new trajectory is found in one of two ways (``rollout``):
+
+    - "feedback": sequential non-linear closed-loop rollout u = ū + K(x - x̄) + αk, as in
+      :func:`diffilqrax.ilqr.ilqr_solver`, with an Armijo line search on the cost. Iterates are feasible.
+    - "parallel": multiple shooting, with no sequential rollout. The states are free variables, the dynamics
+      defects d_t = f(x_t, u_t) - x_{t+1} enter the local LQR as offsets, the step (X + α dX, U + α dU) is
+      found by associative scans and accepted by an Armijo line search on the augmented Lagrangian merit
+      J + λᵀd + ρ/2 ‖d‖² (:func:`merit_linesearch`). Iterates are feasible only at convergence.
 
     Parameters
     ----------
-    parallel_model : ParallelSystem
-        The parallel system model.
+    parallel_model : ParallelSystem | System
+        The system model. A :class:`ParallelSystem` is accepted for backward compatibility; its integrators
+        are not used.
     params : iLQRParams
         The iLQR parameters.
     Us_init : Array
-        The initial control trajectory.
+        The initial control trajectory. The initial states are its non-linear rollout.
     max_iter : int, optional
         The maximum number of iterations, by default 40.
     convergence_thresh : float, optional
-        The convergence threshold, by default 1e-6.
+        If given, also stop once an accepted step reduces the cost by less than this relative amount.
+        By default None, so convergence is determined by ``kkt_tol``.
     alpha_init : float, optional
-        The initial step size for the forward pass, by default 1.0.
+        Line search scale; the first step tried is ``tau * alpha_init``, by default 1.0.
     verbose : bool, optional
         Whether to print debug information, by default False.
     use_linesearch : bool, optional
-        Whether to use line search for the forward pass, by default True.
+        Whether to use the line search, by default True. If False, every step is taken with α = 1 and a step
+        that increases the cost (or merit) beyond round-off is rejected.
+    regularise : bool, optional
+        Whether to adapt the regularisation μ, by default True. If False, μ = 0 and the solver stops
+        at the first step that does not decrease the cost.
+    kkt_tol : float, optional
+        Converged when max|dL/dU| and max|hu| both fall below this tolerance (and the defects below
+        ``defect_tol``), by default 1e-10. hu is the gradient of the cost-to-go wrt the inputs of the
+        unregularised local LQR (:func:`value_function_grad`); where the open-loop adjoint of dL/dU overflows,
+        max|hu| decides alone (:func:`diffilqrax.ilqr.stationary`).
+    mu_max : float, optional
+        Stop when the regularisation exceeds this value without an accepted step, by default 1e10.
+    max_reg_iter : int, optional
+        Maximum number of regularisation increases per backward pass, by default 20.
+    make_psd : str, optional
+        Convexify the local LQR before the backward pass by projection onto the PSD cone
+        (:func:`diffilqrax.plqr.project_psd_lqr`), by default None (no projection). "R" projects the
+        input cost only: it removes negative input curvature without retries, which helps far from a
+        solution, and is inactive where R ≻ δI. If R is indefinite at the solution (with Huu ≻ 0 through
+        BᵀJB) it stays active and final convergence is slower. "full" also projects Q - S R⁻¹Sᵀ and Qf, which
+        makes every Huu positive definite but turns the step into a Gauss-Newton-like step where the
+        state cost is locally non-convex, which can converge only linearly. Composes with ``regularise``.
+    psd_delta : float, optional
+        Minimum eigenvalue after the PSD projection, by default 1e-6.
+    rollout : str, optional
+        "feedback" (default) or "parallel", see above.
+    defect_tol : float, optional
+        Converged only when max|d_t| is below this tolerance, by default ``kkt_tol``. Only binding for
+        ``rollout="parallel"``.
+    merit_rho : float, optional
+        Penalty ρ on the squared defects in the merit function of ``rollout="parallel"``, by default 1.0.
+    loop : str, optional
+        "while" (default) or "scan", as in :func:`diffilqrax.ilqr.ilqr_solver`. "while" is not reverse-mode
+        differentiable; use :func:`diffilqrax.parallel_dilqr.pdilqr` for gradients.
+    linesearch : str, optional
+        "backtrack" (default) or "parallel", as in :func:`diffilqrax.ilqr.ilqr_solver`.
+    return_converged : bool, optional
+        If True, also return whether the solution passes the convergence test, by default False.
+    return_info : bool, optional
+        If True, also return the convergence flag (as ``return_converged``) and the number of iterations run,
+        by default False. Takes precedence over ``return_converged``.
     **linesearch_kwargs
-        Additional keyword arguments for the line search.
+        Additional keyword arguments for the line search (tau, beta, alpha_min, max_iter_linesearch,
+        n_parallel), see :func:`diffilqrax.ilqr.armijo_linesearch`.
 
     Returns
     -------
     Tuple[Tuple[Array, Array, Array], float, Array]
         A tuple containing the final state trajectory, control trajectory, and the adjoint
-        variables. Also returns the total cost of the trajectory and the cost history.
+        variables. Also returns the total cost of the trajectory and the cost history [max_iter],
+        which repeats the final cost after the last iteration. With ``return_converged=True`` a fourth
+        element, the boolean convergence flag, is appended; with ``return_info=True`` the flag and the
+        integer number of iterations are appended.
     """
-    model = parallel_model.model
-    Xs_init = parallel_model.parallel_dynamics(
-        model, params, Us_init, jnp.zeros_like(Us_init[..., 0])
-    )
-
-    a_term = approx_lqr_dyn(parallel_model.model, Xs_init, Us_init, params).a
-    Xs_init = parallel_model.parallel_dynamics(model, params, Us_init, a_term)
-    c_init = jnp.sum(
-        jax.vmap(model.cost, in_axes=(0, 0, 0, None))(
-            jnp.arange(model.dims.horizon), Xs_init[:-1], Us_init, params.theta
+    assert rollout in ROLLOUTS, f"rollout must be one of {ROLLOUTS}, got {rollout}"
+    assert loop in LOOPS, f"loop must be one of {LOOPS}, got {loop}"
+    assert linesearch in LINESEARCHES, f"linesearch must be one of {LINESEARCHES}, got {linesearch}"
+    if linesearch == "parallel":
+        linesearch_kwargs.setdefault("n_parallel", 8)
+    if "tol" in linesearch_kwargs:
+        warnings.warn(
+            "pilqr_solver now uses armijo_linesearch: the ratio-test kwargs (beta: step shrink factor, tol: "
+            "accepted fraction of the expected decrease) are mapped to tau and beta; pass those instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-    )
-    c_init += model.costf(Xs_init[-1], params.theta)
-    initial_carry = (Xs_init, Us_init, c_init, 0, True)
-    prollout = partial(pilqr_forward_pass, parallel_model, params)
+        legacy = {"beta": "tau", "tol": "beta"}
+        linesearch_kwargs = {legacy.get(k, k): v for k, v in linesearch_kwargs.items()}
+    model = parallel_model.model if isinstance(parallel_model, ParallelSystem) else parallel_model
+    defect_tol = kkt_tol if defect_tol is None else defect_tol
+    (Xs_init, _), c_init = ilqr_simulate(model, Us_init, params)
+    # carry: (Xs, Us, total cost, delta, mu, iteration, cost history, carry_on)
+    costs_init = jnp.zeros(max_iter, dtype=jnp.result_type(c_init))
+    initial_carry = (Xs_init, Us_init, c_init, jnp.ones_like(c_init), jnp.zeros_like(c_init), 0, costs_init, jnp.array(True))
+    prollout = partial(ilqr_forward_pass, model, params)
+    delta_x0 = jnp.zeros_like(params.x0)
 
-    def plqr_iter(carry_tuple: Tuple[Array, Array, float, int, bool]):
-        """
-        Perform one iteration of the parallel iLQR algorithm.
+    def stationarity(Xs: Array, Us: Array):
+        """local LQR, defects, unregularised backward pass of the deviation LQR, and the convergence test"""
+        lqr = approx_lqr(model, Xs, Us, params)
+        # deviation coordinates: the defects are the dynamics offsets (zero along a feedback rollout)
+        defects = dynamics_defects(model, params, Xs, Us)
+        delta_lqr = lqr._replace(a=defects)
+        unregularised = plqr_backward_pass(LQRParams(delta_x0, delta_lqr), 0.0, return_values=True)
+        hu_max = jnp.max(jnp.abs(value_function_grad(delta_lqr, unregularised[-1])))
+        dLdU_max = jnp.max(jnp.abs(kkt_input_residual(lqr)))
+        max_defect = jnp.max(jnp.abs(defects))
+        converged = jnp.logical_and(stationary(hu_max, dLdU_max, kkt_tol), max_defect < defect_tol)
+        return lqr, delta_lqr, unregularised, hu_max, dLdU_max, max_defect, converged
 
-        Parameters
-        ----------
-        carry_tuple : Tuple[Array, Array, float, int, bool]
-            The carry tuple containing the state trajectory, control trajectory, total cost,
-            iteration number, and a boolean indicating whether to continue.
+    def backward_with_reg(lqr_params: LQRParams, delta: Array, mu: Array, unregularised: Optional[Tuple] = None):
+        """parallel backward pass, increasing mu until Huu_reg is positive definite; reuses a given mu = 0 pass"""
+        if unregularised is None:
+            first = plqr_backward_pass(lqr_params, mu, return_values=True)
+        else:
+            first = lax.cond(mu == 0.0, lambda: unregularised, lambda: plqr_backward_pass(lqr_params, mu, return_values=True))
+        dJ, gains, is_pd, values = first
+        if not regularise:
+            return dJ, gains, is_pd, values, delta, mu
 
-        Returns
-        -------
-        Tuple[Array, Array, float, int, bool]
-            The updated carry tuple.
-        """
-        old_Xs, old_Us, old_cost, n_iter, carry_on = carry_tuple
-        lqr = approx_lqr(model, old_Xs, old_Us, params)
-        lqr_params = LQRParams(params.x0, lqr)
-        etas, Js = associative_riccati_scan(lqr_params)
-        exp_dJ = get_dcosts(lqr_params, etas, Js)
+        def needs_reg(carry):
+            return jnp.logical_and(jnp.logical_not(carry[2]), carry[5] < mu_max)
 
-        def linesearch_wrapped(*args):
-            value_fns, Xs_init, Us_init, alpha_init = args
-            return linesearch(
+        def retry(carry):
+            *_, delta, mu = carry
+            delta, mu = increase_regularisation(delta, mu)
+            return (*plqr_backward_pass(lqr_params, mu, return_values=True), delta, mu)
+
+        return bounded_loop(needs_reg, retry, (dJ, gains, is_pd, values, delta, mu), max_reg_iter, loop)
+
+    def feedback_step(gains, exp_dJ, old_Xs, old_Us, old_cost):
+        """Sequential non-linear closed-loop rollout"""
+        if use_linesearch:
+            return armijo_linesearch(
                 prollout,
-                value_fns,
-                Xs_init,
-                Us_init,
+                gains,
+                old_Xs,
+                old_Us,
                 alpha_init,
                 cost_init=old_cost,
                 expected_dJ=exp_dJ,
+                loop=loop,
                 **linesearch_kwargs,
             )
-            # NOTE : for the linesearch I believe we can use the exact same function
-            # as in ilqr, as long as we pass a different rollout - is that riht?
+        (new_Xs, new_Us), new_cost = prollout(gains, old_Xs, old_Us, alpha=1.0)
+        noise = 100.0 * jnp.finfo(jnp.result_type(old_cost)).eps * jnp.maximum(jnp.abs(old_cost), 1.0)
+        accepted = jnp.logical_and(jnp.isfinite(new_cost), old_cost - new_cost > -noise)
+        return accepted, (new_Xs, new_Us), new_cost
 
-        # if no line search: α = 1.0; else use dynamic line search
-        (new_Xs, new_Us), new_total_cost = lax.cond(
-            use_linesearch,
-            linesearch_wrapped,
-            prollout,
-            CostToGo(Js, etas),
-            old_Xs,
-            old_Us,
-            alpha_init,
+    def parallel_step(lqr, delta_lqr, gains, values, defects, old_Xs, old_Us, old_cost):
+        """Multiple-shooting step with a merit line search"""
+        step = multiple_shooting_step(delta_lqr, gains, values)
+        ls_kwargs = linesearch_kwargs if use_linesearch else {"tau": 1.0, "max_iter_linesearch": 1}
+        alpha = alpha_init if use_linesearch else 1.0
+        return merit_linesearch(
+            model, params, old_Xs, old_Us, step, lqr, old_cost, defects, merit_rho, alpha, loop=loop, **ls_kwargs
         )
 
-        z = (old_cost - new_total_cost) / jnp.abs(old_cost)
-        carry_on = z > convergence_thresh
-        return (new_Xs, new_Us, new_total_cost, n_iter + 1, carry_on)
+    def plqr_iter(carry_tuple):
+        """One parallel iLQR iteration: backward scan, line search, regularisation update"""
+        old_Xs, old_Us, old_cost, delta, mu, n_iter, costs, _ = carry_tuple
+        # convergence test on the unregularised, unprojected local LQR
+        lqr, delta_lqr, unregularised, hu_max, dLdU_max, max_defect, converged = stationarity(old_Xs, old_Us)
+        defects = delta_lqr.a
 
-    def loop_fun(carry_tuple: Tuple[Array, Array, float, int, bool], _):
-        """
-        Loop function for the parallel iLQR algorithm.
+        def take_step(_):
+            if make_psd is None:
+                local_lqr, reuse = delta_lqr, unregularised
+            else:
+                local_lqr, reuse = project_psd_lqr(delta_lqr, psd_delta, make_psd), None
+            exp_dJ, gains, _, values, delta_new, mu_new = backward_with_reg(LQRParams(delta_x0, local_lqr), delta, mu, reuse)
+            if rollout == "feedback":
+                accepted, (new_Xs, new_Us), new_cost = feedback_step(gains, exp_dJ, old_Xs, old_Us, old_cost)
+            else:
+                accepted, (new_Xs, new_Us), new_cost = parallel_step(
+                    lqr, local_lqr, gains, values, defects, old_Xs, old_Us, old_cost
+                )
+            if regularise:
+                delta_new, mu_new = lax.cond(accepted, decrease_regularisation, increase_regularisation, delta_new, mu_new)
+                stuck = jnp.logical_and(jnp.logical_not(accepted), mu_new >= mu_max)
+            else:
+                stuck = jnp.logical_not(accepted)
+            new_Xs = jnp.where(accepted, new_Xs, old_Xs)
+            new_Us = jnp.where(accepted, new_Us, old_Us)
+            new_cost = jnp.where(accepted, new_cost, old_cost)
+            stop = stuck
+            if convergence_thresh is not None:
+                small = (old_cost - new_cost) / jnp.abs(old_cost) < convergence_thresh
+                stop = jnp.logical_or(stop, jnp.logical_and(accepted, small))
+            if verbose:
+                jax.debug.print(
+                    "it={i} J={j:.12e} max|dLdU|={g:.3e} max|hu|={h:.3e} max|d|={d:.3e} mu={m:.1e} accepted={a}",
+                    i=n_iter + 1,
+                    j=new_cost,
+                    g=dLdU_max,
+                    h=hu_max,
+                    d=max_defect,
+                    m=mu_new,
+                    a=accepted,
+                )
+            costs_new = costs.at[n_iter].set(new_cost)
+            return (new_Xs, new_Us, new_cost, delta_new, mu_new, n_iter + 1, costs_new, jnp.logical_not(stop))
 
-        Parameters
-        ----------
-        carry_tuple : Tuple[Array, Array, float, int, bool]
-            The carry tuple containing the state trajectory, control trajectory, total cost,
-            iteration number, and a boolean indicating whether to continue.
-        _ : Any
-            Unused parameter.
+        def stop(_):
+            return (old_Xs, old_Us, old_cost, delta, mu, n_iter, costs, jnp.array(False))
 
-        Returns
-        -------
-        Tuple[Tuple[Array, Array, float, int, bool], float]
-            The updated carry tuple and the total cost.
-        """
-        updated_carry = lax.cond(carry_tuple[-1], plqr_iter, lambda x: x, carry_tuple)
-        return updated_carry, updated_carry[2]
+        return lax.cond(converged, stop, take_step, None)
 
-    # scan through with max iterations
-    (Xs_star, Us_star, total_cost, n_iters, _), costs = lax.scan(
-        loop_fun, initial_carry, None, length=max_iter
+    Xs_star, Us_star, total_cost_star, _, _, n_iters, costs, _ = bounded_loop(
+        lambda c: c[-1], plqr_iter, initial_carry, max_iter, loop
     )
+    # the history repeats the final cost after the last iteration
+    costs = jnp.where(jnp.arange(max_iter) < n_iters, costs, total_cost_star)
     if verbose:
-        jax.debug.print(f"Converged in {n_iters}/{max_iter} iterations")
-        jax.debug.print(f"old_cost: {total_cost}")
-    lqr_params_stars = approx_lqr(model, Xs_star, Us_star, params)
-    # TODO : Not sure if this is needed - otherwise should solve with Vs and vs
-    Lambs_star = lqr_adjoint_pass(
-        Xs_star, Us_star, LQRParams(Xs_star[0], lqr_params_stars)
-    )
-    return (Xs_star, Us_star, Lambs_star), total_cost, costs
+        jax.debug.print("Ran {n}/{N} iterations, cost: {c}", n=n_iters, N=max_iter, c=total_cost_star)
+    # adjoints λ_T = ∇Cf, λ_t = A_tᵀ λ_{t+1} + ∇_x C_t of the non-linear problem, by an associative scan
+    lqr_stars = approx_lqr_offset(model, Xs_star, Us_star, params)
+    Lambs_star = parallel_reverse_lin_integration(LQRParams(Xs_star[0], lqr_stars), Xs_star, Us_star)
+    out = ((Xs_star, Us_star, Lambs_star), total_cost_star, costs)
+    if not (return_converged or return_info):
+        return out
+    converged = stationarity(Xs_star, Us_star)[-1]
+    return (*out, converged, n_iters) if return_info else (*out, converged)

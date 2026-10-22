@@ -27,9 +27,7 @@ def bmm(arr1: Array, arr2: Array) -> Array:
 
 
 # LQR struct
-LQRBackParams = Tuple[
-    ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike
-]
+LQRBackParams = Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike]
 
 
 def simulate_trajectory(
@@ -103,9 +101,7 @@ def lqr_adjoint_pass(Xs: ArrayLike, Us: ArrayLike, params: LQRParams) -> Array:
         nlamb = aT @ lamb + Q @ x + q + S @ u
         return nlamb, nlamb
 
-    lambs = lax.scan(
-        adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True
-    )[1]
+    lambs = lax.scan(adjoint_step, lambf, (Xs[:-1], Us[:], AT, lqr.Q, lqr.q, lqr.S), reverse=True)[1]
     return jnp.vstack([lambs, lambf[None]])
 
 
@@ -157,9 +153,85 @@ def calc_expected_change(dJ: CostToGo, alpha: float = 0.5):
     return -(dJ.V * alpha**2 + dJ.v * alpha)
 
 
+def regularised_backward_pass(
+    lqr: LQR,
+    mu: float = 0.0,
+    pd_thresh: float = 1e-8,
+    return_grad: bool = False,
+) -> Tuple:
+    """
+    LQR backward pass with Levenberg-Marquardt regularisation of the input Hessian.
+
+    Only ``Huu`` is regularised, ``Huu_reg = Huu + mu B^T B``. The value function update uses the full form so it stays
+    consistent with the regularised gains, and the expected change in cost uses the
+    unregularised ``Huu`` (Tassa et al., 2012). With ``mu=0`` this is the exact LQR solution.
+
+    Parameters
+    ----------
+    lqr : LQR
+        LQR parameters.
+    mu : float, optional
+        Regularisation strength, by default 0.0.
+    pd_thresh : float, optional
+        Minimum eigenvalue of ``Huu_reg`` for it to count as positive definite, by default 1e-8.
+    return_grad : bool, optional
+        Also return max_t |hu_t|, by default False. hu_t = r_t + B_t^T (v_{t+1} + V_{t+1} a_t) is the gradient
+        of the cost-to-go wrt u_t; it vanishes at every t if and only if dL/dU does, but v is propagated
+        through the closed loop A + BK, so it stays bounded for unstable open-loop dynamics.
+
+    Returns
+    -------
+    Tuple[CostToGo, Gains, Array] or Tuple[CostToGo, Gains, Array, Array]
+        Expected change in cost terms (V: 0.5 k^T Huu k, v: k^T hu summed over time), the optimal
+        feedback gains, and a boolean flag that is True if ``Huu_reg`` is positive definite at
+        every time step. With ``return_grad``, also max_t |hu_t|.
+    """
+    a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
+    n_dim, _ = lqr.B[0].shape
+
+    def riccati_step(
+        carry: Tuple[CostToGo, CostToGo, Array, Array], inps: RiccatiStepParams
+    ) -> Tuple[Tuple[CostToGo, CostToGo, Array, Array], Gains]:
+        AT, BT, (A, B, a, Q, q, R, r, S) = inps
+        curr_val, cost_step, is_pd, hu_max = carry
+        V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
+        Huu = symmetrise_matrix(R + BT @ V @ B)
+        Hxx = symmetrise_matrix(Q + AT @ V @ A)
+        Hxu = S + AT @ V @ B
+        hx = q + AT @ (v + V @ a)
+        hu = r + BT @ (v + V @ a)
+        Huu_reg = symmetrise_matrix(Huu + mu * BT @ B)
+        min_eval = jnp.min(jnp.linalg.eigvalsh(lax.stop_gradient(Huu_reg)))
+        is_pd = jnp.logical_and(is_pd, min_eval > pd_thresh)
+        hu_max = jnp.maximum(hu_max, jnp.max(jnp.abs(hu)))
+        K, k = jnp.hsplit(-solve(Huu_reg, jnp.c_[Hxu.T, hu], assume_a="her"), [n_dim])
+        k = k.reshape(-1)
+
+        # Find value iteration at current time
+        V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
+        v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
+
+        # expected change in cost
+        dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
+        dj = dj + (k.T @ hu).squeeze()
+
+        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj), is_pd, hu_max), Gains(K, k)
+
+    (_, dJ, is_pd, hu_max), Ks = lax.scan(
+        riccati_step,
+        init=(CostToGo(lqr.Qf, lqr.qf), CostToGo(0.0, 0.0), jnp.array(True), jnp.zeros((), lqr.r.dtype)),
+        xs=(a_transp, b_transp, lqr[:-2]),
+        reverse=True,
+    )
+
+    if return_grad:
+        return dJ, Ks, is_pd, hu_max
+    return dJ, Ks, is_pd
+
+
 def lqr_backward_pass(
     lqr: LQR,
-) -> Tuple[float, Gains]:
+) -> Tuple[CostToGo, Gains]:
     """
     LQR backward pass learn optimal Gains given LQR cost constraints and dynamics.
 
@@ -170,59 +242,14 @@ def lqr_backward_pass(
 
     Returns
     -------
-    Gains
-        Optimal feedback gains.
+    Tuple[CostToGo, Gains]
+        Expected change in cost terms and optimal feedback gains.
     """
-    a_transp, b_transp = lqr.A.transpose(0, 2, 1), lqr.B.transpose(0, 2, 1)
-    n_dim, _ = lqr.B[0].shape
-
-    def riccati_step(
-        carry: Tuple[CostToGo, CostToGo], inps: RiccatiStepParams
-    ) -> Tuple[CostToGo, Gains]:
-        AT, BT, (A, B, a, Q, q, R, r, S) = inps
-        curr_val, cost_step = carry
-        V, v, dJ, dj = curr_val.V, curr_val.v, cost_step.V, cost_step.v
-        Huu = symmetrise_matrix(R + BT @ V @ B)  # .reshape(m_dim, m_dim)
-        min_eval = jnp.min(jnp.linalg.eigh(Huu)[0])
-        mu = 0.*jnp.maximum(1e-12, 1e-12 - min_eval)
-        # mu = 1.e-6
-        Hxx = symmetrise_matrix(Q + AT @ V @ A)  # .reshape(n_dim, n_dim)
-        Hxu = S + AT @ (V) @ B
-        hx = q + AT @ (v + V @ a)
-        hu = r + BT @ (v + V @ a)
-        I_mu = mu * BT @ B  # jnp.eye(m_dim)
-        Hxu_reg = S + AT @ (V + mu * jnp.eye(n_dim)) @ B
-        Huu_reg = Huu + I_mu
-        K, k = jnp.hsplit(
-            -solve(Huu_reg, jnp.c_[Hxu_reg.T, hu], assume_a="her"), [n_dim]
-        )
-        k = k.reshape(
-            -1,
-        )
-
-        # Find value iteration at current time
-        V_curr = symmetrise_matrix(Hxx + Hxu @ K + K.T @ Hxu.T + K.T @ Huu @ K)
-        v_curr = hx + (K.T @ Huu @ k) + (K.T @ hu) + (Hxu @ k)
-
-        # expected change in cost
-        dJ = dJ + 0.5 * (k.T @ Huu @ k).squeeze()
-        dj = dj + (k.T @ hu).squeeze()
-
-        return (CostToGo(V_curr, v_curr), CostToGo(dJ, dj)), Gains(K, k)
-
-    (V_0, dJ), Ks = lax.scan(
-        riccati_step,
-        init=(CostToGo(lqr.Qf, lqr.qf), (CostToGo(0.0, 0.0))),
-        xs=(a_transp, b_transp, lqr[:-2]),
-        reverse=True,
-    )
-
+    dJ, Ks, _ = regularised_backward_pass(lqr, mu=0.0)
     return dJ, Ks
 
 
-def kkt(
-    params: LQRParams, Xs: Array, Us: Array, Lambs: Array
-) -> Tuple[Array, Array, Array]:
+def kkt(params: LQRParams, Xs: Array, Us: Array, Lambs: Array) -> Tuple[Array, Array, Array]:
     """
     Define KKT conditions for LQR problem.
 
@@ -245,21 +272,11 @@ def kkt(
     AT = params.lqr.A.transpose(0, 2, 1)
     BT = params.lqr.B.transpose(0, 2, 1)
     ST = params.lqr.S.transpose(0, 2, 1)
-    dLdXs = (
-        bmm(params.lqr.Q, Xs[:-1])
-        + bmm(params.lqr.S, Us[:])
-        + params.lqr.q
-        + bmm(AT, Lambs[1:])
-        - Lambs[:-1]
-    )
+    dLdXs = bmm(params.lqr.Q, Xs[:-1]) + bmm(params.lqr.S, Us[:]) + params.lqr.q + bmm(AT, Lambs[1:]) - Lambs[:-1]
     dLdXf = jnp.matmul(params.lqr.Qf, Xs[-1]) + params.lqr.qf - Lambs[-1]
     dLdXs = jnp.concatenate([dLdXs, dLdXf[None]])
-    dLdUs = (
-        bmm(ST, Xs[:-1]) + bmm(params.lqr.R, Us[:]) + params.lqr.r + bmm(BT, Lambs[1:])
-    )
-    dLdLambs = (
-        bmm(params.lqr.A, Xs[:-1]) + bmm(params.lqr.B, Us[:]) + params.lqr.a - Xs[1:]
-    )
+    dLdUs = bmm(ST, Xs[:-1]) + bmm(params.lqr.R, Us[:]) + params.lqr.r + bmm(BT, Lambs[1:])
+    dLdLambs = bmm(params.lqr.A, Xs[:-1]) + bmm(params.lqr.B, Us[:]) + params.lqr.a - Xs[1:]
     dLdLamb0 = params.x0 - Xs[0]
     dLdLambs = jnp.concatenate([dLdLamb0[None], dLdLambs])
     return dLdXs, dLdUs, dLdLambs

@@ -27,11 +27,9 @@ def keygen(key, nkeys):
     return keys[0], (k for k in keys[1:])
 
 
-def initialise_stable_dynamics(
-    key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
-) -> Array:
+def initialise_stable_dynamics(key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6) -> Array:
     """
-    Generate a state matrix with stable dynamics (|eigenvalues| < 1) discrete dynamics.
+    Generate a state matrix with stable dynamics (all eigenvalues inside the unit circle) discrete dynamics.
 
     Parameters
     ----------
@@ -54,11 +52,9 @@ def initialise_stable_dynamics(
     return jnp.tile(mat, (T, 1, 1))
 
 
-def initialise_stable_time_varying_dynamics(
-    key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6
-) -> Array:
+def initialise_stable_time_varying_dynamics(key: Tuple[int, int], n_dim: int, T: int, radii: float = 0.6) -> Array:
     """
-    Generate a state matrix with stable dynamics (|eigenvalues| < 1).
+    Generate a state matrix with stable dynamics (all eigenvalues inside the unit circle).
 
     Parameters
     ----------
@@ -132,3 +128,25 @@ def time_map(fun: Callable) -> Callable:
         Vectorised function along args 1 and 2 0th-axis.
     """
     return jax.vmap(fun, in_axes=(0, 0, 0, None))
+
+
+def smooth_l1(x: Array, eps: float = 1e-6) -> Array:
+    """
+    Smooth approximation of the L1 norm, sum(sqrt(x^2 + eps) - sqrt(eps)).
+
+    Twice differentiable, so it can be used as an iLQR sparsity cost. Approaches ``sum(|x|)`` as
+    ``eps -> 0``; anneal ``eps`` by re-solving with smaller values, warm-starting each solve.
+
+    Parameters
+    ----------
+    x : Array
+        Input array.
+    eps : float, optional
+        Smoothing parameter, by default 1e-6.
+
+    Returns
+    -------
+    Array
+        Smoothed L1 norm of x.
+    """
+    return jnp.sum(jnp.sqrt(x**2 + eps) - jnp.sqrt(eps))

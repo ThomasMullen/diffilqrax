@@ -1,378 +1,234 @@
 """
-Unit test for the parallel LQR module
+Tests for the associative-scan LQR solver: agreement with the sequential solver and the dense QP
+solution across the dimension grid, KKT conditions, the cross-term change of variables, the
+associativity of the scan operators, and cross-checks against primal_dual_ilqr (arXiv:2403.00748).
 """
 
+import os
 from pathlib import Path
-import unittest
-from os import getcwd
-from itertools import product
-from tqdm import trange
-import time
-import logging
+
+import pytest
 import chex
 import jax
-from jax import Array
-import jax.random as jr
 import jax.numpy as jnp
+import jax.random as jr
 import numpy as onp
-from matplotlib.pyplot import subplots, close, style
 
-from diffilqrax.typs import (
-    LQR,
-    LQRParams,
-    ModelDims,
-)
+from diffilqrax import lqr
 from diffilqrax.plqr import (
     solve_plqr,
+    solve_plqr_swap_x0,
+    remove_cross_term,
     associative_riccati_scan,
     associative_opt_traj_scan,
-    parallel_reverse_lin_integration,
+    optimal_gains,
+    get_dcosts,
     parallel_forward_lin_integration,
+    parallel_reverse_lin_integration,
+    riccati_operator,
+    dynamic_operator,
 )
-from diffilqrax.lqr import solve_lqr
-from diffilqrax.utils import keygen, initialise_stable_dynamics
+from diffilqrax.typs import LQRParams, ModelDims
+from problems import DIMS, SLOW_SIZE, random_lqr, exact_lqr_inputs, lqr_total_cost
 
-logging.getLogger("matplotlib.font_manager").disabled = True
-# jax.config.update('jax_default_device', jax.devices('cpu')[0])
-# jax.config.update('jax_platform_name', 'gpu')
+jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
+jax.config.update("jax_enable_x64", True)
 
-
-PLOT_URL = (
-    "https://gist.githubusercontent.com/"
-    "ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/"
-    "raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/"
-    "figure_style.mplstyle"
-)
-PLOTTING_ON = False
-if PLOTTING_ON:
-    # style.use("/home/marineschimel/code/diffilqrax/paper.mplstyle")
-    style.use(PLOT_URL)
-    FIG_DIR = Path(getcwd(), "fig_dump", "para_lqr")
-    FIG_DIR.mkdir(parents=True, exist_ok=True)
-LONG_TIME_PROFILE = False
-
-def is_jax_array(arr: Array) -> bool:
-    """validate jax array type"""
-    return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
+FIXTURES = Path(__file__).parent / "fixtures"
+RTOL = 1e-10
+KKT_ATOL = 1e-10
 
 
-def _gpu_available()->bool:
-    try:
-        _ = jax.device_put(jax.numpy.ones(1), device=jax.devices('gpu')[0])
-        return True
-    except:
-        return False
+def grid(dims=DIMS):
+    """Parametrise over (n, m), marking the large cases slow"""
+    return [pytest.param(n, m, marks=pytest.mark.slow) if n * m >= SLOW_SIZE else (n, m) for n, m in dims]
 
-def _tuple_block_until_ready(x_tuple):
-    """Apply block for leaves in a pytree struct"""
-    def block_each_element(x):
-        return x.block_until_ready()
-    return jax.tree_util.tree_map(block_each_element, x_tuple)
 
-def setup_lqr(
-    dims: chex.Dimensions,
-    pen_weight: dict = {"Q": 10.0, "R": 1.0, "Qf": 1e0, "S": 1e-3},
-) -> LQR:
-    """Setup LQR problem"""
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
-    # initialise dynamics
-    span_time_m = dims["TXX"]
-    span_time_v = dims["TX"]
-    dt = 0.1
-    Uh = jnp.array(
-        [[1, dt, 0.01], [-1 * dt, 1 - 0.1 * dt, 0.0], [-1 * dt, 1 - 0.1 * dt, 0.05]]
+def assert_rel_close(a, b, rtol=RTOL):
+    """Normwise relative error ||a - b|| <= rtol ||b||"""
+    err, ref = jnp.linalg.norm(a - b), jnp.linalg.norm(b)
+    assert err <= rtol * ref, f"relative error {err / ref:.2e} > {rtol:.0e}"
+
+
+def assert_solutions_close(sol, ref, rtol=RTOL):
+    for a, b in zip(sol, ref):
+        assert_rel_close(a, b, rtol)
+
+
+def without_cross_term(params: LQRParams) -> LQRParams:
+    return params._replace(lqr=params.lqr._replace(S=jnp.zeros_like(params.lqr.S)))
+
+
+# --------------------------------------------------------------------------------------------
+# solution
+# --------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("n,m", grid())
+@pytest.mark.parametrize("cross_term", [True, False])
+def test_plqr_matches_lqr(n, m, cross_term):
+    """States, inputs and adjoints agree with the sequential Riccati solver"""
+    params = random_lqr(n, m, horizon=50)
+    params = params if cross_term else without_cross_term(params)
+    assert_solutions_close(solve_plqr(params), lqr.solve_lqr(params))
+
+
+@pytest.mark.parametrize("horizon", [1, 2, 3, 17, 128, 1000])
+def test_plqr_horizons(horizon):
+    """Horizons that are short, odd, a power of two and long"""
+    params = random_lqr(5, 3, horizon=horizon)
+    assert_solutions_close(solve_plqr(params), lqr.solve_lqr(params))
+
+
+@pytest.mark.parametrize("n,m", [(5, 1), (5, 5), (20, 5)])
+def test_plqr_matches_dense_qp(n, m):
+    """Inputs equal the dense QP solution, and perturbing them increases the cost"""
+    params = random_lqr(n, m, horizon=20)
+    _, Us, _ = solve_plqr(params)
+    assert_rel_close(Us, exact_lqr_inputs(params), rtol=1e-8)
+    dU = 1e-3 * jr.normal(jr.PRNGKey(1), Us.shape)
+    assert lqr_total_cost(params, Us + dU) > lqr_total_cost(params, Us)
+
+
+@pytest.mark.parametrize("n,m", grid())
+def test_plqr_kkt(n, m):
+    """All KKT residuals vanish to round-off, relative to the scale of the solution"""
+    params = random_lqr(n, m, horizon=50)
+    Xs, Us, Lambs = solve_plqr(params)
+    scale = jnp.max(jnp.abs(jnp.r_[Xs.ravel(), Us.ravel(), Lambs.ravel()]))
+    for res in lqr.kkt(params, Xs, Us, Lambs):
+        chex.assert_trees_all_close(res / scale, jnp.zeros_like(res), atol=KKT_ATOL, rtol=0.0)
+
+
+def test_plqr_swap_x0():
+    params = random_lqr(5, 3, horizon=30)
+    assert_solutions_close(solve_plqr_swap_x0(params), lqr.solve_lqr_swap_x0(params))
+
+
+def test_plqr_float32():
+    """Single precision is accurate to float32 round-off over a moderate horizon"""
+    params = jax.tree.map(lambda x: x.astype(jnp.float32), random_lqr(5, 3, horizon=100))
+    sol = solve_plqr(params)
+    assert all(x.dtype == jnp.float32 for x in sol)
+    ref = lqr.solve_lqr(jax.tree.map(lambda x: x.astype(jnp.float64), params))
+    assert_solutions_close(sol, ref, rtol=1e-4)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("horizon", [256, 1024, 4096, 16384])
+@pytest.mark.parametrize("gain", [1.0, 2.5], ids=["stable", "unstable"])
+def test_plqr_long_horizon_accuracy(horizon, gain):
+    """The error of the associative scan does not grow with the horizon, in double and single precision, for
+    stable dynamics (spectral radius ~0.6) and unstable ones (~1.5). For unstable dynamics the open-loop
+    adjoint recursions of both solvers amplify round-off like 1.5^T, so only the states and inputs are compared"""
+    params = random_lqr(5, 3, horizon=horizon)
+    params = params._replace(lqr=params.lqr._replace(A=gain * params.lqr.A))
+    ref = lqr.solve_lqr(params)
+    n_compared = 3 if gain == 1.0 else 2
+    assert_solutions_close(solve_plqr(params)[:n_compared], ref[:n_compared], rtol=1e-13)
+    sol32 = solve_plqr(jax.tree.map(lambda x: x.astype(jnp.float32), params))
+    assert_solutions_close(sol32[:n_compared], ref[:n_compared], rtol=1e-5)
+
+
+# --------------------------------------------------------------------------------------------
+# components
+# --------------------------------------------------------------------------------------------
+
+
+def test_remove_cross_term_preserves_cost():
+    """Under u = ũ - Gx - g the transformed problem has the same cost up to the constant -½ Σ rᵀR⁻¹r"""
+    params = random_lqr(5, 3, horizon=20)
+    new_params = LQRParams(params.x0, remove_cross_term(params.lqr)[0])
+    _, G, g = remove_cross_term(params.lqr)
+    Us_tilde = jr.normal(jr.PRNGKey(0), (20, 3))
+    Xs = lqr.simulate_trajectory(lqr.lin_dyn_step, Us_tilde, new_params, ModelDims(5, 3, 20, 0.1))
+    Us = Us_tilde - jnp.einsum("tij,tj->ti", G, Xs[:-1]) - g
+    assert_rel_close(lqr.simulate_trajectory(lqr.lin_dyn_step, Us, params, ModelDims(5, 3, 20, 0.1)), Xs)
+    const = -0.5 * jnp.sum(params.lqr.r * g)
+    chex.assert_trees_all_close(lqr_total_cost(new_params, Us_tilde) + const, lqr_total_cost(params, Us), rtol=1e-12)
+
+
+def random_riccati_elements(key, n, batch=1):
+    keys = jr.split(key, 5)
+    sym_psd = lambda k: (lambda L: L @ L.transpose(0, 2, 1) / n)(jr.normal(k, (batch, n, n)))
+    return (
+        jr.normal(keys[0], (batch, n, n)) / jnp.sqrt(n),
+        jr.normal(keys[1], (batch, n)),
+        sym_psd(keys[2]),
+        jr.normal(keys[3], (batch, n)),
+        sym_psd(keys[4]),
     )
-    Wh = jnp.eye(3)  # jnp.array([[0.5, 2., 0.], [1., -1.2, 0.1]]).T * dt
-    Q = 1.0
-    A = jnp.tile(Uh, span_time_m)
-    B = jnp.tile(Wh, span_time_m)
-    a = jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
-    # define cost matrices
-    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
-    q = -5 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
-    R = pen_weight["R"] * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
-    r = -2.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = 0 * pen_weight["S"] * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
-    Qf = 0 * pen_weight["Q"] * jnp.eye(dims["N"][0])
-    qf = 0 * jnp.ones(dims["N"])
-    # construct LQR
-    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
-    return lqr()
 
 
-def setup_lqr_time(
-    dims: chex.Dimensions,
-    pen_weight: dict = {"Q": 10.0, "R": 1.0, "Qf": 1e0, "S": 1e-3},
-) -> LQR:
-    """Setup LQR problem"""
-    key = jr.PRNGKey(seed=234)
-    key, skeys = keygen(key, 3)
-    # initialise dynamics
-    span_time_m = dims["TXX"]
-    span_time_v = dims["TX"]
-    A = initialise_stable_dynamics(next(skeys), *dims["NT"], radii=0.6)
-    B = jnp.tile(jr.normal(next(skeys), dims["NM"]), span_time_m)
-    a = 2 * jnp.tile(jr.normal(next(skeys), dims["N"]), span_time_v)
-    # define cost matrices
-    Q = pen_weight["Q"] * jnp.tile(jnp.eye(dims["N"][0]), span_time_m)
-    q = -5 * jnp.tile(jnp.ones(dims["N"]), span_time_v)
-    R = pen_weight["R"] * jnp.tile(jnp.eye(dims["M"][0]), span_time_m)
-    r = 0.0 * jnp.tile(jnp.ones(dims["M"]), span_time_v)
-    S = 0 * pen_weight["S"] * jnp.tile(jnp.ones(dims["NM"]), span_time_m)
-    Qf = 2 * pen_weight["Q"] * jnp.eye(dims["N"][0])
-    qf = 0 * jnp.ones(dims["N"])
-    # construct LQR
-    lqr = LQR(A, B, a, Q, q, R, r, S, Qf, qf)
-    return lqr()
+@pytest.mark.parametrize("operator,n_parts", [(riccati_operator, 5), (dynamic_operator, 2)])
+def test_operator_is_associative(operator, n_parts):
+    """(a∘b)∘c == a∘(b∘c) on random elements, the requirement for associative_scan"""
+    a, b, c = (random_riccati_elements(k, 4)[:n_parts] for k in jr.split(jr.PRNGKey(0), 3))
+    left = operator(operator(a, b), c)
+    right = operator(a, operator(b, c))
+    chex.assert_trees_all_close(left, right, rtol=1e-10, atol=1e-12)
 
 
-class TestPLQR(unittest.TestCase):
-    """Test LQR dimensions and dtypes"""
+def test_adjoint_via_reverse_integration():
+    """Adjoints from the value functions equal a reverse associative scan of the adjoint equation"""
+    params = random_lqr(5, 3, horizon=40)
+    Xs, Us, Lambs = solve_plqr(params)
+    assert_rel_close(parallel_reverse_lin_integration(params, Xs, Us), Lambs)
 
-    def setUp(self):
-        """Instantiate dummy LQR"""
-        print("\nRunning setUp method...")
-        self.dims = chex.Dimensions(T=100, N=3, M=3, X=1)
-        self.sys_dims = ModelDims(*self.dims["NMT"], dt=0.01)
-        print("Model dimensionality", self.dims["TNMX"])
-        print("\nMake LQR struct")
-        self.lqr = setup_lqr(self.dims)
 
-        print("\nMake initial state x0 and input U")
-        self.x0 = jnp.array([2.0, 1.0, 0.0])  # jnp.ones(self.dims["N"]) #
-        Us = jnp.zeros(self.dims["TM"], dtype=float)
-        Us = Us.at[2].set(1.0)
-        self.Us = Us
+def test_forward_integration_matches_closed_loop():
+    """Integrating the open-loop inputs with the forward associative scan reproduces the states"""
+    params = random_lqr(5, 3, horizon=40)
+    Xs, Us, _ = solve_plqr(params)
+    assert_rel_close(parallel_forward_lin_integration(params, Us, params.lqr.a), Xs)
 
-    def test_solve_lqr(self):
-        """test LQR solution shape and dtype"""
-        params = LQRParams(self.x0, self.lqr)
-        Xs_lqr, Us_lqr, Lambs_lqr = solve_lqr(params)
-        # print(Xs_lqr)
-        ##for this we might need to define the LQRParams class with everything of size T x ...
-        xs, us, _ = solve_plqr(params)
-        # verify
-        chex.assert_trees_all_close(xs, Xs_lqr, rtol=1e-5, atol=1e-5)
-        # Plot the KKT residuals
-        if PLOTTING_ON:
-            fig, ax = subplots(1, 2, figsize=(8, 3), sharex=True, sharey=True)
-            ax[0].plot(Xs_lqr)
-            ax[1].plot(xs)
-            fig.tight_layout()
-            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_xs.png")
-            close()
-            
-            fig, ax = subplots(1, 3, figsize=(8, 3), sharex=True, sharey=True)
-            ax[0].plot(Us_lqr)
-            ax[1].plot(us)
-            ax[2].plot(Us_lqr - us)
-            fig.tight_layout()
-            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_us.png")
-            close()
 
-    def test_lqr_adjoint(self):
-        """test LQR adjoint solution"""
-        params = LQRParams(self.x0, self.lqr)
-        _, _, Lambs_lqr = solve_lqr(params)
-        # test
-        _, _, lmda = solve_plqr(params)
-        
-        # validate
-        chex.assert_trees_all_close(lmda, Lambs_lqr, rtol=1e-5, atol=1e-5)
+def test_gains_match_sequential():
+    """Feedback gains, and the expected cost change used by the linesearch, match the sequential pass"""
+    params = random_lqr(5, 3, horizon=40)
+    etas, Js = associative_riccati_scan(params)
+    gains, _ = optimal_gains(params, etas, Js)
+    dJ, ref_gains = lqr.lqr_backward_pass(params.lqr)
+    assert_rel_close(gains.K, ref_gains.K)
+    assert_rel_close(gains.k, ref_gains.k)
+    dJ_par = get_dcosts(params, etas, Js)
+    chex.assert_trees_all_close(dJ_par.V, dJ.V, rtol=RTOL)
+    chex.assert_trees_all_close(dJ_par.v, dJ.v, rtol=RTOL)
 
-        if PLOTTING_ON:
-            fig, axes = subplots(1, 3, figsize=(12, 3), sharey=False)
-            for i, ax in enumerate(axes.flatten()):
-                ax.plot(Lambs_lqr[:, i], linestyle="-")
-                ax.plot(lmda[:, i], linestyle=":")
-            fig.tight_layout()
-            fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint01.png")
-            close()
 
-            fig, ax = subplots(1, 2, sharey=True)
-            ax[0].plot(Lambs_lqr)
-            ax[1].plot(lmda)
-            fig.tight_layout()
-            fig.savefig(f"{FIG_DIR}/TestPLQR_adjoint02.png")
+def test_linesearch_alpha_scales_feedforward():
+    """alpha scales the feedforward term only: u = Kx + αk along the resulting trajectory"""
+    params = random_lqr(5, 3, horizon=40)
+    etas, Js = associative_riccati_scan(params)
+    cs, gains = associative_opt_traj_scan(params, etas, Js, alpha=0.3)
+    Xs = jnp.r_[params.x0[None], cs]
+    Us = jnp.einsum("tij,tj->ti", gains.K, Xs[:-1]) + 0.3 * gains.k
+    assert_rel_close(lqr.simulate_trajectory(lqr.lin_dyn_step, Us, params, ModelDims(5, 3, 40, 0.1)), Xs)
 
-    def test_adjoint_via_rev_integration(self):
-        """Test adjoint via reverse integration and v-funs"""
-        # construct LQR and value functions
-        model = LQRParams(self.x0, self.lqr)
-        v_lins, v_quads = associative_riccati_scan(model)
-        # test optimal pass
-        _, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(
-            model, v_lins, v_quads
-        )
-        opt_xs = jnp.r_[model.x0[None], cs]
-        opt_us = ks - jnp.einsum("bij,bj->bi", Ks, opt_xs[:-1]) + offsets
-        lmbdas_vfns = jnp.einsum("bij,bj->bi", v_quads, opt_xs) - v_lins
-        lmbdas_rev = parallel_reverse_lin_integration(model, opt_xs, opt_us)
-        # validate
-        chex.assert_trees_all_close(lmbdas_rev, lmbdas_vfns, rtol=1e-5, atol=1e-5)
 
-    def test_lqr_direct_solve(self):
-        """Test optimal u and x obtained from gains equivalent as an effective problem"""
-        # construct LQR and value functions
-        model = LQRParams(self.x0, self.lqr)
-        v_lins, v_quads = associative_riccati_scan(model)
-        # test optimal pass
-        _, cs, (Ks, _, _, ks), offsets = associative_opt_traj_scan(
-            model, v_lins, v_quads
-        )
-        opt_xs = jnp.r_[model.x0[None], cs]
+# --------------------------------------------------------------------------------------------
+# primal_dual_ilqr cross-check
+# --------------------------------------------------------------------------------------------
 
-        new_model = LQRParams(
-            model.x0,
-            LQR(
-                model.lqr.A - Ks,
-                model.lqr.B,
-                0 * model.lqr.a,
-                model.lqr.Q,
-                model.lqr.q,
-                model.lqr.R,
-                model.lqr.r,
-                model.lqr.S,
-                model.lqr.Qf,
-                model.lqr.qf,
-            ),
-        )
+PDILQR_FIXTURES = sorted(FIXTURES.glob("pdilqr_lqr_*.npz"))
 
-        new_us = ks + offsets + model.lqr.a
-        new_xs = parallel_forward_lin_integration(new_model, new_us, new_model.lqr.a)
 
-        # verify
-        chex.assert_trees_all_close(opt_xs, new_xs, rtol=1e-5, atol=1e-5)
-        if PLOTTING_ON:
-            fig, ax = subplots(1, 2, figsize=(8, 3), sharex=True, sharey=True)
-            ax[0].plot(opt_xs)
-            ax[1].plot(new_xs)
-            fig.tight_layout()
-            fig.savefig(f"{FIG_DIR}/TestPLQR_dual_method.png")
-            close()
-
-    def test_plqr_cpu_profile(self):
-        cpu = jax.devices("cpu")[0]
-        n_reps = 2
-        if LONG_TIME_PROFILE:
-            n_dims = onp.array([16,32])
-        else:
-            n_dims = onp.array([2,4])
-        if LONG_TIME_PROFILE:
-            horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000, 10000, 20000,])
-        else:
-            horizon_dims = onp.array([10, 100])
-        cpu_lqr = jax.jit(solve_lqr, device=cpu)
-        cpu_plqr = jax.jit(solve_plqr, device=cpu)
-        
-        clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
-        print(clock_times.shape)
-        
-        for ix, (n, T) in enumerate(product(n_dims, horizon_dims)):
-            dims = chex.Dimensions(T=T, N=n, M=n, X=1)
-            sys_dims = ModelDims(*dims["NMT"], dt=0.01)
-            # dims = ModelDims(n=n, m=n, horizon=T, dt=0.1)
-            lqr_model = setup_lqr_time(dims=dims)
-            cpu_lqr_prms = LQR(*(jax.device_put(jnp.asarray(val), cpu) for val in lqr_model))
-            x0 = jax.device_put(jnp.ones(sys_dims.n), cpu)
-            # time profile linear lqr
-            res = cpu_lqr(LQRParams(x0, cpu_lqr_prms))
-            # skip jit compile time
-            for e in res:
-                _ = _tuple_block_until_ready(e)
-            tic = time.time()
-            for _ in trange(n_reps, leave=False):
-                # res = cpu_lqr(LQRParams(x0, cpu_lqr_prms))
-                for e in res:
-                    _ = _tuple_block_until_ready(e)
-            print(0, ix, (n, T))
-            clock_times[0,ix] = (time.time() - tic) / n_reps
-
-            # time profile parallel lqr
-            res = cpu_plqr(LQRParams(x0, cpu_lqr_prms))
-            # skip jit compile time
-            for e in res:
-                _ = _tuple_block_until_ready(e)
-            tic = time.time()
-            for _ in trange(n_reps, leave=False):
-                # res = cpu_plqr(LQRParams(x0, cpu_lqr_prms))
-                for e in res:
-                    _ = _tuple_block_until_ready(e)
-            print(1, ix, (n, T))
-            clock_times[1,ix] = (time.time() - tic) / n_reps
-            
-        clock_times = clock_times.reshape(2, n_dims.size, horizon_dims.size)
-        
-        if PLOTTING_ON:
-            fig, ax = subplots(1, figsize=(5, 3), sharex=True)
-            colors = ["r", "b", "g", "magenta"]
-            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in range(n_dims.size)]
-            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in range(n_dims.size)]
-            ax.legend(loc=(1, 0.2))
-            ax.set(xlabel="N tps", ylabel="Clock Time (s)",title="cpu")
-            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_cpu_time.png")
-            close()
-            
-    def test_plqr_gpu_profile(self):
-        if not _gpu_available():
-            return
-        
-        gpu = jax.devices("gpu")[0]
-        n_reps = 2
-        n_dims = onp.array([12,20])
-        horizon_dims = onp.array([10, 100, 200, 500, 1000, 5000,])
-        gpu_lqr = jax.jit(solve_lqr, gpu)
-        gpu_plqr = jax.jit(solve_plqr, gpu)
-        
-        clock_times = onp.zeros((2, n_dims.size * horizon_dims.size), dtype=float)
-        print(clock_times.shape)
-        
-        for ix, (n, T) in enumerate(product(n_dims, horizon_dims)):
-            dims = chex.Dimensions(T=T, N=n, M=n, X=1)
-            sys_dims = ModelDims(*dims["NMT"], dt=0.01)
-            # dims = ModelDims(n=n, m=n, horizon=T, dt=0.1)
-            lqr_model = setup_lqr_time(dims=dims)
-            gpu_lqr_prms = LQR(*(jax.device_put(jnp.asarray(val), gpu) for val in lqr_model))
-            x0 = jax.device_put(jnp.ones(sys_dims.n), gpu)
-            # time profile linear lqr
-            res = gpu_lqr(LQRParams(x0, gpu_lqr_prms))
-            # skip jit compile time
-            for e in res:
-                _ = _tuple_block_until_ready(e)
-            tic = time.time()
-            for _ in trange(n_reps, leave=False):
-                # res = cpu_lqr(LQRParams(x0, cpu_lqr_prms))
-                for e in res:
-                    _ = _tuple_block_until_ready(e)
-            print(0, ix, (n, T))
-            clock_times[0,ix] = (time.time() - tic) / n_reps
-
-            # time profile parallel lqr
-            res = gpu_plqr(LQRParams(x0, gpu_lqr_prms))
-            # skip jit compile time
-            for e in res:
-                _ = _tuple_block_until_ready(e)
-            tic = time.time()
-            for _ in trange(n_reps, leave=False):
-                # res = cpu_plqr(LQRParams(x0, cpu_lqr_prms))
-                for e in res:
-                    _ = _tuple_block_until_ready(e)
-            print(1, ix, (n, T))
-            clock_times[1,ix] = (time.time() - tic) / n_reps
-            
-        clock_times = clock_times.reshape(2, n_dims.size, horizon_dims.size)
-        
-        if PLOTTING_ON:
-            fig, ax = subplots(1, figsize=(5, 3), sharex=True)
-            colors = ["r", "b", "g", "magenta"]
-            [ax.plot(horizon_dims, clock_times[0,i], label=f"Linear LQR {i}", color=colors[i]) for i in range(n_dims.size)]
-            [ax.plot(horizon_dims, clock_times[1,i], label=f"Parallel LQR {i}", color=colors[i],linestyle="--",) for i in range(n_dims.size)]
-            ax.legend(loc=(1, 0.2))
-            ax.set(xlabel="N tps", ylabel="Clock Time (s)",title="gpu")
-            fig.savefig(f"{FIG_DIR}/TestPLQR_lqr_gpu_time.png")
-            close()
-        
-
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.skipif(not PDILQR_FIXTURES, reason="run benchmarks/make_pdilqr_fixtures.py")
+@pytest.mark.parametrize("path", PDILQR_FIXTURES, ids=lambda p: p.stem)
+@pytest.mark.parametrize("variant", ["seq", "par"])
+def test_matches_primal_dual_ilqr(path, variant):
+    """Value functions, gains and trajectory match primal_dual_ilqr's sequential and parallel TVLQR"""
+    d = dict(onp.load(path))
+    n, m, horizon = d["B"].shape[1], d["B"].shape[2], d["B"].shape[0]
+    params = random_lqr(n, m, horizon, seed=int(d["seed"]))
+    chex.assert_trees_all_close(onp.asarray(params.lqr.A), d["A"], rtol=0, atol=0)
+    etas, Js = associative_riccati_scan(params)
+    gains, _ = optimal_gains(params, etas, Js)
+    Xs, Us, _ = solve_plqr(params)
+    rtol = 1e-10 if variant == "seq" else 1e-8
+    assert_rel_close(Js, d[f"{variant}_P"], rtol)
+    assert_rel_close(-etas, d[f"{variant}_p"], rtol)
+    assert_rel_close(gains.K, d[f"{variant}_K"], rtol)
+    assert_rel_close(gains.k, d[f"{variant}_k"], rtol)
+    assert_rel_close(Xs, d[f"{variant}_X"], rtol)
+    assert_rel_close(Us, d[f"{variant}_U"], rtol)
