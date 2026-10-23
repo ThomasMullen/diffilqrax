@@ -111,9 +111,14 @@ open docs/build/html/index.html
 ## Tests
 
 ```bash
-pytest tests/ -m "not slow"   # fast suite
-pytest tests/ -m slow          # large-dimension tests
+pytest tests/ -m "not slow and not heavy"   # quick tier, as run in CI
+pytest tests/ -m "not slow"                  # fast suite: adds the heavy cases
+pytest tests/ -m slow                        # large-dimension tests
 ```
+
+The `heavy` cases (listed in `tests/conftest.py`) are too slow or memory-hungry for a GitHub runner and
+re-check properties that a cheaper test already covers. CI runs the quick tier; the full tiers can be
+started by hand from the "Python package" workflow.
 
 Benchmarks import the shared test problems from `tests/`, so run them as modules from the repository root,
 for example `python -m benchmarks.timing --quick`.

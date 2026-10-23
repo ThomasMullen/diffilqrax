@@ -5,6 +5,13 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Test tier: quick (CI default), full (adds the heavy cases) or all (adds the slow large-dimension tests too)"
+        type: choice
+        options: [quick, full, all]
+        default: quick
 
 jobs:
   test:
@@ -12,9 +19,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.13"]
     env:
       JAX_PLATFORMS: cpu
+      TIER: ${{ inputs.tier || 'quick' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,4 +32,10 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
       - name: Test with pytest
-        run: python -m pytest tests/ -m "not slow"
+        run: |
+          case "$TIER" in
+            quick) MARKERS="not slow and not heavy" ;;
+            full) MARKERS="not slow" ;;
+            all) MARKERS="" ;;
+          esac
+          python -m pytest tests/ -m "$MARKERS" --durations=15
