@@ -46,7 +46,7 @@ dev = [
   "chex",
   "scipy",
   "matplotlib",
-  "black",
+  "black==26.10.1",
   "pylint",
   "build",
 ]
