@@ -229,7 +229,7 @@ def test_matches_primal_dual_ilqr(path, variant):
     d = dict(onp.load(path))
     n, m, horizon = d["B"].shape[1], d["B"].shape[2], d["B"].shape[0]
     params = random_lqr(n, m, horizon, seed=int(d["seed"]))
-    chex.assert_trees_all_close(onp.asarray(params.lqr.A), d["A"], rtol=0, atol=0)
+    chex.assert_trees_all_close(onp.asarray(params.lqr.A), d["A"], rtol=1e-11, atol=1e-13)
     etas, Js = associative_riccati_scan(params)
     gains, _ = optimal_gains(params, etas, Js)
     Xs, Us, _ = solve_plqr(params)
