@@ -78,7 +78,10 @@ diffilqrax = ["VERSION"]
 testpaths = ["tests"]
 pythonpath = ["."]
 norecursedirs = ["fig_dump", ".*", "venv", "build", "dist"]
-markers = ["slow: large-dimension tests (deselect with '-m \"not slow\"')"]
+markers = [
+  "slow: large-dimension tests (deselect with '-m \"not slow\"')",
+  "heavy: slow or memory-hungry cases covered by a cheaper test; skipped in CI (see tests/conftest.py)",
+]
 
 [tool.black]
 line-length = 127
