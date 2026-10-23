@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>diffilqrax.batch &#8212; diffilqrax 1.0.0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/diffilqrax/batch';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.0" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/diffilqrax_logo_dm2_short.png" class="logo__image only-light" alt=""/>
+    <img src="../../_static/diffilqrax_logo_dm2_short2.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Diffilqrax documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/modules.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/ThomasMullen/diffilqrax" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/modules.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/ThomasMullen/diffilqrax" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">diffilqrax.batch</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for diffilqrax.batch</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""</span>
+<span class="sd">Batched iLQR solves: many problems that share a model, e.g. one input trajectory per recorded trial.</span>
+
+<span class="sd">A batch is described as in ``jax.vmap``: ``in_axes`` is a pytree prefix of the arguments whose leaves are 0</span>
+<span class="sd">(the leaf has a leading batch axis) or None (the leaf is shared by the whole batch). Three strategies map</span>
+<span class="sd">the solver over the batch:</span>
+
+<span class="sd">- "vmap": one vectorised solve. The solver's while loops stop once every batch element has converged, so</span>
+<span class="sd">  the batch costs about as many iterations as its slowest element. Usually the fastest choice on GPU.</span>
+<span class="sd">- "map": ``lax.map``, one element (or one chunk of ``batch_size`` elements, vectorised) at a time, so slow</span>
+<span class="sd">  elements only hold up their own chunk and memory stays bounded. Usually the fastest choice on CPU.</span>
+<span class="sd">- "shard": ``shard_map`` over a 1-D mesh of ``devices`` (by default ``jax.devices()``), with "vmap" or</span>
+<span class="sd">  "map" (``inner``) on each device, so each device stops on its own shard. The batch is padded to a</span>
+<span class="sd">  multiple of the number of devices. After ``jax.distributed.initialize()``, ``jax.devices()`` spans every</span>
+<span class="sd">  host, so the same call runs on a multi-host cluster.</span>
+
+<span class="sd">Slow elements (stragglers) cost the most under "vmap" and "shard". When the same batch is solved repeatedly,</span>
+<span class="sd">e.g. once per training epoch, ``return_info=True`` gives the iterations each element needed. Sorting the</span>
+<span class="sd">batch by them and solving with "map" in chunks of ``batch_size`` groups similar elements together. Starting</span>
+<span class="sd">each solve from the previous solution (``Us_init``) usually cuts the iterations.</span>
+
+<span class="sd">Gradients of :func:`batched_dilqr` are the implicit gradients of :func:`diffilqrax.diff_ilqr.dilqr`, attached</span>
+<span class="sd">after the batched solve, so ``jax.grad`` of a loss summed over the batch works with every strategy without</span>
+<span class="sd">differentiating the solver loops.</span>
+<span class="sd">"""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">onp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">lax</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax.sharding</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mesh</span><span class="p">,</span> <span class="n">PartitionSpec</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.diff_ilqr</span><span class="w"> </span><span class="kn">import</span> <span class="n">implicit_dilqr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.ilqr</span><span class="w"> </span><span class="kn">import</span> <span class="n">ilqr_solver</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.parallel_dilqr</span><span class="w"> </span><span class="kn">import</span> <span class="n">implicit_pdilqr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.parallel_ilqr</span><span class="w"> </span><span class="kn">import</span> <span class="n">pilqr_solver</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.typs</span><span class="w"> </span><span class="kn">import</span> <span class="n">iLQRParams</span><span class="p">,</span> <span class="n">System</span>
+
+<span class="k">try</span><span class="p">:</span>  <span class="c1"># jax &gt;= 0.6</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">shard_map</span> <span class="k">as</span> <span class="n">_shard_map</span>  <span class="c1"># pylint: disable=ungrouped-imports</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">jax.experimental.shard_map</span><span class="w"> </span><span class="kn">import</span> <span class="n">shard_map</span> <span class="k">as</span> <span class="n">_shard_map</span>
+
+<span class="c1"># replication checks have no rules for the solver's loops, so they are switched off</span>
+<span class="n">_NO_REP_CHECK</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"check_vma"</span> <span class="k">if</span> <span class="s2">"check_vma"</span> <span class="ow">in</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">_shard_map</span><span class="p">)</span><span class="o">.</span><span class="n">parameters</span> <span class="k">else</span> <span class="s2">"check_rep"</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+
+<span class="n">STRATEGIES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"vmap"</span><span class="p">,</span> <span class="s2">"map"</span><span class="p">,</span> <span class="s2">"shard"</span><span class="p">)</span>
+<span class="n">INNER</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"vmap"</span><span class="p">,</span> <span class="s2">"map"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_mask</span><span class="p">(</span><span class="n">in_axes</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Flat list over the leaves of ``args``: True where the leaf is batched (axis 0)"""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">in_axes</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+        <span class="n">in_axes</span> <span class="o">=</span> <span class="p">(</span><span class="n">in_axes</span><span class="p">,)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_axes</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">),</span> <span class="sa">f</span><span class="s2">"in_axes has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">in_axes</span><span class="p">)</span><span class="si">}</span><span class="s2"> entries for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2"> arguments"</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">expand</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="n">axis</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="sa">f</span><span class="s2">"only in_axes 0 or None are supported, got </span><span class="si">{</span><span class="n">axis</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">_</span><span class="p">:</span> <span class="n">axis</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">leaves</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">expand</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">in_axes</span><span class="p">),</span> <span class="n">args</span><span class="p">,</span> <span class="n">is_leaf</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="batch_map">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_batch.html#diffilqrax.batch.batch_map">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">batch_map</span><span class="p">(</span>
+    <span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span>
+    <span class="n">in_axes</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"vmap"</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">devices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">inner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"vmap"</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Map ``fn`` over the leading axis of the arguments selected by ``in_axes``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    fn : Callable</span>
+<span class="sd">        Function of one batch element.</span>
+<span class="sd">    in_axes : Any, optional</span>
+<span class="sd">        Pytree prefix of the arguments with leaves 0 (batched) or None (shared), as in ``jax.vmap``, by</span>
+<span class="sd">        default 0 (every argument batched).</span>
+<span class="sd">    strategy : str, optional</span>
+<span class="sd">        "vmap" (default), "map" or "shard", see the module docstring.</span>
+<span class="sd">    batch_size : int, optional</span>
+<span class="sd">        Chunk size of ``lax.map`` for strategy "map" (and inner "map"); by default one element at a time.</span>
+<span class="sd">    devices : Sequence[jax.Device], optional</span>
+<span class="sd">        Devices of strategy "shard", by default ``jax.devices()``.</span>
+<span class="sd">    inner : str, optional</span>
+<span class="sd">        Mapping on each device for strategy "shard": "vmap" (default) or "map".</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Callable</span>
+<span class="sd">        Function of the batched arguments whose outputs have a leading batch axis.</span>
+<span class="sd">    """</span>
+    <span class="k">assert</span> <span class="n">strategy</span> <span class="ow">in</span> <span class="n">STRATEGIES</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"strategy must be one of </span><span class="si">{</span><span class="n">STRATEGIES</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">strategy</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">assert</span> <span class="n">inner</span> <span class="ow">in</span> <span class="n">INNER</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"inner must be one of </span><span class="si">{</span><span class="n">INNER</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">inner</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"vmap"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="n">in_axes</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">mapped</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">_batch_mask</span><span class="p">(</span><span class="n">in_axes</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+        <span class="n">leaves</span><span class="p">,</span> <span class="n">treedef</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">batched</span> <span class="o">=</span> <span class="p">[</span><span class="n">leaf</span> <span class="k">for</span> <span class="n">leaf</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">leaves</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span> <span class="k">if</span> <span class="n">b</span><span class="p">]</span>
+        <span class="n">shared</span> <span class="o">=</span> <span class="p">[</span><span class="n">leaf</span> <span class="k">for</span> <span class="n">leaf</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">leaves</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">b</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">batched</span><span class="p">,</span> <span class="s2">"in_axes selects no batched argument"</span>
+        <span class="n">n_batch</span> <span class="o">=</span> <span class="n">batched</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">leaf</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">n_batch</span> <span class="k">for</span> <span class="n">leaf</span> <span class="ow">in</span> <span class="n">batched</span><span class="p">),</span> <span class="s2">"batched leaves differ in their leading axis"</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="n">batched_i</span><span class="p">,</span> <span class="n">shared_</span><span class="p">):</span>
+            <span class="n">it_b</span><span class="p">,</span> <span class="n">it_s</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">batched_i</span><span class="p">),</span> <span class="nb">iter</span><span class="p">(</span><span class="n">shared_</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">treedef</span><span class="o">.</span><span class="n">unflatten</span><span class="p">([</span><span class="nb">next</span><span class="p">(</span><span class="n">it_b</span><span class="p">)</span> <span class="k">if</span> <span class="n">b</span> <span class="k">else</span> <span class="nb">next</span><span class="p">(</span><span class="n">it_s</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">mask</span><span class="p">]))</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">local_map</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="n">batched_</span><span class="p">,</span> <span class="n">shared_</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"vmap"</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">call</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">))(</span><span class="n">batched_</span><span class="p">,</span> <span class="n">shared_</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">lax</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">batched_i</span><span class="p">:</span> <span class="n">call</span><span class="p">(</span><span class="n">batched_i</span><span class="p">,</span> <span class="n">shared_</span><span class="p">),</span> <span class="n">batched_</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"map"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">local_map</span><span class="p">(</span><span class="s2">"map"</span><span class="p">,</span> <span class="n">batched</span><span class="p">,</span> <span class="n">shared</span><span class="p">)</span>
+
+        <span class="n">devs</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span> <span class="k">if</span> <span class="n">devices</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
+        <span class="n">pad</span> <span class="o">=</span> <span class="o">-</span><span class="n">n_batch</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">devs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">pad</span><span class="p">:</span>  <span class="c1"># repeat the last element so every device gets the same number of elements</span>
+            <span class="n">batched</span> <span class="o">=</span> <span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">leaf</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">leaf</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:],</span> <span class="n">pad</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)])</span> <span class="k">for</span> <span class="n">leaf</span> <span class="ow">in</span> <span class="n">batched</span><span class="p">]</span>
+        <span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="p">(</span><span class="n">onp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">devs</span><span class="p">),</span> <span class="p">(</span><span class="s2">"batch"</span><span class="p">,))</span>
+        <span class="c1"># newer jax returns a decorator lambda when f is omitted, which pylint can infer here instead of the call</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">_shard_map</span><span class="p">(</span>  <span class="c1"># pylint: disable=too-many-function-args</span>
+            <span class="k">lambda</span> <span class="n">batched_</span><span class="p">,</span> <span class="n">shared_</span><span class="p">:</span> <span class="n">local_map</span><span class="p">(</span><span class="n">inner</span><span class="p">,</span> <span class="n">batched_</span><span class="p">,</span> <span class="n">shared_</span><span class="p">),</span>
+            <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span>
+            <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">PartitionSpec</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">),</span> <span class="n">PartitionSpec</span><span class="p">()),</span>
+            <span class="n">out_specs</span><span class="o">=</span><span class="n">PartitionSpec</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">),</span>
+            <span class="o">**</span><span class="n">_NO_REP_CHECK</span><span class="p">,</span>
+        <span class="p">)(</span><span class="n">batched</span><span class="p">,</span> <span class="n">shared</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">leaf</span><span class="p">:</span> <span class="n">leaf</span><span class="p">[:</span><span class="n">n_batch</span><span class="p">],</span> <span class="n">out</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">mapped</span></div>
+
+
+
+<div class="viewcode-block" id="batched_ilqr_solver">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_batch.html#diffilqrax.batch.batched_ilqr_solver">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">batched_ilqr_solver</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">:</span> <span class="n">System</span><span class="p">,</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">iLQRParams</span><span class="p">,</span>
+    <span class="n">Us_init</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">in_axes</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">parallel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"vmap"</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">devices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">inner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"vmap"</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">solver_kwargs</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Solve a batch of iLQR problems that share ``model``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : System</span>
+<span class="sd">        The system model, shared by the batch.</span>
+<span class="sd">    params : iLQRParams</span>
+<span class="sd">        The iLQR parameters, with a leading batch axis on the leaves selected by ``in_axes[0]``.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        Initial inputs, [BxTxm] if batched or [Txm] if shared (``in_axes[1] = None``).</span>
+<span class="sd">    in_axes : Any, optional</span>
+<span class="sd">        Batch axes of ``(params, Us_init)`` as in ``jax.vmap`` (0 or None leaves), by default (0, 0). For</span>
+<span class="sd">        example ``(iLQRParams(x0=None, theta=theta_axes), None)`` batches only the theta leaves marked 0 in</span>
+<span class="sd">        ``theta_axes``.</span>
+<span class="sd">    parallel : bool, optional</span>
+<span class="sd">        Use :func:`diffilqrax.parallel_ilqr.pilqr_solver` instead of</span>
+<span class="sd">        :func:`diffilqrax.ilqr.ilqr_solver`, by default False.</span>
+<span class="sd">    strategy, batch_size, devices, inner</span>
+<span class="sd">        See :func:`batch_map`.</span>
+<span class="sd">    **solver_kwargs</span>
+<span class="sd">        Keyword arguments of the solver, e.g. ``max_iter``, ``kkt_tol``, ``linesearch``. With</span>
+<span class="sd">        ``return_info=True`` the outputs end with the per-problem convergence flags and iteration counts.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple</span>
+<span class="sd">        The solver outputs (see :func:`diffilqrax.ilqr.ilqr_solver`), each with a leading batch axis.</span>
+<span class="sd">    """</span>
+    <span class="n">solver</span> <span class="o">=</span> <span class="n">pilqr_solver</span> <span class="k">if</span> <span class="n">parallel</span> <span class="k">else</span> <span class="n">ilqr_solver</span>
+    <span class="k">return</span> <span class="n">batch_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">,</span> <span class="n">u</span><span class="p">:</span> <span class="n">solver</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="o">**</span><span class="n">solver_kwargs</span><span class="p">),</span> <span class="n">in_axes</span><span class="p">,</span> <span class="n">strategy</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">devices</span><span class="p">,</span> <span class="n">inner</span><span class="p">)(</span>
+        <span class="n">params</span><span class="p">,</span> <span class="n">Us_init</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="batched_dilqr">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_batch.html#diffilqrax.batch.batched_dilqr">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">batched_dilqr</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">:</span> <span class="n">System</span><span class="p">,</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">iLQRParams</span><span class="p">,</span>
+    <span class="n">Us_init</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">in_axes</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">parallel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"vmap"</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">devices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">inner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"vmap"</span><span class="p">,</span>
+    <span class="n">exact_hessian</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">adjoint</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"parallel"</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">solver_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Differentiable solutions of a batch of iLQR problems that share ``model``.</span>
+
+<span class="sd">    The batch is solved by :func:`batched_ilqr_solver` without gradients. The implicit gradients of</span>
+<span class="sd">    :func:`diffilqrax.diff_ilqr.dilqr` are then attached to each solution, one LQR solve per problem, mapped</span>
+<span class="sd">    with ``vmap`` (strategy "vmap", or "shard" with inner "vmap") or ``lax.map`` (otherwise, chunked by</span>
+<span class="sd">    ``batch_size``). Reverse mode therefore never enters the solver loops or ``shard_map``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : System</span>
+<span class="sd">        The system model, shared by the batch.</span>
+<span class="sd">    params : iLQRParams</span>
+<span class="sd">        The iLQR parameters, batched as in :func:`batched_ilqr_solver`.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        Initial inputs, batched as in :func:`batched_ilqr_solver`. They receive no gradient.</span>
+<span class="sd">    in_axes, parallel, strategy, batch_size, devices, inner</span>
+<span class="sd">        See :func:`batched_ilqr_solver`.</span>
+<span class="sd">    exact_hessian : bool, optional</span>
+<span class="sd">        See :func:`diffilqrax.diff_ilqr.dilqr`, by default True.</span>
+<span class="sd">    adjoint : str, optional</span>
+<span class="sd">        Adjoint solver of :func:`diffilqrax.parallel_dilqr.pdilqr` if ``parallel``, by default "parallel".</span>
+<span class="sd">    **solver_kwargs</span>
+<span class="sd">        Keyword arguments of the solver, e.g. ``max_iter``, ``kkt_tol``, ``linesearch``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Array</span>
+<span class="sd">        The optimal state-control trajectories [Bx(T+1)x(n+m)], with implicit gradients wrt ``params``.</span>
+<span class="sd">    """</span>
+    <span class="n">solver_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"return_converged"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">solution</span> <span class="o">=</span> <span class="n">batched_ilqr_solver</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span>
+        <span class="n">lax</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">params</span><span class="p">),</span>
+        <span class="n">lax</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">Us_init</span><span class="p">),</span>
+        <span class="n">in_axes</span><span class="p">,</span>
+        <span class="n">parallel</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">,</span>
+        <span class="n">batch_size</span><span class="p">,</span>
+        <span class="n">devices</span><span class="p">,</span>
+        <span class="n">inner</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">solver_kwargs</span><span class="p">,</span>
+    <span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">attach</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">sol</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">parallel</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">implicit_pdilqr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">sol</span><span class="p">,</span> <span class="n">exact_hessian</span><span class="p">,</span> <span class="n">adjoint</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">implicit_dilqr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">sol</span><span class="p">,</span> <span class="n">exact_hessian</span><span class="p">)</span>
+
+    <span class="n">params_axes</span> <span class="o">=</span> <span class="n">in_axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">in_axes</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">))</span> <span class="k">else</span> <span class="n">in_axes</span>
+    <span class="n">vectorised</span> <span class="o">=</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"vmap"</span> <span class="ow">or</span> <span class="p">(</span><span class="n">strategy</span> <span class="o">==</span> <span class="s2">"shard"</span> <span class="ow">and</span> <span class="n">inner</span> <span class="o">==</span> <span class="s2">"vmap"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">batch_map</span><span class="p">(</span><span class="n">attach</span><span class="p">,</span> <span class="p">(</span><span class="n">params_axes</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="s2">"vmap"</span> <span class="k">if</span> <span class="n">vectorised</span> <span class="k">else</span> <span class="s2">"map"</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)(</span><span class="n">params</span><span class="p">,</span> <span class="n">solution</span><span class="p">)</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024-2026, Thomas Soares Mullen &amp; Marine Schimel.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

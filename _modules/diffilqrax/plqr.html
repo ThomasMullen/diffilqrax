@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>diffilqrax.plqr &#8212; diffilqrax 1.0.0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/diffilqrax/plqr';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.0" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/diffilqrax_logo_dm2_short.png" class="logo__image only-light" alt=""/>
+    <img src="../../_static/diffilqrax_logo_dm2_short2.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Diffilqrax documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/modules.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/ThomasMullen/diffilqrax" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../examples/index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/modules.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/ThomasMullen/diffilqrax" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">diffilqrax.plqr</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for diffilqrax.plqr</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""</span>
+<span class="sd">LQR solver using associative parallel scan [Särkkä &amp; García-Fernández, 2023, arXiv:2104.03186].</span>
+
+<span class="sd">The value functions are found with an associative scan over conditional value function elements,</span>
+<span class="sd">and the optimal trajectory with an associative scan over the closed-loop affine dynamics. The</span>
+<span class="sd">cross term S and the linear input cost r are removed first by the change of variables</span>
+<span class="sd">u = ũ - G x - g, with G = R⁻¹Sᵀ and g = R⁻¹r, which leaves an equivalent problem with S = 0, r = 0.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.scipy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jsc</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">Array</span><span class="p">,</span> <span class="n">vmap</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax.lax</span><span class="w"> </span><span class="kn">import</span> <span class="n">associative_scan</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.typs</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">symmetrise_tensor</span><span class="p">,</span>
+    <span class="n">LQRParams</span><span class="p">,</span>
+    <span class="n">CostToGo</span><span class="p">,</span>
+    <span class="n">Gains</span><span class="p">,</span>
+    <span class="n">LQR</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">"jax_enable_x64"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>  <span class="c1"># double precision</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_bmv</span><span class="p">(</span><span class="n">mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">vec</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Batched matrix-vector product over the leading time axis"""</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">mat</span> <span class="o">@</span> <span class="n">vec</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">])[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="remove_cross_term">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.remove_cross_term">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">remove_cross_term</span><span class="p">(</span><span class="n">lqr</span><span class="p">:</span> <span class="n">LQR</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">LQR</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Change of input variables u = ũ - G x - g, with G = R⁻¹Sᵀ and g = R⁻¹r, which removes the cross</span>
+<span class="sd">    term and the linear input cost. The value functions and the adjoints are unchanged.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr : LQR</span>
+<span class="sd">        LQR parameters, with R invertible.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[LQR, Array, Array]</span>
+<span class="sd">        Equivalent LQR with S = 0 and r = 0, the state gain G [Txmxn] and offset g [Txm].</span>
+<span class="sd">    """</span>
+    <span class="n">rhs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">lqr</span><span class="o">.</span><span class="n">S</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">lqr</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">Gg</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span><span class="p">,</span> <span class="n">rhs</span><span class="p">)</span>
+    <span class="n">G</span><span class="p">,</span> <span class="n">g</span> <span class="o">=</span> <span class="n">Gg</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">Gg</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">new_lqr</span> <span class="o">=</span> <span class="n">lqr</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span>
+        <span class="n">A</span><span class="o">=</span><span class="n">lqr</span><span class="o">.</span><span class="n">A</span> <span class="o">-</span> <span class="n">lqr</span><span class="o">.</span><span class="n">B</span> <span class="o">@</span> <span class="n">G</span><span class="p">,</span>
+        <span class="n">a</span><span class="o">=</span><span class="n">lqr</span><span class="o">.</span><span class="n">a</span> <span class="o">-</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="n">g</span><span class="p">),</span>
+        <span class="n">Q</span><span class="o">=</span><span class="n">symmetrise_tensor</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">Q</span> <span class="o">-</span> <span class="n">lqr</span><span class="o">.</span><span class="n">S</span> <span class="o">@</span> <span class="n">G</span><span class="p">),</span>
+        <span class="n">q</span><span class="o">=</span><span class="n">lqr</span><span class="o">.</span><span class="n">q</span> <span class="o">-</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">S</span><span class="p">,</span> <span class="n">g</span><span class="p">),</span>
+        <span class="n">r</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">r</span><span class="p">),</span>
+        <span class="n">S</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">S</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">new_lqr</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">g</span></div>
+
+
+
+<div class="viewcode-block" id="build_associative_riccati_elements">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.build_associative_riccati_elements">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_associative_riccati_elements</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Conditional value function elements (A, b, C, η, J) for the associative Riccati scan, with the</span>
+<span class="sd">    value function V_t(x) = ½ xᵀ J_t x - η_tᵀ x.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple</span>
+<span class="sd">        Elements A, b, C, η, J for t = 0..T, the last of which is the final cost.</span>
+<span class="sd">    """</span>
+    <span class="n">lqr</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">remove_cross_term</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">lqr</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">lqr</span><span class="o">.</span><span class="n">A</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">C</span> <span class="o">=</span> <span class="n">symmetrise_tensor</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">B</span> <span class="o">@</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span><span class="p">,</span> <span class="n">lqr</span><span class="o">.</span><span class="n">B</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+    <span class="n">generic</span> <span class="o">=</span> <span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">A</span><span class="p">,</span> <span class="n">lqr</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="o">-</span><span class="n">lqr</span><span class="o">.</span><span class="n">q</span><span class="p">,</span> <span class="n">symmetrise_tensor</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">Q</span><span class="p">))</span>
+    <span class="n">zeros</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">lqr</span><span class="o">.</span><span class="n">A</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">last</span> <span class="o">=</span> <span class="p">(</span><span class="n">zeros</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">qf</span><span class="p">),</span> <span class="n">zeros</span><span class="p">,</span> <span class="o">-</span><span class="n">lqr</span><span class="o">.</span><span class="n">qf</span><span class="p">,</span> <span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">Qf</span> <span class="o">+</span> <span class="n">lqr</span><span class="o">.</span><span class="n">Qf</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">gen</span><span class="p">,</span> <span class="n">last_e</span><span class="p">[</span><span class="kc">None</span><span class="p">]])</span> <span class="k">for</span> <span class="n">gen</span><span class="p">,</span> <span class="n">last_e</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">generic</span><span class="p">,</span> <span class="n">last</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="associative_riccati_scan">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.associative_riccati_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">associative_riccati_scan</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Obtain value function through associative riccati scan.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array]</span>
+<span class="sd">        Linear (η) and quadratic (J) value functions for t = 0..T, with V_t(x) = ½ xᵀ J_t x - η_tᵀ x.</span>
+<span class="sd">    """</span>
+    <span class="n">lqr_elements</span> <span class="o">=</span> <span class="n">build_associative_riccati_elements</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span> <span class="o">=</span> <span class="n">associative_scan</span><span class="p">(</span><span class="n">riccati_operator</span><span class="p">,</span> <span class="n">lqr_elements</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">etas</span><span class="p">,</span> <span class="n">symmetrise_tensor</span><span class="p">(</span><span class="n">Js</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="optimal_gains">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.optimal_gains">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">optimal_gains</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">etas</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Js</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Gains</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Optimal feedback u_t = K_t x_t + k_t given the value functions, in the original input variables.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+<span class="sd">    etas : Array</span>
+<span class="sd">        Linear value functions for t = 0..T.</span>
+<span class="sd">    Js : Array</span>
+<span class="sd">        Quadratic value functions for t = 0..T.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Gains, Array]</span>
+<span class="sd">        Gains (K, k) and the input Hessians Huu = R + Bᵀ J_{t+1} B.</span>
+<span class="sd">    """</span>
+    <span class="n">lqr</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">g</span> <span class="o">=</span> <span class="n">remove_cross_term</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">lqr</span><span class="p">)</span>
+    <span class="n">BT</span> <span class="o">=</span> <span class="n">lqr</span><span class="o">.</span><span class="n">B</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">Huu</span> <span class="o">=</span> <span class="n">symmetrise_tensor</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span> <span class="o">+</span> <span class="n">BT</span> <span class="o">@</span> <span class="n">Js</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">@</span> <span class="n">lqr</span><span class="o">.</span><span class="n">B</span><span class="p">)</span>
+    <span class="n">rhs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">BT</span> <span class="o">@</span> <span class="n">Js</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">@</span> <span class="n">lqr</span><span class="o">.</span><span class="n">A</span><span class="p">,</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">BT</span><span class="p">,</span> <span class="n">etas</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">Js</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">lqr</span><span class="o">.</span><span class="n">a</span><span class="p">))[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">Kk</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">Huu</span><span class="p">,</span> <span class="n">rhs</span><span class="p">)</span>
+    <span class="c1"># transformed policy ũ = -K̃ x + k̃, so u = -(K̃ + G) x + k̃ - g</span>
+    <span class="k">return</span> <span class="n">Gains</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">Kk</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">G</span><span class="p">),</span> <span class="n">Kk</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">g</span><span class="p">),</span> <span class="n">Huu</span></div>
+
+
+
+<div class="viewcode-block" id="get_dcosts">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.get_dcosts">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_dcosts</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">etas</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Js</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CostToGo</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Expected change in cost terms, as returned by the sequential backward pass: V = Σ ½ kᵀ Huu k and</span>
+<span class="sd">    v = Σ kᵀ hu, with hu = -Huu k. Scale with alpha for a backtracking step.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+<span class="sd">    etas : Array</span>
+<span class="sd">        Linear value functions.</span>
+<span class="sd">    Js : Array</span>
+<span class="sd">        Quadratic value functions.</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        Linesearch alpha parameter, by default 1.0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    CostToGo</span>
+<span class="sd">        Total change in cost-to-go.</span>
+<span class="sd">    """</span>
+    <span class="n">gains</span><span class="p">,</span> <span class="n">Huu</span> <span class="o">=</span> <span class="n">optimal_gains</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span><span class="p">)</span>
+    <span class="n">kHk</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">gains</span><span class="o">.</span><span class="n">k</span> <span class="o">*</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">Huu</span><span class="p">,</span> <span class="n">gains</span><span class="o">.</span><span class="n">k</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">CostToGo</span><span class="p">(</span><span class="n">V</span><span class="o">=</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">kHk</span> <span class="o">*</span> <span class="n">alpha</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">v</span><span class="o">=-</span><span class="n">kHk</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="regularise_lqr">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.regularise_lqr">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">regularise_lqr</span><span class="p">(</span><span class="n">lqr</span><span class="p">:</span> <span class="n">LQR</span><span class="p">,</span> <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LQR</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Levenberg-Marquardt regularisation in input space, R -&gt; R + μI, i.e. a proximal cost ½μ‖u‖² on</span>
+<span class="sd">    the input step. Unlike a regulariser applied to Huu during the Riccati recursion, it does not</span>
+<span class="sd">    depend on the value function, so the regularised problem is still an LQR and the associative</span>
+<span class="sd">    scan solves it exactly. In the Riccati recursion it adds μI to every Huu.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr : LQR</span>
+<span class="sd">        LQR parameters.</span>
+<span class="sd">    mu : float</span>
+<span class="sd">        Regularisation strength.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    LQR</span>
+<span class="sd">        Regularised LQR parameters.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">lqr</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">R</span><span class="o">=</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span> <span class="o">+</span> <span class="n">mu</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="project_psd">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.project_psd">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">project_psd</span><span class="p">(</span><span class="n">mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">delta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Project symmetric matrices [...xnxn] onto the PSD cone, clipping eigenvalues at ``delta``."""</span>
+    <span class="n">evals</span><span class="p">,</span> <span class="n">evecs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">mat</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">swapaxes</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)))</span>
+    <span class="n">proj</span> <span class="o">=</span> <span class="p">(</span><span class="n">evecs</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">evals</span><span class="p">,</span> <span class="n">delta</span><span class="p">)[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:])</span> <span class="o">@</span> <span class="n">jnp</span><span class="o">.</span><span class="n">swapaxes</span><span class="p">(</span><span class="n">evecs</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">proj</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">swapaxes</span><span class="p">(</span><span class="n">proj</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="project_psd_lqr">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.project_psd_lqr">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">project_psd_lqr</span><span class="p">(</span><span class="n">lqr</span><span class="p">:</span> <span class="n">LQR</span><span class="p">,</span> <span class="n">delta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span> <span class="n">which</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"full"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LQR</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Convexify the local LQR stage by stage. R is</span>
+<span class="sd">    projected to eigenvalues ≥ δ and, if ``which == "full"``, the Schur complement Q - S R⁻¹Sᵀ and Qf</span>
+<span class="sd">    too. The fully projected problem is a strictly convex LQR, so every element of the associative scan</span>
+<span class="sd">    is valid and every Huu is positive definite without retries. Linear terms are untouched, so the</span>
+<span class="sd">    gradient of the local problem is unchanged, but it is no longer a Newton model where the projection</span>
+<span class="sd">    is active. With ``which == "R"`` only negative input curvature is removed: the projection is</span>
+<span class="sd">    inactive wherever R ≻ δI, where the Newton step is kept.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr : LQR</span>
+<span class="sd">        LQR parameters.</span>
+<span class="sd">    delta : float</span>
+<span class="sd">        Minimum eigenvalue after projection.</span>
+<span class="sd">    which : str</span>
+<span class="sd">        "R" to project R only, "full" to also project Q - S R⁻¹Sᵀ and Qf.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    LQR</span>
+<span class="sd">        Convexified LQR parameters.</span>
+<span class="sd">    """</span>
+    <span class="k">assert</span> <span class="n">which</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"R"</span><span class="p">,</span> <span class="s2">"full"</span><span class="p">),</span> <span class="sa">f</span><span class="s2">"unknown projection </span><span class="si">{</span><span class="n">which</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">R</span> <span class="o">=</span> <span class="n">project_psd</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">R</span><span class="p">,</span> <span class="n">delta</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">which</span> <span class="o">==</span> <span class="s2">"R"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">lqr</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">)</span>
+    <span class="n">SRS</span> <span class="o">=</span> <span class="n">symmetrise_tensor</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">S</span> <span class="o">@</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="n">lqr</span><span class="o">.</span><span class="n">S</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+    <span class="n">Q</span> <span class="o">=</span> <span class="n">project_psd</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">Q</span> <span class="o">-</span> <span class="n">SRS</span><span class="p">,</span> <span class="n">delta</span><span class="p">)</span> <span class="o">+</span> <span class="n">SRS</span>
+    <span class="k">return</span> <span class="n">lqr</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">Q</span><span class="o">=</span><span class="n">Q</span><span class="p">,</span> <span class="n">Qf</span><span class="o">=</span><span class="n">project_psd</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">Qf</span><span class="p">,</span> <span class="n">delta</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="plqr_backward_pass">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.plqr_backward_pass">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">plqr_backward_pass</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">pd_thresh</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-8</span><span class="p">,</span> <span class="n">return_values</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Parallel counterpart of :func:`diffilqrax.lqr.regularised_backward_pass`: associative Riccati scan</span>
+<span class="sd">    of the problem regularised with :func:`regularise_lqr`, and its optimal gains.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+<span class="sd">    mu : float, optional</span>
+<span class="sd">        Regularisation strength, by default 0.0 (exact LQR solution).</span>
+<span class="sd">    pd_thresh : float, optional</span>
+<span class="sd">        Minimum eigenvalue of the regularised Huu for it to count as positive definite, by default 1e-8.</span>
+<span class="sd">    return_values : bool, optional</span>
+<span class="sd">        Also return the value functions (η, J) of the regularised problem, by default False.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[CostToGo, Gains, Array] or Tuple[CostToGo, Gains, Array, Tuple[Array, Array]]</span>
+<span class="sd">        Expected change in cost terms (V: Σ ½ kᵀ Huu k with the unregularised Huu, v: Σ kᵀ hu), the</span>
+<span class="sd">        gains (u = Kx + k), and a flag that is True if the regularised Huu is positive definite at</span>
+<span class="sd">        every time step and the gains are finite. With ``return_values``, also (η, J) [(T+1)xn], [(T+1)xnxn],</span>
+<span class="sd">        whose costates λ_t = J_t x_t - η_t are the multipliers of the regularised problem.</span>
+<span class="sd">    """</span>
+    <span class="n">reg</span> <span class="o">=</span> <span class="n">LQRParams</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">x0</span><span class="p">,</span> <span class="n">regularise_lqr</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">lqr</span><span class="p">,</span> <span class="n">mu</span><span class="p">))</span>
+    <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span> <span class="o">=</span> <span class="n">associative_riccati_scan</span><span class="p">(</span><span class="n">reg</span><span class="p">)</span>
+    <span class="n">gains</span><span class="p">,</span> <span class="n">Huu_reg</span> <span class="o">=</span> <span class="n">optimal_gains</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span> <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span><span class="p">)</span>
+    <span class="n">min_eval</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigvalsh</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">Huu_reg</span><span class="p">)))</span>
+    <span class="n">finite</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gains</span><span class="o">.</span><span class="n">K</span><span class="p">)),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">gains</span><span class="o">.</span><span class="n">k</span><span class="p">)))</span>
+    <span class="n">is_pd</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">min_eval</span> <span class="o">&gt;</span> <span class="n">pd_thresh</span><span class="p">,</span> <span class="n">finite</span><span class="p">)</span>
+    <span class="c1"># hu = -Huu_reg k, as in the sequential pass</span>
+    <span class="n">kHk_reg</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">gains</span><span class="o">.</span><span class="n">k</span> <span class="o">*</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">Huu_reg</span><span class="p">,</span> <span class="n">gains</span><span class="o">.</span><span class="n">k</span><span class="p">))</span>
+    <span class="n">kHk</span> <span class="o">=</span> <span class="n">kHk_reg</span> <span class="o">-</span> <span class="n">mu</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">gains</span><span class="o">.</span><span class="n">k</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">return_values</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">CostToGo</span><span class="p">(</span><span class="n">V</span><span class="o">=</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">kHk</span><span class="p">,</span> <span class="n">v</span><span class="o">=-</span><span class="n">kHk_reg</span><span class="p">),</span> <span class="n">gains</span><span class="p">,</span> <span class="n">is_pd</span><span class="p">,</span> <span class="p">(</span><span class="n">etas</span><span class="p">,</span> <span class="n">Js</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">CostToGo</span><span class="p">(</span><span class="n">V</span><span class="o">=</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">kHk</span><span class="p">,</span> <span class="n">v</span><span class="o">=-</span><span class="n">kHk_reg</span><span class="p">),</span> <span class="n">gains</span><span class="p">,</span> <span class="n">is_pd</span></div>
+
+
+
+<div class="viewcode-block" id="build_associative_lin_dyn_elements">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.build_associative_lin_dyn_elements">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_associative_lin_dyn_elements</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">gains</span><span class="p">:</span> <span class="n">Gains</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Closed-loop affine dynamics elements x_{t+1} = F_t x_t + c_t under u_t = K_t x_t + α k_t. The first</span>
+<span class="sd">    element absorbs the initial state.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters (only the dynamics and x0 are used).</span>
+<span class="sd">    gains : Gains</span>
+<span class="sd">        Feedback gains (K, k).</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        Linesearch step on the feedforward term, by default 1.0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array]</span>
+<span class="sd">        Elements (F, c).</span>
+<span class="sd">    """</span>
+    <span class="n">lqr</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">lqr</span>
+    <span class="n">Fs</span> <span class="o">=</span> <span class="n">lqr</span><span class="o">.</span><span class="n">A</span> <span class="o">+</span> <span class="n">lqr</span><span class="o">.</span><span class="n">B</span> <span class="o">@</span> <span class="n">gains</span><span class="o">.</span><span class="n">K</span>
+    <span class="n">cs</span> <span class="o">=</span> <span class="n">lqr</span><span class="o">.</span><span class="n">a</span> <span class="o">+</span> <span class="n">alpha</span> <span class="o">*</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">lqr</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="n">gains</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
+    <span class="n">cs</span> <span class="o">=</span> <span class="n">cs</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">Fs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">@</span> <span class="n">model</span><span class="o">.</span><span class="n">x0</span><span class="p">)</span>
+    <span class="n">Fs</span> <span class="o">=</span> <span class="n">Fs</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">Fs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">Fs</span><span class="p">,</span> <span class="n">cs</span></div>
+
+
+
+<div class="viewcode-block" id="closed_loop_scan">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.closed_loop_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">closed_loop_scan</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">gains</span><span class="p">:</span> <span class="n">Gains</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    States x_1..x_T of the linear dynamics under u_t = K_t x_t + α k_t, by an associative scan.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters (only the dynamics and x0 are used).</span>
+<span class="sd">    gains : Gains</span>
+<span class="sd">        Feedback gains (K, k).</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        Linesearch step on the feedforward term, by default 1.0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Array</span>
+<span class="sd">        States x_1..x_T.</span>
+<span class="sd">    """</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">cs</span> <span class="o">=</span> <span class="n">associative_scan</span><span class="p">(</span><span class="n">dynamic_operator</span><span class="p">,</span> <span class="n">build_associative_lin_dyn_elements</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">gains</span><span class="p">,</span> <span class="n">alpha</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">cs</span></div>
+
+
+
+<div class="viewcode-block" id="associative_opt_traj_scan">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.associative_opt_traj_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">associative_opt_traj_scan</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">etas</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Js</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Gains</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Obtain the optimal state trajectory through an associative scan of the closed-loop dynamics.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR problem (initial state, LQR parameters).</span>
+<span class="sd">    etas : Array</span>
+<span class="sd">        Linear value functions.</span>
+<span class="sd">    Js : Array</span>
+<span class="sd">        Quadratic value functions.</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        Linesearch step on the feedforward term, by default 1.0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Gains]</span>
+<span class="sd">        States x_1..x_T, and the gains with u_t = K_t x_t + α k_t.</span>
+<span class="sd">    """</span>
+    <span class="n">gains</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">optimal_gains</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">closed_loop_scan</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">gains</span><span class="p">,</span> <span class="n">alpha</span><span class="p">),</span> <span class="n">gains</span></div>
+
+
+
+<div class="viewcode-block" id="solve_plqr">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.solve_plqr">[docs]</a>
+<span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">solve_plqr</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Run backward forward sweep to find optimal control.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array, Array]</span>
+<span class="sd">        State trajectory, control inputs, and adjoint variables.</span>
+<span class="sd">    """</span>
+    <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span> <span class="o">=</span> <span class="n">associative_riccati_scan</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+    <span class="n">cs</span><span class="p">,</span> <span class="n">gains</span> <span class="o">=</span> <span class="n">associative_opt_traj_scan</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">etas</span><span class="p">,</span> <span class="n">Js</span><span class="p">)</span>
+    <span class="n">Xs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">x0</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">cs</span><span class="p">]</span>
+    <span class="n">Us</span> <span class="o">=</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">gains</span><span class="o">.</span><span class="n">K</span><span class="p">,</span> <span class="n">Xs</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">gains</span><span class="o">.</span><span class="n">k</span>
+    <span class="c1"># adjoints are the value function gradients λ_t = J_t x_t - η_t</span>
+    <span class="n">Lambdas</span> <span class="o">=</span> <span class="n">_bmv</span><span class="p">(</span><span class="n">Js</span><span class="p">,</span> <span class="n">Xs</span><span class="p">)</span> <span class="o">-</span> <span class="n">etas</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">Xs</span><span class="p">,</span> <span class="n">Us</span><span class="p">,</span> <span class="n">Lambdas</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="solve_plqr_swap_x0">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.solve_plqr_swap_x0">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">solve_plqr_swap_x0</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Run backward forward sweep to find optimal control freeze x0 to zero.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model : LQRParams</span>
+<span class="sd">        LQR model parameters.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array, Array]</span>
+<span class="sd">        State trajectory, control inputs, and adjoint variables.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">solve_plqr</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">x0</span><span class="p">)))</span></div>
+
+
+
+<span class="c1"># --------</span>
+<span class="c1"># Parallel forward integration</span>
+<span class="c1"># --------</span>
+<div class="viewcode-block" id="build_fwd_lin_dyn_elements">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.build_fwd_lin_dyn_elements">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_fwd_lin_dyn_elements</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">a_term</span><span class="p">:</span> <span class="n">Array</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Generate sequence of elements {c} for forward integration.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr_params : LQRParams</span>
+<span class="sd">        LQR parameters and initial state.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        Input sequence.</span>
+<span class="sd">    a_term : Array, optional</span>
+<span class="sd">        Offset term, by default None.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array]</span>
+<span class="sd">        Set of elements {c} for associative scan.</span>
+<span class="sd">    """</span>
+
+    <span class="n">initial_element</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">lqr_params</span><span class="o">.</span><span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">lqr_params</span><span class="o">.</span><span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+        <span class="n">lqr_params</span><span class="o">.</span><span class="n">x0</span><span class="p">,</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">a_term</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+    <span class="p">)</span>
+    <span class="c1"># print(initial_element[0].shape, initial_element[1].shape)</span>
+
+    <span class="nd">@partial</span><span class="p">(</span><span class="n">vmap</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generic</span><span class="p">(</span><span class="n">a_mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">b_mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">u</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Generate tuple (c_i,a, c_i,b) to parallelise"""</span>
+        <span class="k">return</span> <span class="n">a_mat</span><span class="p">,</span> <span class="n">b_mat</span> <span class="o">@</span> <span class="n">u</span> <span class="o">+</span> <span class="n">a</span>
+
+    <span class="n">generic_elements</span> <span class="o">=</span> <span class="n">_generic</span><span class="p">(</span><span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">A</span><span class="p">,</span> <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">B</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">a_term</span><span class="p">)</span>
+
+    <span class="c1"># print(generic_elements[0].shape, generic_elements[1].shape)</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">jnp</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">first_e</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">gen_es</span><span class="p">])</span> <span class="k">for</span> <span class="n">first_e</span><span class="p">,</span> <span class="n">gen_es</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">initial_element</span><span class="p">,</span> <span class="n">generic_elements</span><span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="parallel_forward_lin_integration">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.parallel_forward_lin_integration">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parallel_forward_lin_integration</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">a_term</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Associative scan for forward linear dynamics.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr_params : LQRParams</span>
+<span class="sd">        LQR parameters and initial state.</span>
+<span class="sd">    Us_init : Array</span>
+<span class="sd">        Input sequence.</span>
+<span class="sd">    a_term : Array</span>
+<span class="sd">        Offset term.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Array</span>
+<span class="sd">        State trajectory.</span>
+<span class="sd">    """</span>
+    <span class="c1"># delta_us = compute_offset_us(lqr_params)</span>
+    <span class="n">dyn_elements</span> <span class="o">=</span> <span class="n">build_fwd_lin_dyn_elements</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">,</span> <span class="n">Us_init</span><span class="p">,</span> <span class="n">a_term</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">c_bs</span> <span class="o">=</span> <span class="n">associative_scan</span><span class="p">(</span><span class="n">dynamic_operator</span><span class="p">,</span> <span class="n">dyn_elements</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">c_bs</span></div>
+
+
+
+<span class="c1"># parallel adjoint integration</span>
+<div class="viewcode-block" id="build_rev_lin_dyn_elements">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.build_rev_lin_dyn_elements">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_rev_lin_dyn_elements</span><span class="p">(</span>
+    <span class="n">lqr_params</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span>
+    <span class="n">xs_traj</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span>
+    <span class="n">us_traj</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Generate sequence of elements {c} for reverse integration of adjoints.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr_params : LQRParams</span>
+<span class="sd">        LQR parameters and initial state.</span>
+<span class="sd">    xs_traj : Array</span>
+<span class="sd">        State trajectory.</span>
+<span class="sd">    us_traj : Array</span>
+<span class="sd">        Control inputs.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array]</span>
+<span class="sd">        Set of elements {c} for associative scan.</span>
+<span class="sd">    """</span>
+
+    <span class="n">lambda_f</span> <span class="o">=</span> <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">Qf</span> <span class="o">@</span> <span class="n">xs_traj</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">qf</span>
+
+    <span class="n">last_element</span> <span class="o">=</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">lambda_f</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">lambda_f</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span> <span class="n">lambda_f</span><span class="p">)</span>
+
+    <span class="nd">@vmap</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generic</span><span class="p">(</span><span class="n">a_trsp_mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">s_mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">q_mat</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">q_vec</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">u</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Array</span><span class="p">,</span> <span class="n">Array</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Generate tuple (c_i,a, c_i,b) to parallelise"""</span>
+        <span class="n">b_coef</span> <span class="o">=</span> <span class="n">s_mat</span> <span class="o">@</span> <span class="n">u</span> <span class="o">+</span> <span class="n">q_vec</span> <span class="o">+</span> <span class="n">q_mat</span> <span class="o">@</span> <span class="n">x</span>
+        <span class="k">return</span> <span class="n">a_trsp_mat</span><span class="p">,</span> <span class="n">b_coef</span>
+
+    <span class="n">generic_elements</span> <span class="o">=</span> <span class="n">_generic</span><span class="p">(</span>
+        <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">A</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">S</span><span class="p">,</span>
+        <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">Q</span><span class="p">,</span>
+        <span class="n">lqr_params</span><span class="o">.</span><span class="n">lqr</span><span class="o">.</span><span class="n">q</span><span class="p">,</span>
+        <span class="n">xs_traj</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+        <span class="n">us_traj</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># print(generic_elements[0].shape, generic_elements[1].shape)</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">gen_</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">last_</span><span class="p">,</span> <span class="mi">0</span><span class="p">)])</span> <span class="k">for</span> <span class="n">gen_</span><span class="p">,</span> <span class="n">last_</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">generic_elements</span><span class="p">,</span> <span class="n">last_element</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="parallel_reverse_lin_integration">
+<a class="viewcode-back" href="../../api/modules/diffilqrax_plqr.html#diffilqrax.plqr.parallel_reverse_lin_integration">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parallel_reverse_lin_integration</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">:</span> <span class="n">LQRParams</span><span class="p">,</span> <span class="n">xs_traj</span><span class="p">:</span> <span class="n">Array</span><span class="p">,</span> <span class="n">us_traj</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Associative scan for reverse linear dynamics.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    lqr_params : LQRParams</span>
+<span class="sd">        LQR parameters and initial state.</span>
+<span class="sd">    xs_traj : Array</span>
+<span class="sd">        State trajectory.</span>
+<span class="sd">    us_traj : Array</span>
+<span class="sd">        Control inputs.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Array</span>
+<span class="sd">        Adjoint variables.</span>
+<span class="sd">    """</span>
+    <span class="c1"># delta_us = compute_offset_us(lqr_params)</span>
+    <span class="n">dyn_elements</span> <span class="o">=</span> <span class="n">build_rev_lin_dyn_elements</span><span class="p">(</span><span class="n">lqr_params</span><span class="p">,</span> <span class="n">xs_traj</span><span class="p">,</span> <span class="n">us_traj</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">c_bs</span> <span class="o">=</span> <span class="n">associative_scan</span><span class="p">(</span><span class="n">dynamic_operator</span><span class="p">,</span> <span class="n">dyn_elements</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">c_bs</span></div>
+
+
+
+<span class="c1"># forward dynamics</span>
+<span class="nd">@vmap</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">dynamic_operator</span><span class="p">(</span><span class="n">elem1</span><span class="p">,</span> <span class="n">elem2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Associative operator for forward linear dynamics.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    elem1 : Tuple[Array, Array]</span>
+<span class="sd">        Previous effective state dynamic and effective bias.</span>
+<span class="sd">    elem2 : Tuple[Array, Array]</span>
+<span class="sd">        Next effective state dynamic and effective bias.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array]</span>
+<span class="sd">        Updated state and control.</span>
+<span class="sd">    """</span>
+    <span class="n">F1</span><span class="p">,</span> <span class="n">c1</span> <span class="o">=</span> <span class="n">elem1</span>
+    <span class="n">F2</span><span class="p">,</span> <span class="n">c2</span> <span class="o">=</span> <span class="n">elem2</span>
+    <span class="n">F</span> <span class="o">=</span> <span class="n">F2</span> <span class="o">@</span> <span class="n">F1</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">F2</span> <span class="o">@</span> <span class="n">c1</span> <span class="o">+</span> <span class="n">c2</span>
+    <span class="k">return</span> <span class="n">F</span><span class="p">,</span> <span class="n">c</span>
+
+
+<span class="c1"># riccati recursion</span>
+<span class="nd">@vmap</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">riccati_operator</span><span class="p">(</span><span class="n">elem2</span><span class="p">,</span> <span class="n">elem1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Associative operator for Riccati recursion.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    elem1 : Tuple[Array, Array, Array, Array, Array]</span>
+<span class="sd">        Previous Riccati elements.</span>
+<span class="sd">    elem2 : Tuple[Array, Array, Array, Array, Array]</span>
+<span class="sd">        Next Riccati elements.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[Array, Array, Array, Array, Array]</span>
+<span class="sd">        Updated Riccati elements.</span>
+<span class="sd">    """</span>
+    <span class="n">A1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">C1</span><span class="p">,</span> <span class="n">η1</span><span class="p">,</span> <span class="n">J1</span> <span class="o">=</span> <span class="n">elem1</span>
+    <span class="n">A2</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="n">C2</span><span class="p">,</span> <span class="n">η2</span><span class="p">,</span> <span class="n">J2</span> <span class="o">=</span> <span class="n">elem2</span>
+
+    <span class="n">dim</span> <span class="o">=</span> <span class="n">A1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">I</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">A1</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="n">I_C1J2</span> <span class="o">=</span> <span class="n">I</span> <span class="o">+</span> <span class="n">C1</span> <span class="o">@</span> <span class="n">J2</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="n">jsc</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">I_C1J2</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">A2</span><span class="o">.</span><span class="n">T</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="n">temp</span> <span class="o">@</span> <span class="n">A1</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">temp</span> <span class="o">@</span> <span class="p">(</span><span class="n">b1</span> <span class="o">+</span> <span class="n">C1</span> <span class="o">@</span> <span class="n">η2</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
+    <span class="n">C</span> <span class="o">=</span> <span class="n">temp</span> <span class="o">@</span> <span class="n">C1</span> <span class="o">@</span> <span class="n">A2</span><span class="o">.</span><span class="n">T</span> <span class="o">+</span> <span class="n">C2</span>
+
+    <span class="n">I_J2C1</span> <span class="o">=</span> <span class="n">I</span> <span class="o">+</span> <span class="n">J2</span> <span class="o">@</span> <span class="n">C1</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="n">jsc</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">I_J2C1</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">A1</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+    <span class="n">η</span> <span class="o">=</span> <span class="n">temp</span> <span class="o">@</span> <span class="p">(</span><span class="n">η2</span> <span class="o">-</span> <span class="n">J2</span> <span class="o">@</span> <span class="n">b1</span><span class="p">)</span> <span class="o">+</span> <span class="n">η1</span>
+    <span class="n">J</span> <span class="o">=</span> <span class="n">temp</span> <span class="o">@</span> <span class="n">J2</span> <span class="o">@</span> <span class="n">A1</span> <span class="o">+</span> <span class="n">J1</span>
+    <span class="k">return</span> <span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">η</span><span class="p">,</span> <span class="n">J</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024-2026, Thomas Soares Mullen &amp; Marine Schimel.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

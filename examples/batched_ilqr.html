@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Batched iLQR: many tracking problems at once &#8212; diffilqrax 1.0.0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'examples/batched_ilqr';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Design Principles" href="../userguide/design_principles.html" />
+    <link rel="prev" title="iLQR inference: reconstructing a zebrafish tail bout" href="zebrafish_tail_reconstruction.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.0" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/diffilqrax_logo_dm2_short.png" class="logo__image only-light" alt=""/>
+    <img src="../_static/diffilqrax_logo_dm2_short2.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Diffilqrax documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api/modules.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/ThomasMullen/diffilqrax" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/getting_started.html">
+    Getting started
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../userguide/design_principles.html">
+    Design Principles
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../about/lqr_theory.html">
+    LQR Optimization problem
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api/modules.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/ThomasMullen/diffilqrax" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="lqr_integrator.html">LQR: bringing a double integrator to rest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lqr_tracking_integrator.html">LQR tracking: following a reference trajectory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="simple_pendulum.html">iLQR: swinging up a torque-limited pendulum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ilqr_vs_backpropagation.html">iLQR compared with gradient descent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gradients_through_ilqr.html">Implicit gradients through the iLQR solver</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallel_solvers.html">Parallel (associative-scan) solvers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="zebrafish_tail_reconstruction.html">iLQR inference: reconstructing a zebrafish tail bout</a></li>
+<li class="toctree-l1 current active"><a aria-current="page" class="current reference internal" href="#">Batched iLQR: many tracking problems at once</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Tutorials</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Batched iLQR: many tracking problems at once</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="Batched-iLQR:-many-tracking-problems-at-once">
+<h1>Batched iLQR: many tracking problems at once<a class="headerlink" href="#Batched-iLQR:-many-tracking-problems-at-once" title="Link to this heading">#</a></h1>
+<p>Many applications solve the same optimal control problem for many datasets: one input trajectory per recorded trial, or one per datapoint in every training step of an iLQR-VAE. Only a few leaves of the parameters change from problem to problem (the observations, the reference trajectory, the initial state), while the model is shared.</p>
+<p><code class="docutils literal notranslate"><span class="pre">diffilqrax.batch</span></code> maps the solvers over such a batch. This notebook checks that batched solves equal one-at-a-time solves and measures wall-clock time on two datasets:</p>
+<ol class="arabic simple">
+<li><p><strong>Zebrafish tail bouts</strong>: the six bouts of the MGU2 fixture, with the model of the <a class="reference internal" href="zebrafish_tail_reconstruction.html"><span class="doc">zebrafish reconstruction</span></a> notebook;</p></li>
+<li><p><strong>Simulated tracking</strong>: a tanh RNN tracking references simulated from the system itself with known inputs, for batch sizes up to 256.</p></li>
+</ol>
+<p><strong>Why batching works now.</strong> The solver has three nested loops: the iterations, the regularisation retries and the line search. They run as <code class="docutils literal notranslate"><span class="pre">lax.while_loop</span></code>s (<code class="docutils literal notranslate"><span class="pre">loop=&quot;while&quot;</span></code>, the default), so under <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> the batch stops once its slowest problem has converged. The older fixed-length <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> + <code class="docutils literal notranslate"><span class="pre">lax.cond</span></code> loops become <code class="docutils literal notranslate"><span class="pre">select</span></code>s under <code class="docutils literal notranslate"><span class="pre">vmap</span></code>, so every problem paid for all <code class="docutils literal notranslate"><span class="pre">max_iter</span></code> iterations, every retry and every line-search step. <code class="docutils literal notranslate"><span class="pre">while_loop</span></code> cannot be
+reverse-differentiated, but it doesn’t need to be: <code class="docutils literal notranslate"><span class="pre">dilqr</span></code> and <code class="docutils literal notranslate"><span class="pre">batch.batched_dilqr</span></code> differentiate the solution implicitly (see <a class="reference internal" href="gradients_through_ilqr.html"><span class="doc">gradients through iLQR</span></a>).</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">onp</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax</span><span class="w"> </span><span class="kn">import</span> <span class="n">batch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.diff_ilqr</span><span class="w"> </span><span class="kn">import</span> <span class="n">dilqr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.ilqr</span><span class="w"> </span><span class="kn">import</span> <span class="n">ilqr_simulate</span><span class="p">,</span> <span class="n">ilqr_solver</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">diffilqrax.typs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelDims</span><span class="p">,</span> <span class="n">System</span><span class="p">,</span> <span class="n">Theta</span><span class="p">,</span> <span class="n">iLQRParams</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">"jax_enable_x64"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+<span class="n">REPO</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>  <span class="c1"># docs/source/examples -&gt; repository root; tests/ is not part of the installed package</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">REPO</span><span class="p">))</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tests.mgu2_model</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_fixture</span><span class="p">,</span> <span class="n">make_system</span><span class="p">,</span> <span class="n">make_theta</span>  <span class="c1"># the model of the zebrafish notebook</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"jax </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">, devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+jax 0.4.38, devices: [CpuDevice(id=0)]
+</pre></div></div>
+</div>
+<section id="Timing">
+<h2>Timing<a class="headerlink" href="#Timing" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">timeit</span></code> compiles the function once (reported separately) and then reports the median wall-clock time of <code class="docutils literal notranslate"><span class="pre">n_rep</span></code> runs of the compiled function. <code class="docutils literal notranslate"><span class="pre">jax.block_until_ready</span></code> waits for the asynchronous result.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">timeit</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">n_rep</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+    <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+    <span class="n">compiled</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+    <span class="n">t_compile</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+    <span class="n">times</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_rep</span><span class="p">):</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">(</span><span class="n">compiled</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">))</span>
+        <span class="n">times</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span><span class="p">,</span> <span class="n">t_compile</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">onp</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">times</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">n_iterations</span><span class="p">(</span><span class="n">history</span><span class="p">):</span>
+    <span class="c1"># once converged the cost history repeats the final cost</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="n">onp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">history</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">onp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">onp</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">row</span> <span class="o">!=</span> <span class="n">row</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">initial</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">h</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">h</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])])</span>
+
+
+<span class="n">COLORS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"#2a78d6"</span><span class="p">,</span> <span class="s2">"#eb6834"</span><span class="p">,</span> <span class="s2">"#1baf7a"</span><span class="p">,</span> <span class="s2">"#eda100"</span><span class="p">]</span>  <span class="c1"># validated categorical slots, in fixed order</span>
+<span class="n">MARKERS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"o"</span><span class="p">,</span> <span class="s2">"s"</span><span class="p">,</span> <span class="s2">"^"</span><span class="p">,</span> <span class="s2">"D"</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="1.-Zebrafish-bouts">
+<h2>1. Zebrafish bouts<a class="headerlink" href="#1.-Zebrafish-bouts" title="Link to this heading">#</a></h2>
+<p>Only <code class="docutils literal notranslate"><span class="pre">theta.obs</span></code> differs between bouts. <code class="docutils literal notranslate"><span class="pre">in_axes</span></code> says so as a pytree prefix: 0 for the batched leaf, None for the shared ones, as in <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code>. All bouts start from zero inputs, as in the reconstruction notebook.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">ocaml_params</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="n">load_fixture</span><span class="p">(</span><span class="n">REPO</span> <span class="o">/</span> <span class="s2">"tests"</span> <span class="o">/</span> <span class="s2">"fixtures"</span> <span class="o">/</span> <span class="s2">"ocaml_mgu.npz"</span><span class="p">)</span>
+<span class="n">N_BEG</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="n">all_obs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"saved_tail"</span><span class="p">])</span>  <span class="c1"># (6, 160, 7)</span>
+<span class="n">theta</span> <span class="o">=</span> <span class="n">make_theta</span><span class="p">(</span><span class="n">ocaml_params</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s2">"saved_tail"</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">N_BEG</span><span class="p">)</span>
+<span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">T</span> <span class="o">=</span> <span class="n">theta</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">theta</span><span class="o">.</span><span class="n">B</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="s2">"ilqr_u"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">fish</span> <span class="o">=</span> <span class="n">make_system</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span>
+<span class="n">fish_params</span> <span class="o">=</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n</span><span class="p">),</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">)</span>
+<span class="n">fish_axes</span> <span class="o">=</span> <span class="p">(</span><span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">_</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">obs</span><span class="o">=</span><span class="mi">0</span><span class="p">)),</span> <span class="kc">None</span><span class="p">)</span>
+<span class="n">U0_fish</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">m</span><span class="p">))</span>
+<span class="n">KW</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">alpha_init</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">kkt_tol</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">fish_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">fish_params</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">obs</span><span class="o">=</span><span class="n">obs</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve_one</span><span class="p">(</span><span class="n">obs</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">ilqr_solver</span><span class="p">(</span><span class="n">fish</span><span class="p">,</span> <span class="n">fish_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">),</span> <span class="n">U0_fish</span><span class="p">,</span> <span class="o">**</span><span class="n">KW</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">batch</span><span class="o">.</span><span class="n">batched_ilqr_solver</span><span class="p">(</span><span class="n">fish</span><span class="p">,</span> <span class="n">fish_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">),</span> <span class="n">U0_fish</span><span class="p">,</span> <span class="n">fish_axes</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">KW</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">})</span>
+
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">all_obs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> bouts, T=</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">, latents n=</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, inputs m=</span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+6 bouts, T=171, latents n=120, inputs m=10
+</pre></div></div>
+</div>
+<p>The reference is a Python loop over one compiled single-bout solve. The batched strategies are <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> (one bout at a time, or <code class="docutils literal notranslate"><span class="pre">batch_size</span></code> bouts vectorised together), <code class="docutils literal notranslate"><span class="pre">vmap</span></code>, and <code class="docutils literal notranslate"><span class="pre">vmap</span></code> with the parallel line search. The parallel line search rolls out 8 step sizes at once and keeps the largest accepted one, so it takes the same steps as backtracking.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">solve_one_c</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">solve_one</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(</span><span class="n">all_obs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">loop_out</span> <span class="o">=</span> <span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">(</span><span class="n">solve_one_c</span><span class="p">(</span><span class="n">o</span><span class="p">))</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">all_obs</span><span class="p">]</span>
+<span class="n">t_loop</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+<span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">Us_loop</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">J_loop</span><span class="p">,</span> <span class="n">hist_loop</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="o">*</span><span class="n">xs</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="o">*</span><span class="n">loop_out</span><span class="p">)</span>
+
+<span class="n">fish_runs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"python loop"</span><span class="p">:</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">t_loop</span><span class="p">)}</span>
+<span class="n">strategies</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"lax.map"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"map"</span><span class="p">),</span>
+    <span class="s2">"lax.map, batch_size=3"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"map"</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span>
+    <span class="s2">"vmap"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"vmap"</span><span class="p">),</span>
+    <span class="s2">"vmap + parallel line search"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"vmap"</span><span class="p">,</span> <span class="n">linesearch</span><span class="o">=</span><span class="s2">"parallel"</span><span class="p">),</span>
+<span class="p">}</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+    <span class="n">strategies</span><span class="p">[</span><span class="s2">"shard"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"shard"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">kw</span> <span class="ow">in</span> <span class="n">strategies</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">fish_runs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">timeit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">obs</span><span class="p">,</span> <span class="n">kw</span><span class="o">=</span><span class="n">kw</span><span class="p">:</span> <span class="n">solve_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">),</span> <span class="n">all_obs</span><span class="p">,</span> <span class="n">n_rep</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">'strategy'</span><span class="si">:</span><span class="s2">&lt;30</span><span class="si">}{</span><span class="s1">'compile (s)'</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}{</span><span class="s1">'run (s)'</span><span class="si">:</span><span class="s2">&gt;10</span><span class="si">}{</span><span class="s1">'max |dU|'</span><span class="si">:</span><span class="s2">&gt;11</span><span class="si">}{</span><span class="s1">'max rel dJ'</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">t_c</span><span class="p">,</span> <span class="n">t_r</span><span class="p">)</span> <span class="ow">in</span> <span class="n">fish_runs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="k">if</span> <span class="n">out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;30</span><span class="si">}{</span><span class="s1">''</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}{</span><span class="n">t_r</span><span class="si">:</span><span class="s2">&gt;10.1f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">continue</span>
+    <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">Us</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">J</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">out</span>
+    <span class="n">dU</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">Us</span> <span class="o">-</span> <span class="n">Us_loop</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+    <span class="n">dJ</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">((</span><span class="n">J</span> <span class="o">-</span> <span class="n">J_loop</span><span class="p">)</span> <span class="o">/</span> <span class="n">J_loop</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;30</span><span class="si">}{</span><span class="n">t_c</span><span class="si">:</span><span class="s2">&gt;12.1f</span><span class="si">}{</span><span class="n">t_r</span><span class="si">:</span><span class="s2">&gt;10.1f</span><span class="si">}{</span><span class="n">dU</span><span class="si">:</span><span class="s2">&gt;11.1e</span><span class="si">}{</span><span class="n">dJ</span><span class="si">:</span><span class="s2">&gt;12.1e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+strategy                       compile (s)   run (s)   max |dU|  max rel dJ
+python loop                                     85.8
+lax.map                                2.8      86.6    1.1e-15     1.8e-16
+lax.map, batch_size=3                  7.1      85.3    2.0e-15     3.5e-16
+vmap                                   4.3     107.1    4.6e-16     3.5e-16
+vmap + parallel line search            5.2     121.2    3.5e-15     1.8e-16
+</pre></div></div>
+</div>
+<p>Every batched strategy reaches the per-bout solutions, to round-off. With only six bouts of very different lengths (see section 3), vectorising gains little on a CPU: <code class="docutils literal notranslate"><span class="pre">vmap</span></code> costs about as much as the loop, because every bout waits for the slowest one. Its advantage is on many problems (section 2), on GPU, and in training, where the batch must be solved inside one compiled, differentiable step. Against the OCaml reference the costs agree as in the reconstruction notebook: bouts with a non-zero
+difference stopped in another local optimum of the non-convex objective.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">rel_ocaml</span> <span class="o">=</span> <span class="n">onp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">onp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">J_loop</span><span class="p">)</span> <span class="o">-</span> <span class="n">data</span><span class="p">[</span><span class="s2">"ilqr_cost"</span><span class="p">])</span> <span class="o">/</span> <span class="n">onp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"ilqr_cost"</span><span class="p">])</span>
+<span class="n">iters_fish</span> <span class="o">=</span> <span class="n">n_iterations</span><span class="p">(</span><span class="n">hist_loop</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">'bout'</span><span class="si">:</span><span class="s2">&lt;6</span><span class="si">}{</span><span class="s1">'cost'</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}{</span><span class="s1">'OCaml'</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}{</span><span class="s1">'rel diff'</span><span class="si">:</span><span class="s2">&gt;10</span><span class="si">}{</span><span class="s1">'iterations'</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">all_obs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">b</span><span class="si">:</span><span class="s2">&lt;6</span><span class="si">}{</span><span class="nb">float</span><span class="p">(</span><span class="n">J_loop</span><span class="p">[</span><span class="n">b</span><span class="p">])</span><span class="si">:</span><span class="s2">&gt;12.3f</span><span class="si">}{</span><span class="n">data</span><span class="p">[</span><span class="s1">'ilqr_cost'</span><span class="p">][</span><span class="n">b</span><span class="p">]</span><span class="si">:</span><span class="s2">&gt;12.3f</span><span class="si">}{</span><span class="n">rel_ocaml</span><span class="p">[</span><span class="n">b</span><span class="p">]</span><span class="si">:</span><span class="s2">&gt;10.1e</span><span class="si">}{</span><span class="n">iters_fish</span><span class="p">[</span><span class="n">b</span><span class="p">]</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+bout          cost       OCaml  rel diff  iterations
+0       -10188.690  -10215.129   2.6e-03          54
+1       -10302.552  -10297.255   5.1e-04          51
+2       -10263.757  -10270.089   6.2e-04          77
+3       -10544.964  -10545.906   8.9e-05          40
+4       -10313.109  -10312.940   1.6e-05          40
+5       -10403.917  -10403.917   9.0e-14          53
+</pre></div></div>
+</div>
+<p><strong>The cost of the old loops.</strong> With <code class="docutils literal notranslate"><span class="pre">loop=&quot;scan&quot;</span></code> the same <code class="docutils literal notranslate"><span class="pre">vmap</span></code> executes every iteration, retry and line-search step for every bout. At an equal budget of 20 iterations, which no bout reaches convergence in, both versions do the same number of outer iterations, so the gap is the inner loops alone.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">short</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"vmap"</span><span class="p">,</span> <span class="n">max_iter</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">t_while20</span> <span class="o">=</span> <span class="n">timeit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">obs</span><span class="p">:</span> <span class="n">solve_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="o">**</span><span class="n">short</span><span class="p">),</span> <span class="n">all_obs</span><span class="p">,</span> <span class="n">n_rep</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">t_scan20</span> <span class="o">=</span> <span class="n">timeit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">obs</span><span class="p">:</span> <span class="n">solve_batch</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">loop</span><span class="o">=</span><span class="s2">"scan"</span><span class="p">,</span> <span class="o">**</span><span class="n">short</span><span class="p">),</span> <span class="n">all_obs</span><span class="p">,</span> <span class="n">n_rep</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"vmap, 20 iterations: while </span><span class="si">{</span><span class="n">t_while20</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> s, scan </span><span class="si">{</span><span class="n">t_scan20</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> s (</span><span class="si">{</span><span class="n">t_scan20</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">t_while20</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">x slower)"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+vmap, 20 iterations: while 35.6 s, scan 327.6 s (9x slower)
+</pre></div></div>
+</div>
+</section>
+<section id="2.-Simulated-tracking-problems">
+<h2>2. Simulated tracking problems<a class="headerlink" href="#2.-Simulated-tracking-problems" title="Link to this heading">#</a></h2>
+<p>A tanh RNN <span class="math notranslate nohighlight">\(x_{t+1} = \tanh(U_h x_t + W_h u_t)\)</span> with <span class="math notranslate nohighlight">\(n=8\)</span> latents and <span class="math notranslate nohighlight">\(m=3\)</span> inputs tracks references <span class="math notranslate nohighlight">\(\bar x^{(b)}\)</span> that it generated itself from smooth random inputs <span class="math notranslate nohighlight">\(\bar u^{(b)}\)</span> and random initial states. The cost is <span class="math notranslate nohighlight">\(\sum_t \|x_t - \bar x^{(b)}_t\|^2 + 10^{-3}\|u_t\|^2\)</span>. Because the references are reachable, the solution should recover the true inputs. The references sit in <code class="docutils literal notranslate"><span class="pre">theta.Q</span></code> and the initial states in <code class="docutils literal notranslate"><span class="pre">x0</span></code>, the batched leaves.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">n_r</span><span class="p">,</span> <span class="n">m_r</span><span class="p">,</span> <span class="n">T_r</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">50</span>
+<span class="n">k1</span><span class="p">,</span> <span class="n">k2</span><span class="p">,</span> <span class="n">k3</span><span class="p">,</span> <span class="n">k4</span><span class="p">,</span> <span class="n">k5</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="mi">5</span><span class="p">)</span>
+<span class="n">rnn_theta</span> <span class="o">=</span> <span class="n">Theta</span><span class="p">(</span>
+    <span class="n">Uh</span><span class="o">=</span><span class="mf">1.2</span> <span class="o">*</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k1</span><span class="p">,</span> <span class="p">(</span><span class="n">n_r</span><span class="p">,</span> <span class="n">n_r</span><span class="p">))</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">n_r</span><span class="p">),</span>
+    <span class="n">Wh</span><span class="o">=</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k2</span><span class="p">,</span> <span class="p">(</span><span class="n">n_r</span><span class="p">,</span> <span class="n">m_r</span><span class="p">))</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">n_r</span><span class="p">),</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n_r</span><span class="p">),</span>
+    <span class="n">Q</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T_r</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n_r</span><span class="p">)),</span>  <span class="c1"># replaced by the references</span>
+<span class="p">)</span>
+<span class="n">rnn_dynamics</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">th</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">th</span><span class="o">.</span><span class="n">Uh</span> <span class="o">@</span> <span class="n">x</span> <span class="o">+</span> <span class="n">th</span><span class="o">.</span><span class="n">Wh</span> <span class="o">@</span> <span class="n">u</span><span class="p">)</span>
+<span class="n">rnn</span> <span class="o">=</span> <span class="n">System</span><span class="p">(</span>
+    <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">th</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">th</span><span class="o">.</span><span class="n">Q</span><span class="p">[</span><span class="n">t</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-3</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">u</span><span class="o">**</span><span class="mi">2</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="n">th</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">th</span><span class="o">.</span><span class="n">Q</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">),</span>
+    <span class="n">rnn_dynamics</span><span class="p">,</span>
+    <span class="n">ModelDims</span><span class="p">(</span><span class="n">horizon</span><span class="o">=</span><span class="n">T_r</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="n">n_r</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m_r</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">rnn_axes</span> <span class="o">=</span> <span class="p">(</span><span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">Theta</span><span class="p">(</span><span class="n">Uh</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Wh</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Q</span><span class="o">=</span><span class="mi">0</span><span class="p">)),</span> <span class="kc">None</span><span class="p">)</span>
+<span class="n">U0_rnn</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T_r</span><span class="p">,</span> <span class="n">m_r</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">simulate_references</span><span class="p">(</span><span class="n">n_batch</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">k3</span><span class="p">):</span>
+    <span class="n">ka</span><span class="p">,</span> <span class="n">kb</span><span class="p">,</span> <span class="n">kc</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">x0s</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">ka</span><span class="p">,</span> <span class="p">(</span><span class="n">n_batch</span><span class="p">,</span> <span class="n">n_r</span><span class="p">))</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">T_r</span><span class="p">)[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="n">freqs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">amps</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">kb</span><span class="p">,</span> <span class="p">(</span><span class="n">n_batch</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">m_r</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span> <span class="o">/</span> <span class="n">freqs</span>
+    <span class="n">phases</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">kc</span><span class="p">,</span> <span class="p">(</span><span class="n">n_batch</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">m_r</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">maxval</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+    <span class="n">Us_true</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">amps</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">freqs</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="n">T_r</span> <span class="o">+</span> <span class="n">phases</span><span class="p">),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">refs</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x0</span><span class="p">,</span> <span class="n">us</span><span class="p">:</span> <span class="n">ilqr_simulate</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">us</span><span class="p">,</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">rnn_theta</span><span class="p">))[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])(</span><span class="n">x0s</span><span class="p">,</span> <span class="n">Us_true</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">x0</span><span class="o">=</span><span class="n">x0s</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">rnn_theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">Q</span><span class="o">=</span><span class="n">refs</span><span class="p">)),</span> <span class="n">Us_true</span>
+
+
+<span class="n">rnn_params</span><span class="p">,</span> <span class="n">Us_true</span> <span class="o">=</span> <span class="n">simulate_references</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">take</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">B</span><span class="p">):</span>
+    <span class="c1"># the first B problems of a batch</span>
+    <span class="k">return</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">x0</span><span class="p">[:</span><span class="n">B</span><span class="p">],</span> <span class="n">p</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">Q</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Q</span><span class="p">[:</span><span class="n">B</span><span class="p">]))</span>
+</pre></div>
+</div>
+</div>
+<p>First a correctness check on 16 problems: the vmapped solve equals the one-at-a-time solves, every problem converges, and the inputs are recovered.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">p16</span> <span class="o">=</span> <span class="n">take</span><span class="p">(</span><span class="n">rnn_params</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span>
+<span class="p">(</span><span class="n">Xs</span><span class="p">,</span> <span class="n">Us</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">J</span><span class="p">,</span> <span class="n">hist</span><span class="p">,</span> <span class="n">conv</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">batched_ilqr_solver</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">p16</span><span class="p">,</span> <span class="n">U0_rnn</span><span class="p">,</span> <span class="n">rnn_axes</span><span class="p">,</span> <span class="n">max_iter</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">return_converged</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">one</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">ilqr_solver</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">U0_rnn</span><span class="p">,</span> <span class="n">max_iter</span><span class="o">=</span><span class="mi">200</span><span class="p">))</span>
+<span class="n">Us_one</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">one</span><span class="p">(</span><span class="n">iLQRParams</span><span class="p">(</span><span class="n">p16</span><span class="o">.</span><span class="n">x0</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="n">p16</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">Q</span><span class="o">=</span><span class="n">p16</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Q</span><span class="p">[</span><span class="n">b</span><span class="p">])))[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">)])</span>
+<span class="n">rel_u</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">Us</span> <span class="o">-</span> <span class="n">Us_true</span><span class="p">[:</span><span class="mi">16</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">Us_true</span><span class="p">[:</span><span class="mi">16</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"converged: </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">conv</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span><span class="si">}</span><span class="s2">/16, max |U_vmap - U_one| = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">Us</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Us_one</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span><span class="si">:</span><span class="s2">.1e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"relative input error: median </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">rel_u</span><span class="p">))</span><span class="si">:</span><span class="s2">.1e</span><span class="si">}</span><span class="s2">, max </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">rel_u</span><span class="o">.</span><span class="n">max</span><span class="p">())</span><span class="si">:</span><span class="s2">.1e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="s2">"constrained"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]):</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_r</span><span class="p">):</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">Us_true</span><span class="p">[</span><span class="n">b</span><span class="p">,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="n">COLORS</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.4</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">Us</span><span class="p">[</span><span class="n">b</span><span class="p">,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="n">COLORS</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">lw</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ls</span><span class="o">=</span><span class="s2">"--"</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">"problem </span><span class="si">{</span><span class="n">b</span><span class="si">}</span><span class="s2">: true (solid) vs recovered (dashed) inputs"</span><span class="p">,</span> <span class="n">xlabel</span><span class="o">=</span><span class="s2">"time step"</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">title</span><span class="o">.</span><span class="n">set_fontsize</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"$u_t$"</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+converged: 16/16, max |U_vmap - U_one| = 1.0e-15
+relative input error: median 3.0e-03, max 1.1e-02
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/examples_batched_ilqr_15_1.png" src="../_images/examples_batched_ilqr_15_1.png" />
+</div>
+</div>
+<section id="Scaling-with-the-batch-size">
+<h3>Scaling with the batch size<a class="headerlink" href="#Scaling-with-the-batch-size" title="Link to this heading">#</a></h3>
+<p>Wall time of a Python loop over one compiled solve, <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> and <code class="docutils literal notranslate"><span class="pre">vmap</span></code>, for batch sizes 1 to 256. The loop and <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> cost the same per problem at every size. <code class="docutils literal notranslate"><span class="pre">vmap</span></code> amortises the per-iteration overhead of these small problems over the batch, so its cost per problem falls until the vectorised work dominates.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">sizes</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">256</span><span class="p">]</span>
+<span class="n">rnn_kw</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+<span class="n">one_c</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">ilqr_solver</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">U0_rnn</span><span class="p">,</span> <span class="o">**</span><span class="n">rnn_kw</span><span class="p">))</span>
+<span class="n">scaling</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"python loop"</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">"lax.map"</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">"vmap"</span><span class="p">:</span> <span class="p">[]}</span>
+<span class="n">rnn_hist</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">B</span> <span class="ow">in</span> <span class="n">sizes</span><span class="p">:</span>
+    <span class="n">pB</span> <span class="o">=</span> <span class="n">take</span><span class="p">(</span><span class="n">rnn_params</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+    <span class="n">singles</span> <span class="o">=</span> <span class="p">[</span><span class="n">iLQRParams</span><span class="p">(</span><span class="n">pB</span><span class="o">.</span><span class="n">x0</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="n">pB</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">Q</span><span class="o">=</span><span class="n">pB</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Q</span><span class="p">[</span><span class="n">b</span><span class="p">]))</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">)]</span>
+    <span class="n">jax</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">(</span><span class="n">one_c</span><span class="p">(</span><span class="n">singles</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>  <span class="c1"># compile</span>
+    <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">singles</span><span class="p">:</span>
+        <span class="n">jax</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">(</span><span class="n">one_c</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+    <span class="n">scaling</span><span class="p">[</span><span class="s2">"python loop"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">strat</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">"lax.map"</span><span class="p">,</span> <span class="s2">"map"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"vmap"</span><span class="p">,</span> <span class="s2">"vmap"</span><span class="p">)]:</span>
+        <span class="n">out</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">t_r</span> <span class="o">=</span> <span class="n">timeit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">strat</span><span class="p">:</span> <span class="n">batch</span><span class="o">.</span><span class="n">batched_ilqr_solver</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">U0_rnn</span><span class="p">,</span> <span class="n">rnn_axes</span><span class="p">,</span> <span class="n">strategy</span><span class="o">=</span><span class="n">s</span><span class="p">,</span> <span class="o">**</span><span class="n">rnn_kw</span><span class="p">),</span> <span class="n">pB</span><span class="p">)</span>
+        <span class="n">scaling</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t_r</span><span class="p">)</span>
+    <span class="n">rnn_hist</span><span class="p">[</span><span class="n">B</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">'B'</span><span class="si">:</span><span class="s2">&gt;5</span><span class="si">}</span><span class="s2">"</span> <span class="o">+</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">k</span><span class="si">:</span><span class="s2">&gt;14</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">scaling</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">B</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">sizes</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">B</span><span class="si">:</span><span class="s2">&gt;5</span><span class="si">}</span><span class="s2">"</span> <span class="o">+</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">scaling</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">&gt;13.3f</span><span class="si">}</span><span class="s2">s"</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">scaling</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+    B   python loop       lax.map          vmap
+    1        0.038s        0.035s        0.036s
+    4        0.134s        0.140s        0.070s
+   16        0.549s        0.573s        0.201s
+   64        2.228s        2.255s        0.835s
+  256        8.880s        8.705s        3.375s
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="s2">"constrained"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">c</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">ts</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">scaling</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+    <span class="n">ts</span> <span class="o">=</span> <span class="n">onp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="p">[</span><span class="n">ts</span><span class="p">,</span> <span class="n">ts</span> <span class="o">/</span> <span class="n">onp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">sizes</span><span class="p">)]):</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">sizes</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="n">COLORS</span><span class="p">[</span><span class="n">c</span><span class="p">],</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="n">MARKERS</span><span class="p">[</span><span class="n">c</span><span class="p">],</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">xscale</span><span class="o">=</span><span class="s2">"log"</span><span class="p">,</span> <span class="n">yscale</span><span class="o">=</span><span class="s2">"log"</span><span class="p">,</span> <span class="n">xlabel</span><span class="o">=</span><span class="s2">"batch size B"</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s2">"wall time (s)"</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"total"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">xscale</span><span class="o">=</span><span class="s2">"log"</span><span class="p">,</span> <span class="n">yscale</span><span class="o">=</span><span class="s2">"log"</span><span class="p">,</span> <span class="n">xlabel</span><span class="o">=</span><span class="s2">"batch size B"</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s2">"wall time per problem (s)"</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"per problem"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">:</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">which</span><span class="o">=</span><span class="s2">"major"</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="s2">"0.9"</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="p">[[</span><span class="s2">"top"</span><span class="p">,</span> <span class="s2">"right"</span><span class="p">]]</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/examples_batched_ilqr_18_0.png" src="../_images/examples_batched_ilqr_18_0.png" />
+</div>
+</div>
+</section>
+</section>
+<section id="3.-Lockstep-efficiency">
+<h2>3. Lockstep efficiency<a class="headerlink" href="#3.-Lockstep-efficiency" title="Link to this heading">#</a></h2>
+<p>Under <code class="docutils literal notranslate"><span class="pre">vmap</span></code> the batch runs until its slowest problem has converged, and finished problems wait. The efficiency is the mean number of iterations over the maximum: the fraction of the vectorised work that was needed. <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> with <code class="docutils literal notranslate"><span class="pre">batch_size</span></code>, or sharding over devices, limits the waiting to one chunk.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">iters_rnn</span> <span class="o">=</span> <span class="n">n_iterations</span><span class="p">(</span><span class="n">rnn_hist</span><span class="p">[</span><span class="mi">256</span><span class="p">])</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">its</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">"zebrafish (6 bouts)"</span><span class="p">,</span> <span class="n">iters_fish</span><span class="p">),</span> <span class="p">(</span><span class="s2">"simulated RNN (256 problems)"</span><span class="p">,</span> <span class="n">iters_rnn</span><span class="p">)]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;30</span><span class="si">}</span><span class="s2"> iterations </span><span class="si">{</span><span class="n">its</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">its</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">}</span><span class="s2">, efficiency mean/max = </span><span class="si">{</span><span class="n">its</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">its</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.0%</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="s2">"constrained"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">onp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">iters_fish</span><span class="p">)),</span> <span class="n">iters_fish</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">COLORS</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">width</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">iters_fish</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">c</span><span class="o">=</span><span class="s2">"0.4"</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ls</span><span class="o">=</span><span class="s2">"--"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">xlabel</span><span class="o">=</span><span class="s2">"bout"</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s2">"iterations"</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"zebrafish: iterations per bout (dashed: batch max)"</span><span class="p">)</span>
+<span class="n">counts</span> <span class="o">=</span> <span class="n">onp</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">iters_rnn</span><span class="p">)</span>
+<span class="n">its</span> <span class="o">=</span> <span class="n">onp</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">counts</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">its</span><span class="p">,</span> <span class="n">counts</span><span class="p">[</span><span class="n">its</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="n">COLORS</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">width</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">iters_rnn</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">c</span><span class="o">=</span><span class="s2">"0.4"</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ls</span><span class="o">=</span><span class="s2">"--"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">xlabel</span><span class="o">=</span><span class="s2">"iterations"</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s2">"problems"</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"simulated RNN: iterations per problem"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">:</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">title</span><span class="o">.</span><span class="n">set_fontsize</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="p">[[</span><span class="s2">"top"</span><span class="p">,</span> <span class="s2">"right"</span><span class="p">]]</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+zebrafish (6 bouts)            iterations 40-77, efficiency mean/max = 68%
+simulated RNN (256 problems)   iterations 33-42, efficiency mean/max = 88%
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/examples_batched_ilqr_20_1.png" src="../_images/examples_batched_ilqr_20_1.png" />
+</div>
+</div>
+</section>
+<section id="4.-Gradients-through-a-batch">
+<h2>4. Gradients through a batch<a class="headerlink" href="#4.-Gradients-through-a-batch" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">batch.batched_dilqr</span></code> returns the optimal trajectories with implicit gradients. The batch is solved without gradients, then each solution gets its gradient from one LQR solve. Reverse mode never enters the while loops, so <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> of a loss summed over the batch works with every strategy. Here the gradient wrt the shared recurrent weights equals the sum of the per-problem <code class="docutils literal notranslate"><span class="pre">dilqr</span></code> gradients.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">p4</span> <span class="o">=</span> <span class="n">take</span><span class="p">(</span><span class="n">rnn_params</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">batch_loss</span><span class="p">(</span><span class="n">Uh</span><span class="p">,</span> <span class="n">strategy</span><span class="p">):</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">p4</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">theta</span><span class="o">=</span><span class="n">p4</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">Uh</span><span class="o">=</span><span class="n">Uh</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">batch</span><span class="o">.</span><span class="n">batched_dilqr</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">U0_rnn</span><span class="p">,</span> <span class="n">rnn_axes</span><span class="p">,</span> <span class="n">strategy</span><span class="o">=</span><span class="n">strategy</span><span class="p">,</span> <span class="n">max_iter</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">single_loss</span><span class="p">(</span><span class="n">Uh</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">iLQRParams</span><span class="p">(</span><span class="n">p4</span><span class="o">.</span><span class="n">x0</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="n">p4</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">Uh</span><span class="o">=</span><span class="n">Uh</span><span class="p">,</span> <span class="n">Q</span><span class="o">=</span><span class="n">p4</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">Q</span><span class="p">[</span><span class="n">b</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dilqr</span><span class="p">(</span><span class="n">rnn</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">U0_rnn</span><span class="p">,</span> <span class="n">max_iter</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+
+<span class="n">g_sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">single_loss</span><span class="p">)(</span><span class="n">rnn_theta</span><span class="o">.</span><span class="n">Uh</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">strategy</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"vmap"</span><span class="p">,</span> <span class="s2">"map"</span><span class="p">]:</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">batch_loss</span><span class="p">),</span> <span class="n">static_argnums</span><span class="o">=</span><span class="mi">1</span><span class="p">)(</span><span class="n">rnn_theta</span><span class="o">.</span><span class="n">Uh</span><span class="p">,</span> <span class="n">strategy</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">strategy</span><span class="si">:</span><span class="s2">&lt;5</span><span class="si">}</span><span class="s2"> relative difference to the summed gradients: </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">g</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">g_sum</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">g_sum</span><span class="p">))</span><span class="si">:</span><span class="s2">.1e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+vmap  relative difference to the summed gradients: 8.4e-16
+map   relative difference to the summed gradients: 1.5e-16
+</pre></div></div>
+</div>
+</section>
+<section id="How-to-adapt">
+<h2>How to adapt<a class="headerlink" href="#How-to-adapt" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Choosing a strategy.</strong> On CPU, <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> (<code class="docutils literal notranslate"><span class="pre">strategy=&quot;map&quot;</span></code>, optionally with <code class="docutils literal notranslate"><span class="pre">batch_size</span></code>) avoids vectorised work on finished problems; <code class="docutils literal notranslate"><span class="pre">vmap</span></code> pays off when the problems are small and many, or on GPU, where the vectorised work is cheap and the sequential loop is not. On several devices <code class="docutils literal notranslate"><span class="pre">strategy=&quot;shard&quot;</span></code> splits the batch with <code class="docutils literal notranslate"><span class="pre">shard_map</span></code>, so each device stops on its own shard. After <code class="docutils literal notranslate"><span class="pre">jax.distributed.initialize()</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.devices()</span></code> spans every host.</p></li>
+<li><p><strong>Parallel line search.</strong> <code class="docutils literal notranslate"><span class="pre">linesearch=&quot;parallel&quot;</span></code> replaces up to <code class="docutils literal notranslate"><span class="pre">n_parallel</span></code> sequential rollouts by one vectorised rollout. It mostly helps on GPU; on CPU it does extra work.</p></li>
+<li><p><strong>Warm starts.</strong> In training, start each problem from its previous solution. The iteration counts then shrink and even out, which improves the lockstep efficiency of <code class="docutils literal notranslate"><span class="pre">vmap</span></code>.</p></li>
+<li><p><strong>Convergence.</strong> Implicit gradients assume converged solutions. <code class="docutils literal notranslate"><span class="pre">return_converged=True</span></code> returns a per-problem flag to check or mask with.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="zebrafish_tail_reconstruction.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">iLQR inference: reconstructing a zebrafish tail bout</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../userguide/design_principles.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Design Principles</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Timing">Timing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#1.-Zebrafish-bouts">1. Zebrafish bouts</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#2.-Simulated-tracking-problems">2. Simulated tracking problems</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Scaling-with-the-batch-size">Scaling with the batch size</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#3.-Lockstep-efficiency">3. Lockstep efficiency</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#4.-Gradients-through-a-batch">4. Gradients through a batch</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#How-to-adapt">How to adapt</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/examples/batched_ilqr.ipynb.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024-2026, Thomas Soares Mullen &amp; Marine Schimel.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
