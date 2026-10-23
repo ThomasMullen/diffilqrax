@@ -1,6 +1,6 @@
 """Includes utility functions for the project. Generic functions to generate data, seeds, etc."""
 
-from typing import Callable, Tuple, Any
+from typing import Callable, Tuple
 import jax
 from jax import Array
 import jax.random as jr

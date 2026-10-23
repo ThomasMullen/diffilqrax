@@ -15,8 +15,8 @@ from diffilqrax.typs import ModelDims
 from diffilqrax.lqr import solve_lqr
 from diffilqrax.diff_lqr import dlqr, dllqr
 from diffilqrax.parallel_dlqr import pdlqr, pdllqr
-from problems import random_lqr
-from test_dlqr import GRAD_DIMS, sym_lqr_grads
+from tests.problems import random_lqr
+from tests.test_dlqr import GRAD_DIMS, sym_lqr_grads
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
@@ -33,6 +33,7 @@ def setup(n: int, m: int, horizon: int = 30):
 
 
 def test_invalid_adjoint():
+    """An unknown adjoint solver name is rejected"""
     dims, params, _ = setup(3, 2)
     with pytest.raises(AssertionError):
         pdlqr(dims, params, adjoint="banana")

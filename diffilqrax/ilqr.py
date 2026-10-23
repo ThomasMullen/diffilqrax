@@ -912,9 +912,7 @@ def linesearch(
         return updated_carry, (updated_carry[2], updated_carry[3])
 
     # scan through with max iterations
-    (Xs_star, Us_star, cost_opt, old_cost, alpha, its, z, exp_dj, *_), costs = lax.scan(
-        loop_fun, initial_carry, None, length=max_iter_linesearch
-    )
+    (Xs_star, Us_star, cost_opt, *_), _ = lax.scan(loop_fun, initial_carry, None, length=max_iter_linesearch)
     # if verbose:
     # jax.debug.print(
     # f"Nit:{its:02} α:{alpha/beta:.03f} z:{z:.03f} J*:{cost_opt:.03f}",

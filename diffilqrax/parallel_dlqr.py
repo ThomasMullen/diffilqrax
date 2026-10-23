@@ -38,11 +38,13 @@ def _rev(dims: ModelDims, adjoint: str, res, tau_bar: Array) -> LQRParams:
 
 @partial(custom_vjp, nondiff_argnums=(0, 1))
 def _pdlqr(dims: ModelDims, adjoint: str, params: LQRParams) -> Array:
+    del adjoint  # used by the custom VJP only
     Xs_star, Us_star, _ = solve_plqr(params)
     return _tau(dims, Xs_star, Us_star)
 
 
 def _fwd_pdlqr(dims: ModelDims, adjoint: str, params: LQRParams):
+    del adjoint  # used by the custom VJP only
     sol = solve_plqr(params)
     Xs_star, Us_star, _ = sol
     new_params = LQRParams(params.x0, offset_lqr(params.lqr, Xs_star, Us_star))
@@ -84,6 +86,7 @@ def pdlqr(dims: ModelDims, params: LQRParams, tau_guess: Optional[Array] = None,
 
 @partial(custom_vjp, nondiff_argnums=(0, 1))
 def _pdllqr(dims: ModelDims, adjoint: str, params: LQRParams, tau_star: Array) -> Array:
+    del dims, adjoint, params  # identity in the forward pass
     return tau_star
 
 

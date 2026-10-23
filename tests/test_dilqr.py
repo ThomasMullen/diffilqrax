@@ -16,7 +16,6 @@ import numpy as onp
 from matplotlib import pyplot as plt
 from diffilqrax.diff_ilqr import dilqr
 from diffilqrax.ilqr import ilqr_solver
-from diffilqrax.exact import quad_solve, exact_solve
 from diffilqrax.utils import keygen
 from diffilqrax.typs import (
     iLQRParams,
@@ -109,11 +108,6 @@ class TestDILQR(unittest.TestCase):
                 use_linesearch=linesearch,
                 verbose=True,
             )
-            Us_lqr = tau_star[:, self.model.dims.n :]
-            x_tgt = jnp.ones(self.n).squeeze()
-            Xs_lqr = tau_star[:, : self.model.dims.n].squeeze() - x_tgt
-            # if PRINTING_ON:
-            #     jax.debug.print("implicit_opt_x: {x}", x=Xs_lqr[:10])
             return jnp.linalg.norm(tau_star) ** 2  # + jnp.linalg.norm(Us_lqr) ** 2
 
         implicit_val, implicit_g = jax.value_and_grad(implicit_loss)(self.theta)
@@ -121,9 +115,8 @@ class TestDILQR(unittest.TestCase):
 
         def direct_loss(prms):
             theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
-            x_tgt = jnp.ones(self.n).squeeze()
             params = iLQRParams(x0=0 * prms.x0, theta=theta)
-            (Xs_stars, Us_stars, Lambs_stars), total_cost, costs = ilqr_solver(
+            (Xs_stars, Us_stars, _), _, costs = ilqr_solver(
                 self.model,
                 params,
                 self.Us_init,
@@ -142,11 +135,6 @@ class TestDILQR(unittest.TestCase):
             #     ax.plot(onp.asarray(costs))
             #     fig.savefig(f"{FIG_DIR}/costs.png")
             return jnp.linalg.norm(Us_stars) ** 2 + jnp.linalg.norm(Xs_stars.squeeze()) ** 2  # - x_tgt.squeeze()) ** 2
-
-        prms = self.theta
-        theta = Theta(Uh=prms.Uh, Wh=prms.Wh, Q=prms.Q, sigma=jnp.zeros((2)))
-        x_tgt = jnp.ones(self.n).squeeze()
-        params = iLQRParams(x0=0 * prms.x0, theta=theta)
 
         direct_val, direct_g = jax.value_and_grad(direct_loss)(self.theta)
 

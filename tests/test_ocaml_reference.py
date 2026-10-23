@@ -32,7 +32,7 @@ from diffilqrax import ilqr
 from diffilqrax.diff_ilqr import dilqr
 from diffilqrax.diff_lqr import dllqr
 from diffilqrax.typs import iLQRParams, LQRParams
-from problems import ocaml_pendulum, vanilla_rnn, vanilla_rnn_params
+from tests.problems import ocaml_pendulum, vanilla_rnn, vanilla_rnn_params
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
@@ -43,6 +43,7 @@ MAX_ITER = 400
 
 
 def load_fixture(name: str) -> dict:
+    """Arrays of an OCaml fixture, skipping the test if it has not been generated"""
     path = FIXTURES / f"{name}.npz"
     if not path.exists():
         pytest.skip(f"{path.name} missing; generate it with benchmarks/make_ocaml_fixtures.py")
@@ -99,6 +100,7 @@ def gauss_newton_loss(model, params: iLQRParams, Us_init) -> jax.Array:
 
 
 def load_grad_fixture(n: int, linear: bool = False) -> dict:
+    """OCaml gradient fixture of the vanilla RNN with n states"""
     return load_fixture(f"ocaml_rnn_grad{'_linear' if linear else ''}_n{n}")
 
 

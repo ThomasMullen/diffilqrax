@@ -7,7 +7,6 @@ b = -big_g. The function exact_solve uses numpy's linear solver to solve the sam
 
 from typing import Tuple
 import numpy as np
-import jax
 from jax import Array
 import jax.numpy as jnp
 from jax.numpy.linalg import matrix_power

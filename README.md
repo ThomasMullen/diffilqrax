@@ -6,6 +6,7 @@
 ![Python Publish](https://github.com/ThomasMullen/diffilqrax/actions/workflows/python-publish.yml/badge.svg)
 ![PyPI version](https://badge.fury.io/py/diffilqrax.svg?icon=si%3Apython)
 [![DOI](https://zenodo.org/badge/699393913.svg)](https://doi.org/10.5281/zenodo.14861291)
+[![Documentation](https://github.com/ThomasMullen/diffilqrax/actions/workflows/documentation.yml/badge.svg)](https://thomasmullen.github.io/diffilqrax/)
 [![Documentation Status](https://readthedocs.org/projects/diffilqrax/badge/?version=latest)](https://diffilqrax.readthedocs.io/en/latest/?badge=latest)
 
 
@@ -35,21 +36,28 @@ Diffilqrax is a JAX library for LQR and iterative LQR (iLQR) optimal control. It
 
 ## Installation
 
-From a local clone, with pip:
+From PyPI, with pip or [uv](https://docs.astral.sh/uv/):
+
+```bash
+pip install diffilqrax
+uv pip install diffilqrax       # into the active environment
+uv add diffilqrax               # as a dependency of a uv project
+```
+
+The latest version straight from GitHub:
+
+```bash
+uv pip install "git+https://github.com/ThomasMullen/diffilqrax"
+```
+
+For development, from a local clone:
 
 ```bash
 git clone git@github.com:ThomasMullen/diffilqrax.git
 cd diffilqrax
-pip install -e .            # library
-pip install -e ".[dev]"     # + tests and linting
-pip install -e ".[doc]"     # + documentation
-```
-
-or with [uv](https://docs.astral.sh/uv/), using the committed `uv.lock`:
-
-```bash
-uv sync --extra dev
-uv run pytest tests/ -m "not slow"
+uv pip install -e ".[dev]"      # or: pip install -e ".[dev]"   (tests and linting)
+uv pip install -e ".[doc]"      # documentation
+uv build                        # sdist + wheel in dist/
 ```
 
 Importing diffilqrax enables JAX double precision (`jax_enable_x64`).
@@ -90,6 +98,8 @@ More examples are in the documentation notebooks (`docs/source/examples/`) and i
 
 ## Documentation
 
+The documentation is hosted at <https://thomasmullen.github.io/diffilqrax/>.
+
 Build the docs locally (this also needs `pandoc`, for example `brew install pandoc`):
 
 ```bash
@@ -104,6 +114,9 @@ open docs/build/html/index.html
 pytest tests/ -m "not slow"   # fast suite
 pytest tests/ -m slow          # large-dimension tests
 ```
+
+Benchmarks import the shared test problems from `tests/`, so run them as modules from the repository root,
+for example `python -m benchmarks.timing --quick`.
 
 The tests run on the CPU by default. Set `DIFFILQRAX_TEST_PLATFORM=gpu` to run them on a GPU instead.
 

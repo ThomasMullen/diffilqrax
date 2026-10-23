@@ -16,7 +16,7 @@ from diffilqrax import ilqr, lqr
 from diffilqrax.diff_ilqr import add_dynamics_curvature
 from diffilqrax.typs import LQR, System
 from diffilqrax.utils import smooth_l1
-from problems import (
+from tests.problems import (
     DIMS,
     SLOW_SIZE,
     random_lqr,
@@ -59,6 +59,7 @@ def assert_second_order(model, params, Xs, Us, Lambs):
 
 
 def random_inputs(model, scale=0.1, seed=0):
+    """Gaussian initial inputs for the model's horizon"""
     return scale * jr.normal(jr.PRNGKey(seed), (model.dims.horizon, model.dims.m))
 
 

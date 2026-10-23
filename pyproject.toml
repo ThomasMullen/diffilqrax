@@ -20,7 +20,7 @@ dependencies = [
   "jaxopt",
 ]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   # Indicate who your project is intended for
   "Intended Audience :: Science/Research",
   "Intended Audience :: Education",
@@ -71,10 +71,12 @@ diffilqrax = ["VERSION"]
 
 [project.urls]
 "Homepage" = "https://github.com/ThomasMullen/diffilqrax"
+"Documentation" = "https://thomasmullen.github.io/diffilqrax/"
 "Bug Tracker" = "https://github.com/ThomasMullen/diffilqrax/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 norecursedirs = ["fig_dump", ".*", "venv", "build", "dist"]
 markers = ["slow: large-dimension tests (deselect with '-m \"not slow\"')"]
 

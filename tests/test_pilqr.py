@@ -18,7 +18,7 @@ from diffilqrax.lqr import regularised_backward_pass
 from diffilqrax.parallel_ilqr import pilqr_solver, dynamics_defects, multiple_shooting_step, total_cost, value_function_grad
 from diffilqrax.plqr import plqr_backward_pass
 from diffilqrax.typs import LQRParams
-from problems import (
+from tests.problems import (
     rnn_problem,
     unstable_rnn_problem,
     linear_rnn_problem,
@@ -49,10 +49,12 @@ PROBLEMS = {
 
 
 def init_inputs(model, seed: int = 0, scale: float = 0.1):
+    """Gaussian initial inputs for the model's horizon"""
     return scale * jr.normal(jr.PRNGKey(seed), (model.dims.horizon, model.dims.m))
 
 
 def max_kkt(model, params, Xs, Us, Lambs) -> float:
+    """Largest absolute residual of the non-linear KKT conditions"""
     return max(float(jnp.max(jnp.abs(r))) for r in nonlinear_kkt(model, params, Xs, Us, Lambs))
 
 
@@ -111,12 +113,14 @@ def test_parallel_system_still_accepted():
 
 
 def test_legacy_linesearch_kwargs_warn():
+    """The old line-search keyword arguments still work but raise a DeprecationWarning"""
     model, params = PROBLEMS["pendulum"]()
     with pytest.warns(DeprecationWarning):
         pilqr_solver(model, params, init_inputs(model), max_iter=5, beta=0.5, tol=0.1)
 
 
 def test_invalid_rollout():
+    """An unknown rollout name is rejected"""
     model, params = PROBLEMS["pendulum"]()
     with pytest.raises(AssertionError):
         pilqr_solver(model, params, init_inputs(model), rollout="linearised")
@@ -158,6 +162,7 @@ def test_multiple_shooting_step():
 
 
 def test_total_cost_matches_rollout():
+    """total_cost of a rollout equals the cost returned by ilqr_simulate"""
     model, params = PROBLEMS["rnn"]()
     Us = init_inputs(model)
     (Xs, _), J = ilqr_simulate(model, Us, params)

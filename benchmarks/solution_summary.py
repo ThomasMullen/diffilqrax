@@ -9,12 +9,11 @@ For every problem in tests/problems.py one figure shows, initial (dashed) vs opt
 plus an overview figure of initial vs optimal total cost and the iterations taken.
 
 Run from the repository root:
-    python benchmarks/solution_summary.py
+    python -m benchmarks.solution_summary
 
 Writes <problem>.png, overview.png and solutions.npz to fig_dump/<timestamp>/.
 """
 
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -28,9 +27,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
 # pylint: disable=wrong-import-position
-import problems as P
+import tests.problems as P
 from diffilqrax import ilqr
 
 jax.config.update("jax_enable_x64", True)
@@ -174,6 +172,7 @@ def plot_overview(results, out_dir):
 
 
 def main():
+    """Solve and plot every problem and save the figures and arrays"""
     out_dir = REPO / "fig_dump" / datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     results, arrays = {}, {}

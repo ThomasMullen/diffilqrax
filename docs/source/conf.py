@@ -1,3 +1,6 @@
+"""Sphinx configuration for the diffilqrax documentation."""
+
+# pylint: disable=invalid-name,redefined-builtin  # Sphinx reads these lowercase module globals
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -6,15 +9,11 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import os
-import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.abspath("../.."))
-
-project = 'diffilqrax'
-copyright = '2024-2026, Thomas Soares Mullen & Marine Schimel'
-author = 'Thomas Soares Mullen & Marine Schimel'
+project = "diffilqrax"
+copyright = "2024-2026, Thomas Soares Mullen & Marine Schimel"
+author = "Thomas Soares Mullen & Marine Schimel"
 release = (Path(__file__).resolve().parents[2] / "diffilqrax" / "VERSION").read_text().strip()
 version = release
 
@@ -45,11 +44,11 @@ extensions = [
     # "sphinx.ext.autosectionlabel",
 ]
 
-bibtex_bibfiles = ["refs.bib"]          # required, path relative to conf.py
-bibtex_default_style = "unsrt"          # or "plain", "alpha"
+bibtex_bibfiles = ["refs.bib"]  # required, path relative to conf.py
+bibtex_default_style = "unsrt"  # or "plain", "alpha"
 bibtex_reference_style = "author_year"  # or "label" for [1]-style numbers
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 exclude_patterns = ["build", "**.ipynb_checkpoints"]
 
 # notebooks are stored with their outputs; the docs build never executes them
@@ -67,27 +66,26 @@ intersphinx_mapping = {
 }
 
 
-
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "pydata_sphinx_theme"
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 html_theme_options = {
-   "logo": {
+    "logo": {
         "text": "Diffilqrax documentation",
         "image_dark": "./_static/images/diffilqrax_logo_dm2_short2.png",
         "image_light": "./_static/images/diffilqrax_logo_dm2_short.png",
-   },
-   "icon_links": [
-       {
-           "name": "GitHub",
-           "url": "https://github.com/ThomasMullen/diffilqrax",
-           "icon": "fa-brands fa-github",
-       }
-   ],
-   # Navigation bar links
+    },
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/ThomasMullen/diffilqrax",
+            "icon": "fa-brands fa-github",
+        }
+    ],
+    # Navigation bar links
     # "navbar_links": [
     #     {"name": "Getting started", "url": "userguide/getting_started"},
     #     {"name": "Tutorials", "url": "examples/index"},
@@ -95,4 +93,3 @@ html_theme_options = {
     #     {"name": "API", "url": "api/modules"},
     # ],
 }
-

@@ -17,7 +17,7 @@ import jax.random as jr
 from diffilqrax import ilqr, lqr
 from diffilqrax.parallel_ilqr import pilqr_solver
 from diffilqrax.plqr import plqr_backward_pass, regularise_lqr, project_psd, project_psd_lqr
-from problems import NONCONVEX_COSTS, random_lqr, linear_nonconvex_problem, as_parallel
+from tests.problems import NONCONVEX_COSTS, random_lqr, linear_nonconvex_problem, as_parallel
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
@@ -26,6 +26,7 @@ MAX_ITER = 200
 
 
 def kkt_residual(model, params, Xs, Us) -> float:
+    """Largest input KKT residual of the local LQR at (Xs, Us)"""
     return float(jnp.max(jnp.abs(ilqr.kkt_input_residual(ilqr.approx_lqr(model, Xs, Us, params)))))
 
 
@@ -35,6 +36,7 @@ def iterations(costs, J) -> int:
 
 
 def solve_both(kind: str, seed: int = 0, scale: float = 0.1, regularise: bool = True):
+    """Solve a non-convex problem with ilqr and pilqr from the same random initial inputs"""
     model, params = linear_nonconvex_problem(kind, seed=seed)
     Us_init = scale * jr.normal(jr.PRNGKey(seed + 100), (model.dims.horizon, model.dims.m))
     seq = ilqr.ilqr_solver(model, params, Us_init, max_iter=MAX_ITER)
