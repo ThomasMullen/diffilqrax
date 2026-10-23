@@ -127,7 +127,8 @@ def batch_map(
         if pad:  # repeat the last element so every device gets the same number of elements
             batched = [jnp.concatenate([leaf, jnp.repeat(leaf[-1:], pad, axis=0)]) for leaf in batched]
         mesh = Mesh(onp.asarray(devs), ("batch",))
-        out = _shard_map(
+        # newer jax returns a decorator lambda when f is omitted, which pylint can infer here instead of the call
+        out = _shard_map(  # pylint: disable=too-many-function-args
             lambda batched_, shared_: local_map(inner, batched_, shared_),
             mesh=mesh,
             in_specs=(PartitionSpec("batch"), PartitionSpec()),

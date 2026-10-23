@@ -701,11 +701,11 @@ class TestiLQRExactSolution(unittest.TestCase):
         # set-up model
         key = jr.PRNGKey(seed=234)
         key, skeys = keygen(key, 5)
-        Uh = initialise_stable_dynamics(next(skeys), *self.dims["NT"], 0.6)[0]
+        Uh = initialise_stable_dynamics(next(skeys), self.dims["N"][0], self.dims["T"][0], 0.6)[0]
         Wh = jr.normal(next(skeys), self.dims["NM"])
         # chex.assert_trees_all_equal(self.fixtures["Uh"], Uh)
         # chex.assert_trees_all_equal(self.fixtures["Wh"], Wh)
-        Q = jnp.eye(*self.dims["N"])
+        Q = jnp.eye(self.dims["N"][0])
         # initialise params
         self.theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros((2)), Q=Q)
         theta = Theta(Uh=Uh, Wh=Wh, sigma=jnp.zeros(self.dims["N"]), Q=Q)
