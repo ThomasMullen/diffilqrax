@@ -262,7 +262,12 @@ def test_shard_strategy():
     """shard_map over 4 CPU devices, with padding of the odd batch, gives the vmap solutions and gradients"""
     env = {**os.environ, "XLA_FLAGS": "--xla_force_host_platform_device_count=4", "JAX_PLATFORMS": "cpu"}
     res = subprocess.run(
-        [sys.executable, "-c", SHARD_SCRIPT], cwd=Path(__file__).parents[1], env=env, capture_output=True, text=True, check=False
+        [sys.executable, "-c", SHARD_SCRIPT],
+        cwd=Path(__file__).parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert res.returncode == 0 and res.stdout.strip().endswith("ok"), res.stderr[-3000:]
 
