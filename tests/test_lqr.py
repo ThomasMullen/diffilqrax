@@ -5,6 +5,7 @@ Unit test for the LQR module
 import os
 from pathlib import Path
 import unittest
+from typing import Optional
 from os import getcwd
 import chex
 import jax
@@ -105,8 +106,12 @@ def is_jax_array(arr: Array) -> bool:
     return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
 
 
-def setup_lqr(dims: chex.Dimensions, pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}) -> LQR:
+PEN_WEIGHT = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}
+
+
+def setup_lqr(dims: chex.Dimensions, pen_weight: Optional[dict] = None) -> LQR:
     """Setup LQR problem"""
+    pen_weight = PEN_WEIGHT if pen_weight is None else pen_weight
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 3)
     # initialise dynamics
@@ -219,7 +224,7 @@ class TestLQR(unittest.TestCase):
     def test_lqr_forward_pass(self):
         """test forward pass shape and dtype"""
         params = LQRParams(self.x0, self.lqr)
-        dJ, Ks = lqr_backward_pass(lqr=params.lqr)
+        _, Ks = lqr_backward_pass(lqr=params.lqr)
         Xs_lqr, Us_lqr = lqr_forward_pass(gains=Ks, params=params)
         chex.assert_type(Xs_lqr, float)
         chex.assert_shape(Xs_lqr, (self.dims["T"][0] + 1,) + self.dims["N"])
@@ -323,7 +328,6 @@ class TestLQRSolutionExact(unittest.TestCase):
     def test_lqr_solution(self):
         """test LQR solution using jaxopt conjugate gradient solution"""
         # setup
-        params = LQRParams(self.x0, self.lqr)
         print("Make tmp dir")
         # Exercise the LQR solver function
         Xs_dir, Us_dir, _ = solve_lqr(self.params)

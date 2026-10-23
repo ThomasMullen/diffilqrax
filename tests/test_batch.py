@@ -27,9 +27,9 @@ from diffilqrax.ilqr import ilqr_solver
 from diffilqrax.parallel_ilqr import pilqr_solver
 from diffilqrax.typs import iLQRParams
 
-from mgu2_model import load_fixture, make_system, make_theta
-from problems import TRACKING_AXES, pendulum_problem, rnn_problem, simulated_tracking
-from test_gradients import assert_grads_close
+from tests.mgu2_model import load_fixture, make_system, make_theta
+from tests.problems import TRACKING_AXES, pendulum_problem, rnn_problem, simulated_tracking
+from tests.test_gradients import assert_grads_close
 
 jax.config.update("jax_enable_x64", True)
 
@@ -40,6 +40,7 @@ PROBLEMS = {"rnn": lambda: rnn_problem(5, 3), "pendulum": pendulum_problem}
 
 
 def zero_inputs(model):
+    """Zero initial inputs for the model's horizon"""
     return jnp.zeros((model.dims.horizon, model.dims.m))
 
 
@@ -118,6 +119,7 @@ def test_batched_return_info(parallel):
 
 
 def test_unknown_loop_raises():
+    """Unknown loop or line-search names are rejected"""
     model, params = PROBLEMS["rnn"]()
     with pytest.raises(AssertionError):
         ilqr_solver(model, params, zero_inputs(model), loop="fori")
@@ -130,8 +132,8 @@ def test_unknown_loop_raises():
 # --------------------------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module", params=["rnn", "pendulum"])
-def tracking(request):
+@pytest.fixture(name="tracking", scope="module", params=["rnn", "pendulum"])
+def tracking_fixture(request):
     """Odd batch size, so that sharding over 4 devices needs padding"""
     model, params, Us_true = simulated_tracking(request.param, n_batch=5)
     solve = jax.jit(lambda p: ilqr_solver(model, p, zero_inputs(model), max_iter=MAX_ITER, return_converged=True))
@@ -240,9 +242,9 @@ SHARD_SCRIPT = textwrap.dedent("""
     jax.config.update("jax_enable_x64", True)
     assert len(jax.devices()) == 4, jax.devices()
     from diffilqrax import batch
-    from problems import TRACKING_AXES, simulated_tracking
-    from test_batch import MAX_ITER, assert_solutions_close, batched_tracking_loss, zero_inputs
-    from test_gradients import assert_grads_close
+    from tests.problems import TRACKING_AXES, simulated_tracking
+    from tests.test_batch import MAX_ITER, assert_solutions_close, batched_tracking_loss, zero_inputs
+    from tests.test_gradients import assert_grads_close
 
     model, params, _ = simulated_tracking("rnn", n_batch=5)
     solve = lambda **kw: batch.batched_ilqr_solver(model, params, zero_inputs(model), TRACKING_AXES, max_iter=MAX_ITER, **kw)
@@ -260,7 +262,12 @@ def test_shard_strategy():
     """shard_map over 4 CPU devices, with padding of the odd batch, gives the vmap solutions and gradients"""
     env = {**os.environ, "XLA_FLAGS": "--xla_force_host_platform_device_count=4", "JAX_PLATFORMS": "cpu"}
     res = subprocess.run(
-        [sys.executable, "-c", SHARD_SCRIPT], cwd=Path(__file__).parent, env=env, capture_output=True, text=True, check=False
+        [sys.executable, "-c", SHARD_SCRIPT],
+        cwd=Path(__file__).parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert res.returncode == 0 and res.stdout.strip().endswith("ok"), res.stderr[-3000:]
 
@@ -270,8 +277,8 @@ def test_shard_strategy():
 # --------------------------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def zebrafish():
+@pytest.fixture(name="zebrafish", scope="module")
+def zebrafish_fixture():
     """Model, shared parameters and stacked observations of the 6 fixture bouts"""
     if not FIXTURE.exists():
         pytest.skip(f"{FIXTURE.name} missing; generate it with dilqr_jax_apps zebrafish/ocaml/make_fixture.py")
@@ -284,6 +291,7 @@ def zebrafish():
 
 
 def zebrafish_batch(params, data, bouts):
+    """Zebrafish parameters with the observations of the selected bouts stacked as a batch"""
     return params._replace(theta=params.theta._replace(obs=jnp.asarray(data["saved_tail"][bouts])))
 
 

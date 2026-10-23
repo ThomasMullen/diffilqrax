@@ -10,12 +10,11 @@ the CSV, so the same sweep can be re-run on a GPU. On a CPU the associative scan
 work with no parallel speedup and is expected to be slower than the sequential scan; the
 O(log T) depth only pays off on a parallel accelerator.
 
-Usage: ``venv/bin/python benchmarks/parallel_lqr.py [--quick] [--grad]``
+Usage: ``venv/bin/python -m benchmarks.parallel_lqr [--quick] [--grad]``
 """
 
 import argparse
 import csv
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -27,13 +26,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
-sys.path.insert(0, str(REPO / "benchmarks"))
 jax.config.update("jax_enable_x64", True)
 
 # pylint: disable=wrong-import-position
-from problems import random_lqr, linear_nonconvex_problem, as_parallel
-from timing import timeit
+from tests.problems import random_lqr, linear_nonconvex_problem, as_parallel
+from benchmarks.timing import timeit
 from diffilqrax import lqr
 from diffilqrax.plqr import solve_plqr
 from diffilqrax.typs import ModelDims
@@ -46,6 +43,7 @@ SOLVERS = {"lqr": jax.jit(lqr.solve_lqr), "plqr": solve_plqr}
 
 
 def rel_err(a, b) -> float:
+    """Relative 2-norm error of a against the reference b"""
     return float(jnp.linalg.norm(a - b) / jnp.linalg.norm(b))
 
 
@@ -56,6 +54,7 @@ def kkt_residual(params, sol) -> float:
 
 
 def run(sweeps, repeats: int):
+    """Time lqr and plqr on each (n, m, T) case and compare their solutions"""
     device = str(jax.devices()[0])
     rows = []
     for axis, cases in sweeps.items():
@@ -121,6 +120,7 @@ def ilqr_grad_fns(n: int, m: int, T: int):
 
 
 def run_grad(sweeps, repeats: int):
+    """Time the gradients of the differentiable solvers on each (n, m, T) case"""
     device = str(jax.devices()[0])
     rows = []
     for axis, cases in sweeps.items():
@@ -151,6 +151,7 @@ def run_grad(sweeps, repeats: int):
 
 
 def plot_grad(rows, out_dir: Path):
+    """Gradient wall time and agreement with the sequential gradient along each sweep axis"""
     axes_names = list(dict.fromkeys(r["axis"] for r in rows))
     fig, axs = plt.subplots(2, len(axes_names), figsize=(4.5 * len(axes_names), 7), squeeze=False)
     device = rows[0]["device"]
@@ -172,6 +173,7 @@ def plot_grad(rows, out_dir: Path):
 
 
 def plot(rows, out_dir: Path):
+    """Wall time, solution error and KKT residual of lqr and plqr along each sweep axis"""
     axes_names = sorted({r["axis"] for r in rows})
     fig, axs = plt.subplots(3, len(axes_names), figsize=(4.5 * len(axes_names), 10), squeeze=False)
     device = rows[0]["device"]
@@ -196,7 +198,8 @@ def plot(rows, out_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    """Parse arguments, run the solver or gradient sweep and save the CSV and figure"""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("--quick", action="store_true", help="small sweep for a smoke test")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--grad", action="store_true", help="time gradients of the differentiable solvers")

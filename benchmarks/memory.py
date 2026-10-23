@@ -17,7 +17,7 @@ Configurations whose compiled memory exceeds --max-run-gib (default 16) are comp
 only their compiled memory is reported (the direct gradient needs ~47 GiB at n = 100).
 
 Run from the repository root:
-    python benchmarks/memory.py [--quick]
+    python -m benchmarks.memory [--quick]
 
 Writes memory.csv, memory.json and memory.png to fig_dump/<timestamp>/.
 """
@@ -49,12 +49,11 @@ def peak_rss_bytes() -> int:
 def worker(kind: str, n: int, m: int, horizon: int, max_iter: int, max_run_bytes: int) -> dict:
     """Measure one gradient configuration in this (fresh) process; run it only if it fits in max_run_bytes"""
     # pylint: disable=import-outside-toplevel
-    sys.path[:0] = [str(REPO / "tests"), str(REPO / "benchmarks")]
     import jax
     import jax.numpy as jnp
     import jax.random as jr
-    from problems import rnn_problem
-    from timing import timeit
+    from tests.problems import rnn_problem
+    from benchmarks.timing import timeit
     from diffilqrax.ilqr import ilqr_solver
     from diffilqrax.diff_ilqr import dilqr
     from diffilqrax.typs import iLQRParams
@@ -93,7 +92,8 @@ def worker(kind: str, n: int, m: int, horizon: int, max_iter: int, max_run_bytes
 
 def run_config(kind: str, n: int, m: int, horizon: int, max_iter: int, max_run_bytes: int) -> dict:
     """Run worker() in a fresh Python process so peak RSS is not shared between configurations"""
-    cmd = [sys.executable, __file__, "--worker", kind, str(n), str(m), str(horizon), str(max_iter), str(max_run_bytes)]
+    sizes = [str(v) for v in (n, m, horizon, max_iter, max_run_bytes)]
+    cmd = [sys.executable, "-m", "benchmarks.memory", "--worker", kind, *sizes]
     proc = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=REPO)
     return json.loads(proc.stdout.strip().splitlines()[-1])
 
@@ -126,6 +126,7 @@ def plot(rows, out_dir: Path):
 
 
 def main():
+    """Run the memory sweeps (or one --worker configuration) and write the CSV, JSON and plot"""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--quick", action="store_true", help="small sizes for a fast smoke run")
     parser.add_argument("--max-run-gib", type=float, default=16.0, help="only run configurations that fit in this")

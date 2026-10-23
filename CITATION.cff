@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as follows."
 title: "DiffiLQRAX: Differentiable iLQR in JAX"
-version: "0.1.0"
-date-released: "2026-10-14"
+version: "1.0.0"
+date-released: "2026-10-23"
 authors:
   - family-names: "Mullen"
     given-names: "Thomas Soares"

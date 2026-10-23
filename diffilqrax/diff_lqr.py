@@ -18,7 +18,6 @@ from diffilqrax.typs import (
     LQRParams,
     ModelDims,
     LQR,
-    symmetrise_matrix,
     symmetrise_tensor,
 )
 
@@ -193,6 +192,7 @@ def dlqr(dims: ModelDims, params: LQRParams, tau_guess: Array) -> Array:
     Array
         Concatenated optimal state and control sequence along axis=1.
     """
+    del tau_guess
     sol = solve_lqr(params)
     Xs_star, Us_star, _ = sol
     tau_star = jnp.c_[Xs_star[:, ...], jnp.r_[Us_star, jnp.zeros(shape=(1, dims.m))]]
@@ -220,6 +220,7 @@ def fwd_dlqr(
         A tuple containing the optimal state-control trajectory and the updated parameters
         and solution.
     """
+    del tau_guess
     lqr = params.lqr
     sol = solve_lqr(params)
     Xs_star, Us_star, _ = sol
@@ -300,6 +301,7 @@ def dllqr(dims: ModelDims, params: LQRParams, tau_star: Array) -> Array:
     Array
         Concatenated optimal state and control sequence along axis=1.
     """
+    del dims, params  # identity in the forward pass
     return tau_star
 
 

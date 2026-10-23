@@ -45,6 +45,7 @@ def final_cost(x, theta):
 
 
 def main():
+    """Solve the swing-up with iLQR, print diagnostics and plot the trajectory"""
     model = System(cost, final_cost, dynamics, ModelDims(n=2, m=1, horizon=HORIZON, dt=DT))
     params = iLQRParams(x0=jnp.array([0.1, 0.0]), theta=None)
     Us_init = 0.5 * jr.normal(jr.PRNGKey(0), (HORIZON, 1))

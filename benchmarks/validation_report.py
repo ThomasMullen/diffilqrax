@@ -16,12 +16,11 @@ Figures (fig_dump/<timestamp>/):
 Memory and time of implicit vs unrolled gradients are in benchmarks/memory.py (memory.png/json).
 
 Run from the repository root:
-    python benchmarks/validation_report.py [--skip-grid]
+    python -m benchmarks.validation_report [--skip-grid]
 """
 
 import argparse
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -35,11 +34,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
 # pylint: disable=wrong-import-position
-import problems as P
-from test_ocaml_reference import gauss_newton_loss, ocaml_rollout_loss
-from test_dlqr import dlqr_losses, sym_lqr_grads
+import tests.problems as P
+from tests.test_ocaml_reference import gauss_newton_loss, ocaml_rollout_loss
+from tests.test_dlqr import dlqr_losses, sym_lqr_grads
 from diffilqrax import ilqr, lqr
 from diffilqrax.diff_ilqr import add_dynamics_curvature, dilqr
 from diffilqrax.typs import iLQRParams
@@ -59,6 +57,7 @@ CONTROL_PROBLEMS = [
 
 
 def solve(builder, use_linesearch=True, max_iter=300, scale=0.1, seed=0):
+    """Build a problem and solve it with iLQR from random (or zero) initial inputs"""
     model, params = builder()
     shape = (model.dims.horizon, model.dims.m)
     Us_init = scale * jr.normal(jr.PRNGKey(seed), shape) if scale else jnp.zeros(shape)
@@ -67,10 +66,12 @@ def solve(builder, use_linesearch=True, max_iter=300, scale=0.1, seed=0):
 
 
 def max_kkt(model, params, Xs, Us, Lambs):
+    """Largest absolute residual of the non-linear KKT conditions"""
     return max(float(jnp.abs(r).max()) for r in P.nonlinear_kkt(model, params, Xs, Us, Lambs))
 
 
 def is_strict_min(model, params, Xs, Us, Lambs):
+    """Whether the local LQR with dynamics curvature is positive definite, i.e. a strict minimum"""
     local = add_dynamics_curvature(model, ilqr.approx_lqr_offset(model, Xs, Us, params), Xs, Us, Lambs, params)
     return bool(lqr.regularised_backward_pass(local, mu=0.0)[2])
 
@@ -165,7 +166,7 @@ def ocaml_comparison(out_dir, summary):
     for row, (label, fixture, builder, use_ls) in enumerate(cases):
         path = REPO / "tests" / "fixtures" / f"{fixture}.npz"
         if not path.exists():
-            print(f"skipping {label}: {path.name} missing (run benchmarks/make_ocaml_fixtures.py)")
+            print(f"skipping {label}: {path.name} missing (run python -m benchmarks.make_ocaml_fixtures)")
             continue
         ref = onp.load(path)
         model, params = builder()
@@ -307,7 +308,7 @@ def ocaml_gradients(out_dir, summary):
     for n, m in sizes:
         path = REPO / "tests" / "fixtures" / f"ocaml_rnn_grad_n{n}.npz"
         if not path.exists():
-            print(f"skipping OCaml gradients n={n}: {path.name} missing (run benchmarks/make_ocaml_fixtures.py)")
+            print(f"skipping OCaml gradients n={n}: {path.name} missing (run python -m benchmarks.make_ocaml_fixtures)")
             continue
         ref = onp.load(path)
         model, params = P.vanilla_rnn(n, m)
@@ -365,6 +366,7 @@ def dlqr_gradients(out_dir, summary):
 
 
 def main():
+    """Run every validation section and write the figures and summary JSON"""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--skip-grid", action="store_true", help="skip the (slow) dimension-grid heat-map")
     args = parser.parse_args()

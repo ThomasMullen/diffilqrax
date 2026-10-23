@@ -3,7 +3,7 @@ Unit tests for the differentiable LQR solver
 """
 
 import os
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 import unittest
 import pytest
 import chex
@@ -19,7 +19,7 @@ from diffilqrax.typs import LQRParams, ModelDims, LQR
 from diffilqrax.diff_lqr import dlqr
 from diffilqrax.lqr import solve_lqr, kkt
 from diffilqrax.utils import keygen, initialise_stable_dynamics
-from problems import random_lqr
+from tests.problems import random_lqr
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)  # double precision
@@ -32,11 +32,15 @@ def is_jax_array(arr: Array) -> bool:
     return isinstance(arr, jnp.ndarray) and not isinstance(arr, onp.ndarray)
 
 
+PEN_WEIGHT = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3}
+
+
 def setup_lqr_time_varying(
     dims: chex.Dimensions,
-    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3},
+    pen_weight: Optional[dict] = None,
 ) -> LQR:
     """Setup LQR problem"""
+    pen_weight = PEN_WEIGHT if pen_weight is None else pen_weight
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 4)
     # initialise dynamics
@@ -58,10 +62,7 @@ def setup_lqr_time_varying(
     return lqr()
 
 
-def setup_lqr(
-    dims: chex.Dimensions,
-    pen_weight: dict = {"Q": 1e-0, "R": 1e-3, "Qf": 1e0, "S": 1e-3},
-) -> LQR:
+def setup_lqr(dims: chex.Dimensions) -> LQR:
     """set up time invariant LQR problem"""
     key = jr.PRNGKey(seed=234)
     key, skeys = keygen(key, 3)
@@ -205,7 +206,7 @@ class TestDLQR(unittest.TestCase):
             return jnp.linalg.norm(Us_lqr) ** 2 + jnp.linalg.norm(Xs_lqr - 1) ** 2
 
         def direct_loss(prms):
-            Xs, Us, Lambs = solve_lqr(replace_params(prms))
+            Xs, Us, _ = solve_lqr(replace_params(prms))
             return jnp.linalg.norm(Us) ** 2 + jnp.linalg.norm(Xs - 1) ** 2
 
         prms = Prms(

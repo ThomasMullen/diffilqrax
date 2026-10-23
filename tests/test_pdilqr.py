@@ -18,7 +18,7 @@ from diffilqrax.ilqr import ilqr_solver, approx_lqr_offset
 from diffilqrax.diff_ilqr import dilqr, add_dynamics_curvature
 from diffilqrax.parallel_dilqr import pdilqr
 from diffilqrax.parallel_dlqr import pdllqr
-from problems import (
+from tests.problems import (
     NONCONVEX_COSTS,
     linear_nonconvex_problem,
     linear_rnn_problem,
@@ -28,7 +28,7 @@ from problems import (
     inverted_pendulum,
     as_parallel,
 )
-from test_gradients import assert_grads_close
+from tests.test_gradients import assert_grads_close
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
@@ -50,6 +50,7 @@ NONLINEAR_PROBLEMS = {
 
 
 def init_inputs(model, seed: int = 0):
+    """Small Gaussian initial inputs for the model's horizon"""
     return 0.1 * jr.normal(jr.PRNGKey(seed + 100), (model.dims.horizon, model.dims.m))
 
 

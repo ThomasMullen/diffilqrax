@@ -7,7 +7,7 @@ Measures (post-JIT, median of repeats, on CPU):
   (c) implicit (dilqr) vs direct-unrolled gradient time vs n and T
 
 Run from the repository root:
-    python benchmarks/timing.py [--quick]
+    python -m benchmarks.timing [--quick]
 
 Writes timing.csv and timing.png to fig_dump/<timestamp>/.
 """
@@ -15,7 +15,6 @@ Writes timing.csv and timing.png to fig_dump/<timestamp>/.
 import argparse
 import csv
 import statistics
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -29,9 +28,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
 # pylint: disable=wrong-import-position
-from problems import random_lqr, rnn_problem
+from tests.problems import random_lqr, rnn_problem
 from diffilqrax import lqr
 from diffilqrax.ilqr import ilqr_solver
 from diffilqrax.diff_ilqr import dilqr
@@ -136,6 +134,7 @@ def plot(rows, out_dir: Path):
 
 
 def main():
+    """Parse arguments, run the timing sweeps and save the CSV and figure"""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--quick", action="store_true", help="small sizes for a fast smoke run")
     args = parser.parse_args()

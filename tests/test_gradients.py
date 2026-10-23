@@ -13,7 +13,7 @@ from jax.test_util import check_grads
 
 from diffilqrax.ilqr import ilqr_solver
 from diffilqrax.diff_ilqr import dilqr
-from problems import rnn_problem, linear_rnn_problem, pendulum_problem, van_der_pol, inverted_pendulum
+from tests.problems import rnn_problem, linear_rnn_problem, pendulum_problem, van_der_pol, inverted_pendulum
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)

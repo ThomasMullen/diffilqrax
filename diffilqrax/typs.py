@@ -1,8 +1,7 @@
 """Define data structures and types"""
 
 from typing import NamedTuple, Callable, Any, Union, Tuple, Optional
-from functools import partial
-from jax import lax, Array
+from jax import Array
 from jax.typing import ArrayLike
 
 # from flax import struct

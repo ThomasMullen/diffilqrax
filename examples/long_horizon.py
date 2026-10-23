@@ -8,8 +8,8 @@ Run from the repository root:
 Solves with ilqr_solver and with pilqr_solver using the "feedback" rollout (parallel backward pass,
 sequential non-linear rollout) and the "parallel" rollout (multiple shooting: everything is an associative
 scan or a vmap). Prints the wall time, iterations, cost and KKT residual of each, and saves a plot of the
-solutions and a CSV of the results to fig_dump/<timestamp>/ (or --out-dir). On a CPU the parallel solvers are not faster; on a GPU
-the "parallel" rollout has O(log T) depth per iteration.
+solutions and a CSV of the results to fig_dump/<timestamp>/ (or --out-dir). On a CPU the parallel solvers are not
+faster; on a GPU the "parallel" rollout has O(log T) depth per iteration.
 """
 
 import argparse
@@ -54,7 +54,8 @@ def make_problem(horizon: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    """Solve the long-horizon problem with each solver and save the CSV and figure"""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("--horizon", type=int, default=4000)
     parser.add_argument("--out-dir", type=Path, default=None, help="output directory, by default fig_dump/<timestamp>")
     args = parser.parse_args()
@@ -79,7 +80,8 @@ def main():
         kkt = float(jnp.max(jnp.abs(kkt_input_residual(approx_lqr(model, Xs, Us, params)))))
         defect = float(jnp.max(jnp.abs(dynamics_defects(model, params, Xs, Us))))
         print(
-            f"{name:15s} {seconds:7.3f}s  iterations {iters:3d}  cost {float(J):.10f}  max|dL/dU| {kkt:.1e}  max defect {defect:.1e}"
+            f"{name:15s} {seconds:7.3f}s  iterations {iters:3d}  cost {float(J):.10f}  "
+            f"max|dL/dU| {kkt:.1e}  max defect {defect:.1e}"
         )
         solutions[name] = (Xs, Us)
         rows.append(

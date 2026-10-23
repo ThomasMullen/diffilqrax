@@ -173,3 +173,6 @@ CLAUDE.md
 # local-only reference fixture generators (fixtures themselves are tracked)
 benchmarks/make_ocaml_fixtures.py
 benchmarks/make_pdilqr_fixtures.py
+
+# uv lockfile: the package resolves from pyproject.toml
+uv.lock

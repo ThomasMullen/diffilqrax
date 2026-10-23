@@ -19,7 +19,7 @@ import jax.numpy as jnp
 from diffilqrax import ilqr
 from diffilqrax.typs import iLQRParams
 
-from mgu2_model import load_fixture, make_system, make_theta, readout, rollout, total_cost
+from tests.mgu2_model import load_fixture, make_system, make_theta, readout, rollout, total_cost
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
@@ -31,8 +31,8 @@ GRAD_TOL = 1e-2  # OCaml stops on a 1e-13 relative cost change, not on the gradi
 WARM_U_TOL = 1e-5
 
 
-@pytest.fixture(scope="module")
-def ref():
+@pytest.fixture(name="ref", scope="module")
+def ref_fixture():
     """Reference arrays and parameters"""
     if not FIXTURE.exists():
         pytest.skip(f"{FIXTURE.name} missing; generate it with dilqr_jax_apps zebrafish/ocaml/make_fixture.py")

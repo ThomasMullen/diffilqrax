@@ -7,12 +7,11 @@ The script is device-agnostic: it runs on whatever ``jax.devices()[0]`` is and r
 so the same sweep can be re-run on a GPU. On a CPU the associative scans do O(T log T) work with no
 parallel speedup; the O(log T) depth of the "parallel" rollout only pays off on a parallel accelerator.
 
-Usage: ``venv/bin/python benchmarks/parallel_ilqr.py [--quick] [--repeats 3]``
+Usage: ``venv/bin/python -m benchmarks.parallel_ilqr [--quick] [--repeats 3]``
 """
 
 import argparse
 import csv
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -25,13 +24,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
-sys.path.insert(0, str(REPO / "benchmarks"))
 jax.config.update("jax_enable_x64", True)
 
 # pylint: disable=wrong-import-position
-from problems import pendulum_problem, rnn_problem, nonlinear_kkt
-from timing import timeit
+from tests.problems import pendulum_problem, rnn_problem, nonlinear_kkt
+from benchmarks.timing import timeit
 from diffilqrax.ilqr import ilqr_solver
 from diffilqrax.parallel_ilqr import pilqr_solver, dynamics_defects
 
@@ -49,6 +46,7 @@ METHODS = {
 
 
 def run(horizons, repeats: int):
+    """Time ilqr and pilqr on each problem over the horizons, with cost, KKT and defect diagnostics"""
     device = str(jax.devices()[0])
     rows = []
     for problem, make in PROBLEMS.items():
@@ -84,6 +82,7 @@ def run(horizons, repeats: int):
 
 
 def plot(rows, out_dir: Path):
+    """Wall time, iterations and final cost of each method against the horizon"""
     problems = list(dict.fromkeys(r["problem"] for r in rows))
     fig, axs = plt.subplots(3, len(problems), figsize=(5 * len(problems), 10), squeeze=False)
     device = rows[0]["device"]
@@ -105,7 +104,8 @@ def plot(rows, out_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    """Parse arguments, run the sweep and save the CSV and figure"""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("--quick", action="store_true", help="small sweep for a smoke test")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--out-dir", type=Path, default=None, help="output directory, by default fig_dump/<timestamp>")

@@ -19,7 +19,6 @@
 # jax.config.update('jax_default_device', jax.devices('cpu')[0])
 # jax.config.update("jax_enable_x64", True)  # double precision
 
-# style.use("https://gist.githubusercontent.com/ThomasMullen/e4a6a0abd54ba430adc4ffb8b8675520/raw/1189fbee1d3335284ec5cd7b5d071c3da49ad0f4/figure_style.mplstyle")
 
 # class TestiLQRStructs(unittest.TestCase):
 #     """Test LQR dimensions and data structures"""
@@ -554,7 +553,7 @@ class TestiLQRStructs(unittest.TestCase):
     def test_vectorise_fun_in_time(self):
         """test vectorise function in time"""
         # setup
-        (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
+        (Xs, Us), _ = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         Xs = Xs[:-1]
         Us = Us[:]
         tps = jnp.arange(self.model.dims.horizon)
@@ -582,7 +581,7 @@ class TestiLQRStructs(unittest.TestCase):
     def test_linearise(self):
         """test linearise function shape"""
         # setup
-        (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
+        (Xs, Us), _ = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         Xs = Xs[0]
         Us = Us[0]
         # exercise
@@ -615,7 +614,7 @@ class TestiLQRStructs(unittest.TestCase):
         # setup
         Xs_lqr_sim = lqr.simulate_trajectory(self.model.dynamics, self.Us_init, self.params, self.model.dims)
         # exercise
-        (Xs, Us), J0 = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
+        (Xs, Us), _ = ilqr.ilqr_simulate(self.model, self.Us_init, self.params)
         # verify
         chex.assert_trees_all_equal(Us, self.Us_init)
         chex.assert_shape(Xs, (self.dims["T"][0] + 1,) + self.dims["N"])
@@ -797,6 +796,7 @@ class TestiLQRExactSolution(unittest.TestCase):
     #     assert jnp.allclose(total_cost, self.fixtures['obj'], rtol=1e-06, atol=1e-06)
 
     def test_lqr_on_ilqr(self):
+        """iLQR on a linear-quadratic problem matches the LQR solution"""
         T = self.model.dims.horizon
         # set up lqr
         print(T, self.x_targ.shape)
@@ -817,7 +817,7 @@ class TestiLQRExactSolution(unittest.TestCase):
         Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(lqr_params)
 
         # run ilqr
-        (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilqr.ilqr_solver(
+        (Xs_stars, Us_stars, Lambs_stars), _, _ = ilqr.ilqr_solver(
             self.model,
             self.params,
             self.Us,
@@ -834,7 +834,8 @@ class TestiLQRExactSolution(unittest.TestCase):
             ax[1].plot(Us_lqr, c="k", linestyle="--", alpha=0.6)
             ax[2].plot(Lambs_stars, c="b", linestyle=":", alpha=0.6)
             ax[2].plot(Lambs_lqr, c="k", linestyle="--", alpha=0.6)
-            [a_.set(title=l_) for a_, l_ in zip(ax.flatten(), ["x", "u", "λ"])]
+            for a_, l_ in zip(ax.flatten(), ["x", "u", "λ"]):
+                a_.set(title=l_)
             fig.savefig(f"{FIG_DIR}/ilqr_vs_lqr.png")
             close(fig)
 
@@ -846,7 +847,7 @@ class TestiLQRExactSolution(unittest.TestCase):
     def test_ilqr_kkt_solution(self):
         """test ilqr solver with kkt optimality conditions"""
         # exercise ilqr solver
-        (Xs_stars, Us_stars, Lambs_stars), total_cost, cost_log = ilqr.ilqr_solver(
+        (Xs_stars, Us_stars, Lambs_stars), _, cost_log = ilqr.ilqr_solver(
             self.model,
             self.params,
             self.Us,
@@ -946,14 +947,14 @@ class TestiLQRWithLQRProblem(unittest.TestCase):
         # setup: simulate dynamics
         lqr_Xs_sim = lqr.simulate_trajectory(dynamics=lqr.lin_dyn_step, Us=self.Us, params=self.lqr_params, dims=self.sys_dims)
         # exercise rollout
-        (Xs_init, Us_init), cost_init = ilqr.ilqr_simulate(self.model, self.Us, self.ilqr_params)
+        (Xs_init, _), _ = ilqr.ilqr_simulate(self.model, self.Us, self.ilqr_params)
         # verify
         chex.assert_trees_all_close(Xs_init, lqr_Xs_sim)
 
         # setup: lqr solver
-        Xs_lqr, Us_lqr, Lambs_lqr = lqr.solve_lqr(self.lqr_params)  # , self.sys_dims)
+        Xs_lqr, Us_lqr, _ = lqr.solve_lqr(self.lqr_params)
         # exercise ilqr solver
-        (Xs_stars, Us_stars, Lambs_stars), total_cost, _ = ilqr.ilqr_solver(
+        (Xs_stars, Us_stars, _), _, _ = ilqr.ilqr_solver(
             self.model,
             self.ilqr_params,
             self.Us,

@@ -29,7 +29,7 @@ from diffilqrax.plqr import (
     dynamic_operator,
 )
 from diffilqrax.typs import LQRParams, ModelDims
-from problems import DIMS, SLOW_SIZE, random_lqr, exact_lqr_inputs, lqr_total_cost
+from tests.problems import DIMS, SLOW_SIZE, random_lqr, exact_lqr_inputs, lqr_total_cost
 
 jax.config.update("jax_default_device", jax.devices(os.environ.get("DIFFILQRAX_TEST_PLATFORM", "cpu"))[0])
 jax.config.update("jax_enable_x64", True)
@@ -51,11 +51,13 @@ def assert_rel_close(a, b, rtol=RTOL):
 
 
 def assert_solutions_close(sol, ref, rtol=RTOL):
+    """Each array of sol is close to the matching array of ref"""
     for a, b in zip(sol, ref):
         assert_rel_close(a, b, rtol)
 
 
 def without_cross_term(params: LQRParams) -> LQRParams:
+    """The LQR with its state-input cross term S set to zero"""
     return params._replace(lqr=params.lqr._replace(S=jnp.zeros_like(params.lqr.S)))
 
 
@@ -101,6 +103,7 @@ def test_plqr_kkt(n, m):
 
 
 def test_plqr_swap_x0():
+    """plqr with a swapped initial state matches the sequential solver"""
     params = random_lqr(5, 3, horizon=30)
     assert_solutions_close(solve_plqr_swap_x0(params), lqr.solve_lqr_swap_x0(params))
 
@@ -149,8 +152,13 @@ def test_remove_cross_term_preserves_cost():
 
 
 def random_riccati_elements(key, n, batch=1):
+    """Random elements of the associative Riccati scan, with PSD blocks where required"""
     keys = jr.split(key, 5)
-    sym_psd = lambda k: (lambda L: L @ L.transpose(0, 2, 1) / n)(jr.normal(k, (batch, n, n)))
+
+    def sym_psd(k):
+        L = jr.normal(k, (batch, n, n))
+        return L @ L.transpose(0, 2, 1) / n
+
     return (
         jr.normal(keys[0], (batch, n, n)) / jnp.sqrt(n),
         jr.normal(keys[1], (batch, n)),

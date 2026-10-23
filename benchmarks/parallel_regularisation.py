@@ -9,12 +9,11 @@ history, the iterations to converge, the final cost gap to the best solution fou
 residual max|dL/dU|.
 Linear dynamics keep the parallel rollout exact, so differences come from the regularisation only.
 
-Usage: ``venv/bin/python benchmarks/parallel_regularisation.py [--seeds 8] [--scale 1.0]``
+Usage: ``venv/bin/python -m benchmarks.parallel_regularisation [--seeds 8] [--scale 1.0]``
 """
 
 import argparse
 import csv
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -27,11 +26,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tests"))
 jax.config.update("jax_enable_x64", True)
 
 # pylint: disable=wrong-import-position
-from problems import NONCONVEX_COSTS, linear_nonconvex_problem, as_parallel
+from tests.problems import NONCONVEX_COSTS, linear_nonconvex_problem, as_parallel
 from diffilqrax import ilqr
 from diffilqrax.parallel_ilqr import pilqr_solver
 
@@ -52,6 +50,7 @@ METHODS = {
 
 
 def kkt_residual(model, params, Xs, Us) -> float:
+    """Largest input KKT residual of the local LQR at (Xs, Us)"""
     return float(jnp.max(jnp.abs(ilqr.kkt_input_residual(ilqr.approx_lqr(model, Xs, Us, params)))))
 
 
@@ -61,6 +60,7 @@ def iterations(costs, J) -> int:
 
 
 def run(n_seeds: int, scale: float):
+    """Solve each non-convex problem from random initial inputs with every method"""
     rows, histories = [], {}
     for kind in NONCONVEX_COSTS:
         model, params = linear_nonconvex_problem(kind)
@@ -89,6 +89,7 @@ def run(n_seeds: int, scale: float):
 
 
 def plot(rows, histories, best, out_dir: Path):
+    """Cost histories, final cost gaps and KKT residuals of each method"""
     kinds = list(NONCONVEX_COSTS)
     colours = dict(zip(METHODS, ("k", "tab:blue", "tab:green", "tab:orange", "tab:red")))
     fig, axs = plt.subplots(3, len(kinds), figsize=(4.2 * len(kinds), 11), squeeze=False)
@@ -115,6 +116,7 @@ def plot(rows, histories, best, out_dir: Path):
 
 
 def main():
+    """Parse arguments, run the comparison and save the CSV and figure"""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("--seeds", type=int, default=8)
     parser.add_argument("--scale", type=float, default=1.0, help="std of the random initial inputs")

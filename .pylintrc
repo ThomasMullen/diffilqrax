@@ -39,7 +39,7 @@ extension-pkg-whitelist=
 fail-on=
 
 # Specify a score threshold under which the program will exit with error.
-fail-under=7
+fail-under=10
 
 # Interpret the stdin as a python script, whose filename needs to be passed as
 # the module_or_package argument.
@@ -99,9 +99,6 @@ recursive=no
 # source root.
 source-roots=
 
-# When enabled, pylint would attempt to guess common misconfiguration and emit
-# user-friendly hints instead of false-positive error messages.
-suggestion-mode=yes
 
 # Allow loading of arbitrary C extensions. Extensions are imported into the
 # active Python interpreter and may run arbitrary code.
@@ -315,7 +312,7 @@ good-names=i,
 
 # Good variable names regexes, separated by a comma. If names match any regex,
 # they will always be accepted
-good-names-rgxs=
+good-names-rgxs=^_?([a-z0-9]+_)*[a-z0-9]*[A-Z][A-Za-z0-9]*(_[A-Za-z0-9]+)*$
 
 # Include a hint for the correct naming format with invalid-name.
 include-naming-hint=no
@@ -458,7 +455,7 @@ indent-after-paren=4
 indent-string='    '
 
 # Maximum number of characters on a single line.
-max-line-length=100
+max-line-length=127
 
 # Maximum number of lines in a module.
 max-module-lines=1000
@@ -549,7 +546,19 @@ disable=raw-checker-failed,
         suppressed-message,
         useless-suppression,
         deprecated-pragma,
-        use-symbolic-message-instead
+        use-symbolic-message-instead,
+        # solver signatures mirror the maths and are public API
+        too-many-arguments,
+        too-many-positional-arguments,
+        too-many-locals,
+        too-many-statements,
+        too-few-public-methods,
+        too-many-instance-attributes,
+        duplicate-code,
+        non-ascii-name,
+        # JAX idioms: lambda closures for jax.grad/vmap, dict(...) for solver kwargs
+        unnecessary-lambda-assignment,
+        use-dict-literal
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -742,7 +751,8 @@ callbacks=cb_,
 dummy-variables-rgx=_+$|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+?$)|dummy|^ignored_|^unused_
 
 # Argument names that match this expression will be ignored.
-ignored-argument-names=_.*|^ignored_|^unused_
+# t/theta/th: arguments of the System cost and dynamics callbacks, which every model must accept
+ignored-argument-names=_.*|^ignored_|^unused_|^t$|^th$|^theta$
 
 # Tells whether we should check for unused import in __init__ files.
 init-import=no
