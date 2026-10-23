@@ -4,12 +4,18 @@ CI runs ``pytest -m "not slow and not heavy"`` on 4-core, 16 GB runners. ``heavy
 are too slow or memory-hungry for that budget and whose property is already covered by a cheaper test:
 every function in ``HEAVY``, and every case of a function in ``QUICK`` except its listed representatives
 (fnmatch patterns on the parametrisation id). Locally ``pytest -m "not slow"`` still runs everything.
+
+The test problems are drawn with ``jax.random``. JAX 0.5 changed the default threefry implementation, which
+changes every draw for a given seed, so the old implementation is pinned here: the problems (and the
+fixtures and iteration budgets tuned on them) are then the same for every JAX version.
 """
 
 from fnmatch import fnmatch
 
 import jax
 import pytest
+
+jax.config.update("jax_threefry_partitionable", False)
 
 HEAVY = {
     # unrolled reverse mode, sharding subprocess and long horizons

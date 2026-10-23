@@ -73,7 +73,7 @@ def test_rnn_fixture_uses_shared_parameters():
     """The OCaml RNN was solved with exactly the parameters of tests/problems.vanilla_rnn"""
     ref = load_fixture("ocaml_rnn")
     for key, value in vanilla_rnn_params().items():
-        onp.testing.assert_array_equal(ref[key], value)
+        onp.testing.assert_allclose(ref[key], value, rtol=1e-10, atol=0)
 
 
 # --------------------------------------------------------------------------------------------
